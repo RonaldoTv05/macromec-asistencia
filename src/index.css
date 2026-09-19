@@ -1,0 +1,157 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-navy-950: #0F172A;
+  --color-navy-900: #1E3A8A;
+  --color-navy-800: #1e40af;
+  --color-accent: #2563EB;
+  --color-slate-50: #F8FAFC;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #F8FAFC;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* Safe area support for iPhone 15 Pro Max */
+.safe-top {
+  padding-top: max(59px, env(safe-area-inset-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(34px, env(safe-area-inset-bottom));
+}
+
+/* Smooth scrolling */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar hide */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Pill button active state */
+.pill-active {
+  background-color: #1E3A8A;
+  color: white;
+}
+
+/* Badge pulse animation */
+@keyframes pulse-soft {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Card hover transition */
+.card-hover {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-hover:active {
+  transform: scale(0.98);
+}
+
+/* Progress bar fill animation */
+@keyframes fill-bar {
+  from {
+    width: 0%;
+  }
+
+  to {
+    width: var(--fill-pct);
+  }
+}
+
+.progress-bar-fill {
+  animation: fill-bar 0.8s ease-out forwards;
+}
+
+/* Bottom nav backdrop */
+.bottom-nav-backdrop {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Sheet/Modal overlay */
+.overlay-enter {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Sheet slide up */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.sheet-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Role switcher pill */
+.role-pill {
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.role-pill-active {
+  background-color: #2563EB;
+  color: white;
+}
+
+.role-pill-inactive {
+  color: #94a3b8;
+}
+
+.role-pill-inactive:hover {
+  color: #cbd5e1;
+}
