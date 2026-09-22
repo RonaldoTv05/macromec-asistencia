@@ -11,11 +11,11 @@ import type {
   EstadoLaboral,
   ExtraHoursBalance,
   HorarioSemanal,
+  InformeQuincenal,
   Practicante,
   Rol,
-  SuspensionData,
+  RetiroData,
   User,
-  VacacionesData,
 } from '../types'
 
 // ============================================================
@@ -133,11 +133,10 @@ interface AppState {
     supervisorNombre: string,
   ) => boolean
 
-  // ── Estado laboral ────────────────────────────────────────
   setEstadoLaboral: (
     practicanteId: string,
     estado: EstadoLaboral,
-    datos?: { suspension?: SuspensionData; vacaciones?: VacacionesData },
+    datos?: { retiro?: RetiroData },
   ) => void
 
   // ── Hoja Física ───────────────────────────────────────────
@@ -146,6 +145,11 @@ interface AppState {
 
   // ── Almuerzos ─────────────────────────────────────────────
   confirmarAlmuerzo: (practicanteId: string, fecha: string) => void
+
+  // ── Informes Quincenales ──────────────────────────────────────────
+  informesQuincenales: InformeQuincenal[]
+  enviarInformeQuincenal: (informe: Omit<InformeQuincenal, 'id' | 'estado'>) => void
+  aceptarInformeQuincenal: (informeId: string, feedback: string) => void
 }
 
 // ============================================================
@@ -575,10 +579,7 @@ export const useAppStore = create<AppState>()(
             return {
               ...p,
               estadoLaboral: estado,
-              suspension:
-                estado === 'suspendido' ? datos?.suspension : undefined,
-              vacaciones:
-                estado === 'vacaciones' ? datos?.vacaciones : undefined,
+              retiro: estado === 'retirado' ? datos?.retiro : undefined,
             }
           }),
         }))
@@ -616,11 +617,50 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           practicantes: state.practicantes.map((p) => {
             if (p.id !== practicanteId) return p
-            const arr = Array.isArray(p.almuerzosConfirmados)
+            const arr = p.almuerzosConfirmados
               ? p.almuerzosConfirmados
               : []
             return { ...p, almuerzosConfirmados: [...arr, fecha] }
           }),
+        }))
+      },
+
+      // ── Informes Quincenales ──────────────────────────────────────────
+      informesQuincenales: [
+        {
+          id: 'inf-1',
+          practicanteId: 'p1',
+          documentos: ['informe_quincenal_1.pdf'],
+          mensajePracticante: 'Adjunto mi informe de la primera quincena de septiembre.',
+          estado: 'pendiente'
+        },
+        {
+          id: 'inf-2',
+          practicanteId: 'p2',
+          documentos: ['actividades_sep.docx'],
+          mensajePracticante: 'Revisión solicitada.',
+          estado: 'pendiente'
+        }
+      ],
+      enviarInformeQuincenal: (informe) => {
+        set((state) => ({
+          informesQuincenales: [
+            ...state.informesQuincenales,
+            {
+              ...informe,
+              id: Date.now().toString(),
+              estado: 'pendiente'
+            }
+          ]
+        }))
+      },
+      aceptarInformeQuincenal: (informeId, feedback) => {
+        set((state) => ({
+          informesQuincenales: state.informesQuincenales.map(inf =>
+            inf.id === informeId
+              ? { ...inf, estado: 'revisado', feedbackSupervisor: feedback }
+              : inf
+          )
         }))
       },
     }),
@@ -631,6 +671,7 @@ export const useAppStore = create<AppState>()(
         practicantes: state.practicantes,
         practicanteSeleccionadoId: state.practicanteSeleccionadoId,
         extraHoursBalances: state.extraHoursBalances,
+        informesQuincenales: state.informesQuincenales,
       }),
     },
   ),

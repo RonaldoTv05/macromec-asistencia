@@ -54,16 +54,16 @@ export default function App() {
     }
 
     // SUPERVISOR
-    if (rol === 'SUPERVISOR' && tabActiva === 'horarios') {
-      return <HorariosScreen />
-    }
-    if (rol === 'SUPERVISOR' && tabActiva === 'general') {
-      return <GeneralScreen />
+    if (rol === 'SUPERVISOR' && tabActiva === 'reportes') {
+      return <ReportesScreen />
     }
 
     // GERENCIA
     if (rol === 'GERENCIA' && tabActiva === 'reportes') {
       return <ReportesScreen />
+    }
+    if (rol === 'GERENCIA' && tabActiva === 'general') {
+      return <GeneralScreen />
     }
     if (rol === 'GERENCIA' && tabActiva === 'admin') {
       return <AdminModuloScreen />

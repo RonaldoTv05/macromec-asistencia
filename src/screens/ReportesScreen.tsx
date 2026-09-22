@@ -1,270 +1,248 @@
-import { useState, useMemo } from 'react'
-import { Clock, TrendingDown, Users, ArrowDownAZ, ArrowUpZA } from 'lucide-react'
+import { useState } from 'react'
+import { FileText, CheckCircle2, X, Clock, Check, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
 
-// ── KPI Card ──────────────────────────────────────────────────
-
-function KpiCard({
-  label,
-  value,
-  sub,
-  icon,
-  bgClass,
-}: {
-  label: string
-  value: string | number
-  sub?: string
-  icon: React.ReactNode
-  bgClass: string
-}) {
-  return (
-    <div className={`flex-1 rounded-[14px] p-3.5 flex flex-col gap-1.5 min-w-0 ${bgClass}`}>
-      <div className="text-white/75 flex items-center gap-1.5">
-        {icon}
-        <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
-      </div>
-      <div className="text-[32px] font-extrabold text-white leading-none">{value}</div>
-      {sub && (
-        <div className="text-[10px] text-white/60 font-medium">
-          {sub}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ============================================================
-// REPORTES SCREEN — Solo GERENCIA
-// ============================================================
-
 export default function ReportesScreen() {
+  const rolActivo = useAppStore((s) => s.rolActivo)
   const practicantes = useAppStore((s) => s.practicantes)
-  const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
-  const [sortAsc, setSortAsc] = useState(true)
 
-  // Mes Septiembre 2026
-  const mesFiltroStr = '2026-09'
-  const fechaHoyStr = '2026-09-18'
+  // SUPERVISOR
+  const informes = useAppStore((s) => s.informesQuincenales)
+  const aceptarInforme = useAppStore((s) => s.aceptarInformeQuincenal)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedInforme, setSelectedInforme] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState('')
 
-  // Calcular métricas del mes actual (Septiembre)
-  let totalFaltasMes = 0
-  let totalTardanzasMes = 0
-  let totalHECompensadasMes = 0
+  // GERENCIA
+  const aprobarHorario = useAppStore((s) => s.aprobarHorario)
+  const rechazarHorario = useAppStore((s) => s.rechazarHorario)
 
-  practicantes.forEach((p) => {
-    p.historial.forEach((h) => {
-      if (h.fecha.startsWith(mesFiltroStr)) {
-        if (h.estado === 'FALTA') totalFaltasMes++
-        if (h.estado === 'TARDANZA') totalTardanzasMes++
-        if (h.estado === 'COMPENSADO' || h.estado === 'FALTA_CUBIERTA') {
-          totalHECompensadasMes += 5
-        }
-      }
-    })
-  })
+  // ── Lógica Supervisor ──
+  const pendientesSupervisor = informes.filter((i) => i.estado === 'pendiente')
+  const revisadosSupervisor = informes.filter((i) => i.estado === 'revisado')
 
-  // Calcular total de horas extras disponibles en el sistema
-  const totalHorasExtrasDisponibles = extraHoursBalances.reduce(
-    (s, b) => s + b.horasDisponibles,
-    0,
+  const handleOpenModal = (id: string) => {
+    setSelectedInforme(id)
+    setFeedback('')
+    setModalOpen(true)
+  }
+
+  const handleConfirmar = () => {
+    if (!selectedInforme) return
+    aceptarInforme(selectedInforme, feedback)
+    toast.success('Informe revisado exitosamente')
+
+    setModalOpen(false)
+    setSelectedInforme(null)
+  }
+
+  const renderTarjetaSupervisor = (informe: typeof informes[0]) => {
+    const practicante = practicantes.find((p) => p.id === informe.practicanteId)
+    if (!practicante) return null
+    const isRevisado = informe.estado === 'revisado'
+
+    return (
+      <div
+        key={informe.id}
+        className={`border-t border-slate-100 pt-3 mt-2 ${isRevisado ? 'opacity-60 grayscale' : ''}`}
+      >
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <div className="w-10 h-10 rounded-full shrink-0 bg-gradient-to-br from-blue-900 to-blue-600 flex items-center justify-center text-[14px] font-bold text-white">
+            {practicante.nombre[0]}
+            {practicante.apellido[0]}
+          </div>
+          <div className="flex-1">
+            <div className="font-bold text-[14px] text-slate-800">
+              {practicante.nombre} {practicante.apellido}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 p-2 rounded-lg mb-2.5 flex flex-col gap-1.5 border border-slate-100">
+          {informe.documentos?.map((doc, idx) => (
+             <div key={idx} className="flex items-center justify-between text-[11px] font-medium text-slate-700">
+                <div className="flex items-center gap-1.5 truncate">
+                  <FileText size={12} className="text-blue-500 shrink-0" />
+                  <span className="truncate">{doc}</span>
+                </div>
+                <button onClick={() => console.log('Abriendo documento...')} className="bg-transparent border-none text-blue-600 underline cursor-pointer font-bold hover:text-blue-700 shrink-0">
+                  Abrir
+                </button>
+             </div>
+          ))}
+        </div>
+
+        <p className="text-[13px] text-slate-600 italic m-0 mb-3 px-1">
+          "{informe.mensajePracticante}"
+        </p>
+
+        {!isRevisado && (
+          <button
+            onClick={() => handleOpenModal(informe.id)}
+            className="w-full py-2.5 rounded-[10px] border-none bg-gradient-to-br from-emerald-700 to-emerald-500 text-white text-[13px] font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm hover:opacity-90"
+          >
+            <CheckCircle2 size={16} /> Aceptar y enviar feedback
+          </button>
+        )}
+        {isRevisado && informe.feedbackSupervisor && (
+          <div className="bg-emerald-50 text-emerald-800 text-[11px] p-2 rounded-lg font-medium border border-emerald-100">
+            <span className="font-bold">Tu feedback:</span> {informe.feedbackSupervisor}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Lógica Gerencia ──
+  const pendientesGerencia = practicantes.filter(
+    (p) => p.horarioPendiente?.estado === 'pendiente_aprobacion',
   )
 
-  const totalSuspendidos = practicantes.filter((p) => p.estadoLaboral === 'suspendido').length
-  const totalVacaciones = practicantes.filter((p) => p.estadoLaboral === 'vacaciones').length
+  const handleAprobarHorario = (id: string) => {
+    aprobarHorario(id)
+    toast.success('Horario aprobado exitosamente')
+  }
 
-  // Consolidado de almuerzos hoy
-  let totalAlmuerzosHoy = 0
-  practicantes.forEach((p) => {
-    const regHoy = p.historial.find((h) => h.fecha === fechaHoyStr)
-    if (regHoy?.estado === 'ASISTIO' && regHoy?.modalidad === 'presencial') {
-      totalAlmuerzosHoy++
-    }
-  })
+  const handleRechazarHorario = (id: string) => {
+    rechazarHorario(id)
+    toast.error('Horario rechazado')
+  }
 
-  // Ordenamiento
-  const practicantesOrdenados = useMemo(() => {
-    const arr = [...practicantes]
-    arr.sort((a, b) => {
-      const cmp = a.nombre.localeCompare(b.nombre)
-      return sortAsc ? cmp : -cmp
-    })
-    return arr
-  }, [practicantes, sortAsc])
+  const renderTarjetaGerencia = (p: typeof practicantes[0]) => {
+    const horario = p.horarioPendiente
+    if (!horario) return null
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="font-bold text-[14px] text-slate-900">
-        📊 Reportes — Mes Septiembre (1-30)
-      </div>
-
-      {/* KPIs principales */}
-      <div className="flex gap-2.5">
-        <KpiCard
-          label="Total personal"
-          value={practicantes.length}
-          sub="Activos en sistema"
-          icon={<Users size={13} />}
-          bgClass="bg-gradient-to-br from-blue-900 to-blue-600"
-        />
-        <KpiCard
-          label="Faltas"
-          value={totalFaltasMes}
-          icon={<TrendingDown size={13} />}
-          bgClass="bg-gradient-to-br from-red-900 to-red-600"
-        />
-      </div>
-
-      <div className="flex gap-2.5">
-        <KpiCard
-          label="Tardanzas"
-          value={totalTardanzasMes}
-          icon={<Clock size={13} />}
-          bgClass="bg-gradient-to-br from-amber-900 to-amber-600"
-        />
-        <KpiCard
-          label="HE comp."
-          value={`${totalHECompensadasMes}h`}
-          icon={<span className="text-[12px]">🔄</span>}
-          bgClass="bg-gradient-to-br from-indigo-900 to-indigo-500"
-        />
-      </div>
-
-      <div className="flex gap-2.5">
-        <KpiCard
-          label="Suspendidos"
-          value={totalSuspendidos}
-          icon={<span className="text-[12px]">🚫</span>}
-          bgClass="bg-gradient-to-br from-slate-700 to-slate-500"
-        />
-        <KpiCard
-          label="Vacaciones"
-          value={totalVacaciones}
-          icon={<span className="text-[12px]">🌴</span>}
-          bgClass="bg-gradient-to-br from-amber-900 to-amber-600"
-        />
-        <KpiCard
-          label="HE disp."
-          value={`${totalHorasExtrasDisponibles}h`}
-          icon={<span className="text-[12px]">⚡</span>}
-          bgClass="bg-gradient-to-br from-emerald-800 to-emerald-600"
-        />
-      </div>
-
-      {/* Consolidado de almuerzos */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4">
-        <div className="font-bold text-[13px] text-slate-900 mb-2.5">
-          🍽️ Consolidado de Almuerzos — Hoy [Viernes 18 de Septiembre de 2026]
-        </div>
-        <div className="bg-emerald-50 rounded-xl p-3 text-center border border-emerald-100">
-          <div className="text-[10px] text-emerald-800 font-bold uppercase tracking-widest">
-            Con almuerzo
+    return (
+      <div key={p.id} className="border-t border-slate-100 pt-3 mt-2">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <div className="w-10 h-10 rounded-full shrink-0 bg-gradient-to-br from-indigo-900 to-indigo-600 flex items-center justify-center text-[14px] font-bold text-white">
+            {p.nombre[0]}
+            {p.apellido[0]}
           </div>
-          <div className="text-[28px] font-extrabold text-emerald-600 mt-1 leading-none">
-            {totalAlmuerzosHoy}
+          <div className="flex-1">
+            <div className="font-bold text-[14px] text-slate-800">
+              {p.nombre} {p.apellido}
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium">
+              Horas propuestas: {horario.totalHoras}h
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Tabla detallada */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="font-bold text-[13px] text-slate-900">
-            Detalle por Practicante
-          </div>
+        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-3 flex flex-col gap-1">
+          {horario.dias.map((d, i) => (
+            <div key={i} className="flex justify-between text-[11px] font-medium">
+              <span className="text-slate-600 capitalize">{d.dia}</span>
+              <span className="text-slate-800">{d.horaInicio} - {d.horaFin}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2.5">
           <button
-            onClick={() => setSortAsc(!sortAsc)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg border-0 cursor-pointer transition-colors text-[11px] font-bold text-slate-600"
+            onClick={() => handleRechazarHorario(p.id)}
+            className="flex-1 py-2.5 rounded-[10px] border-none bg-rose-100 text-rose-700 text-[13px] font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm hover:opacity-90"
           >
-            {sortAsc ? <ArrowDownAZ size={14} /> : <ArrowUpZA size={14} />}
-            {sortAsc ? 'A-Z' : 'Z-A'}
+            <XCircle size={16} /> Rechazar
+          </button>
+          <button
+            onClick={() => handleAprobarHorario(p.id)}
+            className="flex-1 py-2.5 rounded-[10px] border-none bg-gradient-to-br from-emerald-600 to-emerald-500 text-white text-[13px] font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm hover:opacity-90"
+          >
+            <Check size={16} /> Aprobar
           </button>
         </div>
-
-        {practicantesOrdenados.map((p) => {
-          const isSuspendido = p.estadoLaboral === 'suspendido'
-          const isVacaciones = p.estadoLaboral === 'vacaciones'
-
-          // Calcular faltas, tardanzas y HE del practicante en el mes
-          let fMes = 0
-          let tMes = 0
-          let heMes = 0
-          p.historial.forEach((h) => {
-            if (h.fecha.startsWith(mesFiltroStr)) {
-              if (h.estado === 'FALTA') fMes++
-              if (h.estado === 'TARDANZA') tMes++
-              if (h.estado === 'COMPENSADO' || h.estado === 'FALTA_CUBIERTA') heMes += 5
-            }
-          })
-
-          return (
-            <div
-              key={p.id}
-              className={`flex items-center gap-2.5 py-2.5 border-b border-slate-100 last:border-b-0 ${
-                isSuspendido ? 'opacity-50' : 'opacity-100'
-              }`}
-            >
-              {/* Avatar */}
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 ${
-                  isSuspendido
-                    ? 'bg-slate-200 text-slate-400'
-                    : isVacaciones
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white'
-                }`}
-              >
-                {p.nombre.split(' ')[0][0]}
-                {p.nombre.split(' ')[1]?.[0] || p.apellido?.[0] || ''}
-              </div>
-
-              {/* Nombre y badges */}
-              <div className="flex-1 min-w-0">
-                <div className={`text-[12px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${
-                  isSuspendido ? 'text-slate-400' : 'text-slate-800'
-                }`}>
-                  {p.nombre} {p.apellido}
-                </div>
-                <div className="flex gap-1.5 mt-1 flex-wrap">
-                  {isSuspendido && (
-                    <span className="text-[9px] bg-slate-200 text-slate-500 rounded-md px-1.5 py-0.5 font-bold">
-                      SUSPENDIDO
-                    </span>
-                  )}
-                  {isVacaciones && (
-                    <span className="text-[9px] bg-yellow-100 text-yellow-800 rounded-md px-1.5 py-0.5 font-bold">
-                      VACACIONES
-                    </span>
-                  )}
-                  {!isSuspendido && !isVacaciones && (
-                    <>
-                      {fMes > 0 && (
-                        <span className="text-[9px] bg-red-100 text-red-700 rounded-md px-1.5 py-0.5 font-bold">
-                          F:{fMes}
-                        </span>
-                      )}
-                      {tMes > 0 && (
-                        <span className="text-[9px] bg-amber-100 text-amber-700 rounded-md px-1.5 py-0.5 font-bold">
-                          T:{tMes}
-                        </span>
-                      )}
-                      {heMes > 0 && (
-                        <span className="text-[9px] bg-blue-100 text-blue-700 rounded-md px-1.5 py-0.5 font-bold">
-                          HE:{heMes}h
-                        </span>
-                      )}
-                      {fMes === 0 && tMes === 0 && heMes === 0 && (
-                        <span className="text-[9px] bg-slate-50 text-slate-400 rounded-md px-1.5 py-0.5 font-bold">
-                          S/N
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
       </div>
-    </div>
-  )
+    )
+  }
+
+  // ── Renderizado Principal ──
+  if (rolActivo === 'SUPERVISOR') {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div className="font-bold text-[14px] text-slate-900 mb-3 flex items-center gap-2">
+            📑 Informes pendientes de revisión ({pendientesSupervisor.length})
+          </div>
+          {pendientesSupervisor.length === 0 ? (
+            <div className="text-center py-5 text-slate-400 text-[13px]">
+              <CheckCircle2 size={32} className="mx-auto mb-2 text-slate-300" />
+              Sin informes pendientes
+            </div>
+          ) : (
+            pendientesSupervisor.map(renderTarjetaSupervisor)
+          )}
+        </div>
+
+        {revisadosSupervisor.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm mt-2">
+            <div className="font-bold text-[14px] text-slate-500 mb-3 flex items-center gap-2">
+              ✅ Informes revisados ({revisadosSupervisor.length})
+            </div>
+            {revisadosSupervisor.map(renderTarjetaSupervisor)}
+          </div>
+        )}
+
+        {/* Modal */}
+        {modalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-5">
+            <div className="bg-white rounded-[20px] p-5 w-full max-w-[350px] shadow-xl">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="m-0 text-[16px] font-bold text-slate-900">Dar Feedback</h3>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="bg-transparent border-none text-slate-400 cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <p className="text-[13px] text-slate-600 mb-3">
+                Escribe un mensaje de retroalimentación para el alumno:
+              </p>
+
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="Opcional: 'Buen trabajo en esta quincena...'"
+                className="w-full h-24 p-3 border border-slate-200 rounded-xl resize-none text-[13px] focus:outline-none focus:border-blue-500 bg-slate-50 mb-4 font-sans"
+              />
+
+              <button
+                onClick={handleConfirmar}
+                className="w-full py-3 rounded-xl border-none bg-blue-600 text-white font-bold text-[14px] cursor-pointer"
+              >
+                Confirmar revisión
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (rolActivo === 'GERENCIA') {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div className="font-bold text-[14px] text-slate-900 mb-3 flex items-center gap-2">
+            <Clock size={16} className="text-indigo-600" />
+            Solicitudes de cambio de horario ({pendientesGerencia.length})
+          </div>
+          {pendientesGerencia.length === 0 ? (
+            <div className="text-center py-5 text-slate-400 text-[13px]">
+              <CheckCircle2 size={32} className="mx-auto mb-2 text-slate-300" />
+              Sin solicitudes pendientes
+            </div>
+          ) : (
+            pendientesGerencia.map(renderTarjetaGerencia)
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Fallback
+  return null
 }

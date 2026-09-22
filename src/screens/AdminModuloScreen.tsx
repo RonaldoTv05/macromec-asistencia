@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
-import type { EstadoLaboral, Practicante, SuspensionData, VacacionesData } from '../types'
+import type { EstadoLaboral, Practicante, RetiroData } from '../types'
 
 // ── Sanitización ───────────────────────────────────────────────
 function sanitize(value: string): string {
@@ -18,55 +18,15 @@ function sanitize(value: string): string {
 
 // ── Badge de estado laboral ────────────────────────────────────
 function BadgeEstado({ estado }: { estado: EstadoLaboral }) {
-  if (estado === 'suspendido') {
+  if (estado === 'retirado') {
     return (
-      <span
-        style={{
-          background: '#e2e8f0',
-          color: '#64748b',
-          borderRadius: 9999,
-          padding: '2px 10px',
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: '0.5px',
-          textTransform: 'uppercase',
-        }}
-      >
-        SUSPENDIDO
-      </span>
-    )
-  }
-  if (estado === 'vacaciones') {
-    return (
-      <span
-        style={{
-          background: '#fef9c3',
-          color: '#854d0e',
-          borderRadius: 9999,
-          padding: '2px 10px',
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: '0.5px',
-          textTransform: 'uppercase',
-        }}
-      >
-        VACACIONES
+      <span className="bg-slate-200 text-slate-500 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide uppercase">
+        RETIRADO
       </span>
     )
   }
   return (
-    <span
-      style={{
-        background: '#d1fae5',
-        color: '#065f46',
-        borderRadius: 9999,
-        padding: '2px 10px',
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: '0.5px',
-        textTransform: 'uppercase',
-      }}
-    >
+    <span className="bg-emerald-100 text-emerald-800 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide uppercase">
       ACTIVO
     </span>
   )
@@ -80,116 +40,31 @@ function TarjetaColaborador({
   practicante: Practicante
   onEditarEstado: (p: Practicante) => void
 }) {
-  const isSuspendido = practicante.estadoLaboral === 'suspendido'
-  const isVacaciones = practicante.estadoLaboral === 'vacaciones'
+  const isRetirado = practicante.estadoLaboral === 'retirado'
 
   return (
-    <div
-      style={{
-        background: isSuspendido
-          ? '#f8fafc'
-          : isVacaciones
-            ? '#fffbeb'
-            : 'white',
-        borderRadius: 14,
-        border: isSuspendido
-          ? '1px solid #e2e8f0'
-          : isVacaciones
-            ? '1px solid #fde68a'
-            : '1px solid #e2e8f0',
-        padding: '12px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        opacity: isSuspendido ? 0.7 : 1,
-        transition: 'opacity 0.2s ease',
-      }}
-    >
+    <div className={`rounded-[14px] p-3 flex items-center gap-3 transition-opacity duration-200 border ${isRetirado ? 'bg-slate-50 border-slate-200 opacity-70' : 'bg-white border-slate-200'}`}>
       {/* Avatar */}
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          background: isSuspendido
-            ? '#e2e8f0'
-            : isVacaciones
-              ? 'linear-gradient(135deg,#fbbf24,#d97706)'
-              : 'linear-gradient(135deg,#1E3A8A,#2563EB)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 15,
-          fontWeight: 700,
-          color: isSuspendido ? '#94a3b8' : 'white',
-          flexShrink: 0,
-        }}
-      >
+      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 ${isRetirado ? 'bg-slate-200 text-slate-400' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white'}`}>
         {practicante.nombre[0]}
         {practicante.apellido[0]}
       </div>
 
       {/* Datos */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: isSuspendido ? '#94a3b8' : '#1e293b',
-            marginBottom: 2,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
+      <div className="flex-1 min-w-0">
+        <div className={`text-[13px] font-bold mb-0.5 truncate ${isRetirado ? 'text-slate-400' : 'text-slate-800'}`}>
           {practicante.nombre} {practicante.apellido}
         </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            flexWrap: 'wrap',
-          }}
-        >
+        <div className="flex items-center gap-1.5 flex-wrap">
           <BadgeEstado estado={practicante.estadoLaboral} />
-          <span
-            style={{
-              fontSize: 10,
-              color: '#94a3b8',
-              textTransform: 'capitalize',
-            }}
-          >
+          <span className="text-[10px] text-slate-400 capitalize">
             {practicante.modalidadBase}
           </span>
         </div>
-        {/* Info de suspensión/vacaciones */}
-        {isSuspendido && practicante.suspension && (
-          <div
-            style={{
-              fontSize: 10,
-              color: '#64748b',
-              marginTop: 3,
-              fontStyle: 'italic',
-            }}
-          >
-            {practicante.suspension.vigencia === 'indefinido'
-              ? 'Vigencia indefinida'
-              : `${practicante.suspension.vigencia} días`}{' '}
-            · {practicante.suspension.motivo.slice(0, 30)}…
-          </div>
-        )}
-        {isVacaciones && practicante.vacaciones && (
-          <div
-            style={{
-              fontSize: 10,
-              color: '#92400e',
-              marginTop: 3,
-              fontStyle: 'italic',
-            }}
-          >
-            {practicante.vacaciones.fechaInicio} →{' '}
-            {practicante.vacaciones.fechaFin}
+        {/* Info de retiro */}
+        {isRetirado && practicante.retiro && (
+          <div className="text-[10px] text-slate-500 mt-1 italic">
+            Indefinido · {practicante.retiro.motivo.slice(0, 30)}…
           </div>
         )}
       </div>
@@ -222,7 +97,7 @@ function TarjetaColaborador({
 
 // ── Modal de edición de estado laboral ────────────────────────
 
-type EstadoFormType = 'activo' | 'suspendido' | 'vacaciones'
+type EstadoFormType = 'activo' | 'retirado'
 
 interface ModalEdicionState {
   open: boolean
@@ -244,72 +119,26 @@ function ModalEdicionEstado({
       (p?.estadoLaboral as EstadoFormType) ?? 'activo',
     )
 
-  // Suspensión
-  const [motivoSuspension, setMotivoSuspension] = useState(
-    p?.suspension?.motivo ?? '',
-  )
-  const [vigenciaTipo, setVigenciaTipo] = useState<'dias' | 'indefinido'>(
-    p?.suspension?.vigencia === 'indefinido' ? 'indefinido' : 'dias',
-  )
-  const [vigenciaDias, setVigenciaDias] = useState<number>(
-    typeof p?.suspension?.vigencia === 'number'
-      ? p.suspension.vigencia
-      : 5,
-  )
-
-  // Vacaciones
-  const [motivoVacaciones, setMotivoVacaciones] = useState(
-    p?.vacaciones?.motivo ?? '',
-  )
-  const [fechaInicioVac, setFechaInicioVac] = useState(
-    p?.vacaciones?.fechaInicio ?? new Date().toISOString().split('T')[0],
-  )
-  const [fechaFinVac, setFechaFinVac] = useState(
-    p?.vacaciones?.fechaFin ?? '',
+  // Retiro
+  const [motivoRetiro, setMotivoRetiro] = useState(
+    p?.retiro?.motivo ?? '',
   )
 
   if (!p) return null
 
-  const calcDias = () => {
-    if (!fechaInicioVac || !fechaFinVac) return 0
-    const ini = new Date(fechaInicioVac)
-    const fin = new Date(fechaFinVac)
-    const diff = Math.ceil(
-      (fin.getTime() - ini.getTime()) / (1000 * 60 * 60 * 24),
-    )
-    return Math.max(0, diff)
-  }
-
   const handleGuardar = () => {
-    if (estadoSeleccionado === 'suspendido') {
-      if (!motivoSuspension.trim()) {
-        toast.error('El motivo de suspensión es obligatorio')
+    if (estadoSeleccionado === 'retirado') {
+      if (!motivoRetiro.trim()) {
+        toast.error('El motivo de retiro es obligatorio')
         return
       }
-      const suspension: SuspensionData = {
-        motivo: sanitize(motivoSuspension),
-        vigencia:
-          vigenciaTipo === 'indefinido' ? 'indefinido' : vigenciaDias,
+      const retiro: RetiroData = {
+        motivo: sanitize(motivoRetiro),
         fechaInicio: new Date().toISOString().split('T')[0],
       }
-      setEstadoLaboral(p.id, 'suspendido', { suspension })
+      setEstadoLaboral(p.id, 'retirado', { retiro })
       toast.success(
-        `🚫 ${p.nombre} ${p.apellido} suspendido — Motivo guardado`,
-      )
-    } else if (estadoSeleccionado === 'vacaciones') {
-      if (!motivoVacaciones.trim() || !fechaFinVac) {
-        toast.error('Completa todos los campos de vacaciones')
-        return
-      }
-      const vacaciones: VacacionesData = {
-        fechaInicio: fechaInicioVac,
-        fechaFin: fechaFinVac,
-        dias: calcDias(),
-        motivo: sanitize(motivoVacaciones),
-      }
-      setEstadoLaboral(p.id, 'vacaciones', { vacaciones })
-      toast.success(
-        `🌴 ${p.nombre} ${p.apellido} en vacaciones — ${calcDias()} días`,
+        `🚫 ${p.nombre} ${p.apellido} ha sido retirado — Motivo guardado`,
       )
     } else {
       setEstadoLaboral(p.id, 'activo')
@@ -326,31 +155,23 @@ function ModalEdicionEstado({
     bg: string
     border: string
   }[] = [
-    {
-      value: 'activo',
-      label: 'Activo',
-      emoji: '✅',
-      desc: 'Operatividad normal en el sistema',
-      bg: '#f0fdf4',
-      border: '#059669',
-    },
-    {
-      value: 'suspendido',
-      label: 'Suspender',
-      emoji: '🚫',
-      desc: 'Bloquea operatividad. Sus días cuentan como FALTA',
-      bg: '#f8fafc',
-      border: '#94a3b8',
-    },
-    {
-      value: 'vacaciones',
-      label: 'Vacaciones',
-      emoji: '🌴',
-      desc: 'Ausencia programada. Sus días cuentan como ASISTIÓ',
-      bg: '#fffbeb',
-      border: '#d97706',
-    },
-  ]
+      {
+        value: 'activo',
+        label: 'Activo',
+        emoji: '✅',
+        desc: 'Operatividad normal en el sistema',
+        bg: '#f0fdf4',
+        border: '#059669',
+      },
+      {
+        value: 'retirado',
+        label: 'Retiro',
+        emoji: '🚫',
+        desc: 'Bloquea operatividad y retira al alumno indefinidamente',
+        bg: '#f8fafc',
+        border: '#94a3b8',
+      },
+    ]
 
   return (
     <>
@@ -358,13 +179,7 @@ function ModalEdicionEstado({
       <div
         id="modal-estado-overlay"
         onClick={onCerrar}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.55)',
-          zIndex: 100,
-          backdropFilter: 'blur(4px)',
-        }}
+        className="fixed inset-0 bg-black/55 z-[100] backdrop-blur-[4px]"
       />
 
       {/* Sheet */}
@@ -372,513 +187,101 @@ function ModalEdicionEstado({
         id="modal-estado-sheet"
         role="dialog"
         aria-modal="true"
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '100%',
-          maxWidth: '430px',
-          zIndex: 101,
-          background: 'white',
-          borderRadius: '24px 24px 0 0',
-          maxHeight: '88dvh',
-          overflowY: 'auto',
-          paddingBottom: 'max(28px, env(safe-area-inset-bottom))',
-        }}
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white rounded-t-[20px] px-5 pt-6 pb-8 z-[110]"
       >
-        {/* Drag indicator */}
-        <div style={{ textAlign: 'center', paddingTop: 12, paddingBottom: 2 }}>
-          <div
-            style={{
-              width: 40,
-              height: 4,
-              borderRadius: 9999,
-              background: '#e2e8f0',
-              display: 'inline-block',
-            }}
-          />
-        </div>
-
-        <div style={{ padding: '12px 20px' }}>
-          {/* Header */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 4,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 17,
-                  fontWeight: 800,
-                  color: '#0f172a',
-                }}
-              >
-                Editar Estado Laboral
+        <div className="flex flex-col h-full max-h-[80vh] overflow-y-auto pr-1">
+          {/* Cabecera */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                <Edit3 size={20} />
               </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: '#64748b',
-                  marginTop: 1,
-                }}
-              >
+              <div className="font-bold text-[18px] text-slate-800">
                 {p.nombre} {p.apellido}
               </div>
             </div>
             <button
               id="btn-cerrar-modal-estado"
               onClick={onCerrar}
-              style={{
-                background: '#f1f5f9',
-                border: 'none',
-                borderRadius: '50%',
-                width: 34,
-                height: 34,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#64748b',
-              }}
+              className="bg-slate-100 border-none rounded-full w-8 h-8 flex items-center justify-center cursor-pointer text-slate-500"
             >
               <X size={17} />
             </button>
           </div>
 
           {/* Opciones de estado */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-              marginTop: 16,
-              marginBottom: 16,
-            }}
-          >
+          <div className="flex flex-col gap-2.5 my-4">
             {opciones.map((opt) => (
               <button
                 key={opt.value}
                 id={`opt-estado-${opt.value}`}
-                onClick={() =>
-                  setEstadoSeleccionado(opt.value)
-                }
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '12px 14px',
-                  borderRadius: 12,
-                  border:
-                    estadoSeleccionado === opt.value
-                      ? `2px solid ${opt.border}`
-                      : '1.5px solid #e2e8f0',
-                  background:
-                    estadoSeleccionado === opt.value
-                      ? opt.bg
-                      : 'white',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  transition: 'all 0.15s ease',
-                }}
+                onClick={() => setEstadoSeleccionado(opt.value)}
+                className={`w-full text-left p-3.5 rounded-xl border-[1.5px] cursor-pointer flex items-center gap-3 transition-all duration-150 ${estadoSeleccionado === opt.value
+                  ? `border-slate-400 bg-slate-50`
+                  : 'border-slate-200 bg-white'
+                  }`}
               >
-                <span style={{ fontSize: 22, flexShrink: 0 }}>
-                  {opt.emoji}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#1e293b',
-                    }}
-                  >
+                <span className="text-[22px] shrink-0">{opt.emoji}</span>
+                <div className="flex-1">
+                  <div className="text-[13px] font-bold text-slate-800">
                     {opt.label}
                   </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: '#94a3b8',
-                      marginTop: 1,
-                    }}
-                  >
+                  <div className="text-[11px] text-slate-400 mt-0.5">
                     {opt.desc}
                   </div>
                 </div>
                 {estadoSeleccionado === opt.value && (
-                  <CheckCircle2
-                    size={18}
-                    style={{
-                      color: opt.border,
-                      flexShrink: 0,
-                    }}
-                  />
+                  <CheckCircle2 size={18} className="text-slate-500 shrink-0" />
                 )}
               </button>
             ))}
           </div>
 
-          {/* Formulario extra: Suspensión */}
-          {estadoSeleccionado === 'suspendido' && (
-            <div
-              style={{
-                background: '#f8fafc',
-                borderRadius: 12,
-                padding: '14px',
-                marginBottom: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#64748b',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                Detalles de Suspensión
+          {/* Formulario extra: Retiro */}
+          {estadoSeleccionado === 'retirado' && (
+            <div className="bg-slate-50 rounded-xl p-3.5 mb-4 flex flex-col gap-3">
+              <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">
+                Detalles de Retiro
               </div>
 
               {/* Motivo obligatorio */}
               <div>
                 <label
-                  htmlFor="input-motivo-suspension"
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#475569',
-                    display: 'block',
-                    marginBottom: 6,
-                  }}
+                  htmlFor="input-motivo-retiro"
+                  className="text-[11px] font-bold text-slate-600 block mb-1.5"
                 >
                   Motivo *
                 </label>
                 <textarea
-                  id="input-motivo-suspension"
-                  value={motivoSuspension}
-                  onChange={(e) =>
-                    setMotivoSuspension(e.target.value)
-                  }
-                  placeholder="Describe el motivo de la suspensión…"
+                  id="input-motivo-retiro"
+                  value={motivoRetiro}
+                  onChange={(e) => setMotivoRetiro(e.target.value)}
+                  placeholder="Describe el motivo del retiro…"
                   rows={3}
                   maxLength={300}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: 10,
-                    border: '1.5px solid #e2e8f0',
-                    fontSize: 13,
-                    color: '#1e293b',
-                    resize: 'none',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    boxSizing: 'border-box',
-                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] text-slate-800 resize-none outline-none font-sans bg-white focus:border-slate-400"
                 />
               </div>
 
-              {/* Vigencia */}
-              <div>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#475569',
-                    display: 'block',
-                    marginBottom: 8,
-                  }}
-                >
-                  Vigencia
-                </label>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                  {(['dias', 'indefinido'] as const).map((t) => (
-                    <button
-                      key={t}
-                      id={`vigencia-${t}`}
-                      onClick={() => setVigenciaTipo(t)}
-                      style={{
-                        flex: 1,
-                        padding: '9px 0',
-                        borderRadius: 10,
-                        border:
-                          vigenciaTipo === t
-                            ? '2px solid #64748b'
-                            : '1.5px solid #e2e8f0',
-                        background:
-                          vigenciaTipo === t ? '#f1f5f9' : 'white',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color:
-                          vigenciaTipo === t ? '#1e293b' : '#94a3b8',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {t === 'dias' ? '📅 Días específicos' : '∞ Indefinido'}
-                    </button>
-                  ))}
-                </div>
-
-                {vigenciaTipo === 'dias' && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
-                  >
-                    <button
-                      id="btn-vigencia-menos"
-                      onClick={() =>
-                        setVigenciaDias((v) => Math.max(1, v - 1))
-                      }
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 9999,
-                        border: '1.5px solid #e2e8f0',
-                        background: 'white',
-                        fontSize: 18,
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        color: '#1e293b',
-                      }}
-                    >
-                      −
-                    </button>
-                    <div
-                      style={{
-                        flex: 1,
-                        textAlign: 'center',
-                        fontSize: 20,
-                        fontWeight: 800,
-                        color: '#1e293b',
-                      }}
-                    >
-                      {vigenciaDias}{' '}
-                      <span
-                        style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}
-                      >
-                        día{vigenciaDias !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <button
-                      id="btn-vigencia-mas"
-                      onClick={() =>
-                        setVigenciaDias((v) => Math.min(365, v + 1))
-                      }
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 9999,
-                        border: '1.5px solid #e2e8f0',
-                        background: 'white',
-                        fontSize: 18,
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        color: '#1e293b',
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Formulario extra: Vacaciones */}
-          {estadoSeleccionado === 'vacaciones' && (
-            <div
-              style={{
-                background: '#fffbeb',
-                borderRadius: 12,
-                padding: '14px',
-                marginBottom: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                border: '1px solid #fde68a',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#92400e',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                Detalles de Vacaciones
-              </div>
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <label
-                    htmlFor="input-fecha-ini-vac"
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#475569',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <Calendar size={12} /> Inicio
-                  </label>
-                  <input
-                    id="input-fecha-ini-vac"
-                    type="date"
-                    value={fechaInicioVac}
-                    onChange={(e) =>
-                      setFechaInicioVac(e.target.value)
-                    }
-                    style={{
-                      width: '100%',
-                      padding: '9px 10px',
-                      borderRadius: 10,
-                      border: '1.5px solid #fde68a',
-                      fontSize: 13,
-                      color: '#1e293b',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      background: 'white',
-                    }}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label
-                    htmlFor="input-fecha-fin-vac"
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#475569',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <Calendar size={12} /> Fin
-                  </label>
-                  <input
-                    id="input-fecha-fin-vac"
-                    type="date"
-                    value={fechaFinVac}
-                    onChange={(e) =>
-                      setFechaFinVac(e.target.value)
-                    }
-                    style={{
-                      width: '100%',
-                      padding: '9px 10px',
-                      borderRadius: 10,
-                      border: '1.5px solid #fde68a',
-                      fontSize: 13,
-                      color: '#1e293b',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      background: 'white',
-                    }}
-                  />
-                </div>
-              </div>
-
-              {calcDias() > 0 && (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: '#92400e',
-                  }}
-                >
-                  {calcDias()} día{calcDias() !== 1 ? 's' : ''} de vacaciones
-                </div>
-              )}
-
-              <div>
-                <label
-                  htmlFor="input-motivo-vac"
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#475569',
-                    display: 'block',
-                    marginBottom: 6,
-                  }}
-                >
-                  Motivo descriptivo *
-                </label>
-                <input
-                  id="input-motivo-vac"
-                  type="text"
-                  value={motivoVacaciones}
-                  onChange={(e) =>
-                    setMotivoVacaciones(e.target.value)
-                  }
-                  placeholder="Ej: Vacaciones anuales programadas…"
-                  maxLength={150}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: 10,
-                    border: '1.5px solid #fde68a',
-                    fontSize: 13,
-                    color: '#1e293b',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    background: 'white',
-                  }}
-                />
+              {/* Aviso estático */}
+              <div className="text-[11px] text-slate-500 italic mt-1">
+                Estás retirando al alumno de manera indefinida
               </div>
             </div>
           )}
 
           {/* Botones de acción */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div className="flex gap-2.5">
             <button
               id="btn-cancelar-modal-estado"
               onClick={onCerrar}
-              style={{
-                flex: 1,
-                padding: '13px 0',
-                background: '#f1f5f9',
-                border: 'none',
-                borderRadius: 12,
-                fontSize: 14,
-                fontWeight: 600,
-                color: '#64748b',
-                cursor: 'pointer',
-              }}
+              className="flex-1 py-3.5 bg-slate-100 border-none rounded-xl text-[14px] font-semibold text-slate-500 cursor-pointer"
             >
               Cancelar
             </button>
             <button
               id="btn-guardar-estado"
               onClick={handleGuardar}
-              style={{
-                flex: 2,
-                padding: '13px 0',
-                background:
-                  'linear-gradient(135deg,#1E3A8A 0%,#2563EB 100%)',
-                border: 'none',
-                borderRadius: 12,
-                fontSize: 14,
-                fontWeight: 700,
-                color: 'white',
-                cursor: 'pointer',
-              }}
             >
               Guardar Estado
             </button>
@@ -920,128 +323,42 @@ export default function AdminModuloScreen() {
   const totalActivos = practicantes.filter(
     (p) => p.estadoLaboral === 'activo',
   ).length
-  const totalSuspendidos = practicantes.filter(
-    (p) => p.estadoLaboral === 'suspendido',
-  ).length
-  const totalVacaciones = practicantes.filter(
-    (p) => p.estadoLaboral === 'vacaciones',
+  const totalRetirados = practicantes.filter(
+    (p) => p.estadoLaboral === 'retirado',
   ).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div
-        style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}
-      >
+    <div className="flex flex-col gap-3">
+      <div className="font-bold text-[14px] text-slate-900">
         ⚙️ Admin — Gestión de Personal
       </div>
 
       {/* Resumen rápido */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <div
-          style={{
-            flex: 1,
-            background: '#d1fae5',
-            borderRadius: 12,
-            padding: '10px 12px',
-            textAlign: 'center',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              color: '#065f46',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-            }}
-          >
+      <div className="flex gap-2">
+        <div className="flex-1 bg-emerald-100 rounded-xl p-2.5 text-center">
+          <div className="text-[10px] text-emerald-800 font-bold uppercase">
             Activos
           </div>
-          <div
-            style={{
-              fontSize: 22,
-              fontWeight: 800,
-              color: '#059669',
-              marginTop: 4,
-            }}
-          >
+          <div className="text-[22px] font-extrabold text-emerald-600 mt-1">
             {totalActivos}
           </div>
         </div>
-        <div
-          style={{
-            flex: 1,
-            background: '#f1f5f9',
-            borderRadius: 12,
-            padding: '10px 12px',
-            textAlign: 'center',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              color: '#64748b',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-            }}
-          >
-            Suspendidos
+        <div className="flex-1 bg-slate-100 rounded-xl p-2.5 text-center">
+          <div className="text-[10px] text-slate-500 font-bold uppercase">
+            Retirados
           </div>
-          <div
-            style={{
-              fontSize: 22,
-              fontWeight: 800,
-              color: '#64748b',
-              marginTop: 4,
-            }}
-          >
-            {totalSuspendidos}
-          </div>
-        </div>
-        <div
-          style={{
-            flex: 1,
-            background: '#fefce8',
-            borderRadius: 12,
-            padding: '10px 12px',
-            textAlign: 'center',
-            border: '1px solid #fde68a',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              color: '#92400e',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-            }}
-          >
-            Vacaciones
-          </div>
-          <div
-            style={{
-              fontSize: 22,
-              fontWeight: 800,
-              color: '#d97706',
-              marginTop: 4,
-            }}
-          >
-            {totalVacaciones}
+          <div className="text-[22px] font-extrabold text-slate-500 mt-1">
+            {totalRetirados}
           </div>
         </div>
       </div>
 
       {/* Buscador + Ordenar */}
-      <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ flex: 1, position: 'relative' }}>
+      <div className="flex gap-2.5">
+        <div className="flex-1 relative">
           <Search
             size={15}
-            style={{
-              position: 'absolute',
-              left: 12,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: '#94a3b8',
-            }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <input
             id="input-buscar-admin"
@@ -1049,36 +366,14 @@ export default function AdminModuloScreen() {
             placeholder="Nombre, apellido o DNI…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px 10px 34px',
-              borderRadius: 12,
-              border: '1.5px solid #e2e8f0',
-              fontSize: 13,
-              outline: 'none',
-              boxSizing: 'border-box',
-              background: 'white',
-            }}
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] outline-none bg-white"
           />
         </div>
         <button
           id="btn-toggle-orden"
           onClick={() => setOrdenAscendente((v) => !v)}
           title={ordenAscendente ? 'Ordenar Z–A' : 'Ordenar A–Z'}
-          style={{
-            background: 'white',
-            border: '1.5px solid #e2e8f0',
-            borderRadius: 12,
-            padding: '0 14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            fontSize: 12,
-            fontWeight: 700,
-            color: '#1E3A8A',
-            flexShrink: 0,
-          }}
+          className="bg-white border-[1.5px] border-slate-200 rounded-xl px-3.5 cursor-pointer flex items-center gap-1.5 text-[12px] font-bold text-blue-900 shrink-0"
         >
           <ArrowUpDown size={15} />
           {ordenAscendente ? 'A–Z' : 'Z–A'}
@@ -1086,37 +381,18 @@ export default function AdminModuloScreen() {
       </div>
 
       {/* Contador de resultados */}
-      <div
-        style={{
-          fontSize: 12,
-          color: '#94a3b8',
-          paddingLeft: 2,
-        }}
-      >
+      <div className="text-[12px] text-slate-400 pl-0.5">
         {filtrados.length} colaborador{filtrados.length !== 1 ? 'es' : ''}{' '}
         encontrado{filtrados.length !== 1 ? 's' : ''}
       </div>
 
       {/* Lista de colaboradores */}
       {filtrados.length === 0 ? (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '32px 0',
-            color: '#94a3b8',
-            fontSize: 13,
-          }}
-        >
+        <div className="text-center py-8 text-slate-400 text-[13px]">
           Sin resultados para "{query}"
         </div>
       ) : (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
+        <div className="flex flex-col gap-2">
           {filtrados.map((p) => (
             <TarjetaColaborador
               key={p.id}

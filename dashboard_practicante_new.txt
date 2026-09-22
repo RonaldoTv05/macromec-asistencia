@@ -1,0 +1,210 @@
+// ============================================================
+// DASHBOARD PRACTICANTE
+// ============================================================
+function DashboardPracticante() {
+  const usuario = useAppStore((s) => s.usuarioActual)
+  const practicantes = useAppStore((s) => s.practicantes)
+  const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
+
+  const p = practicantes[0]
+  const balance = extraHoursBalances[0]
+  const horasExtra = balance?.horasDisponibles ?? 0
+
+  const pct = Math.round((HORAS_SEMANA_ACTUAL / 30) * 100)
+
+  if (!p || !usuario) return null
+
+  // FASE 1: LÓGICA DE REVELACIÓN PROGRESIVA DE DÍAS (TIEMPO REAL)
+  const hoy = new Date()
+  
+  // Convertimos DOM=0 a DOM=7 para que Lunes sea 1 y Domingo 7
+  const diaSemanaHoy = hoy.getDay() || 7
+  
+  // Para la fecha a mostrar (como si fuera el "hoy" mockeado anteriormente pero real)
+  const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+
+  const SEMANA_ACTUAL = []
+  
+  // Iteramos desde Lunes (1) hasta Hoy (diaSemanaHoy), limitando hasta 5 (Viernes)
+  for (let i = 1; i <= diaSemanaHoy; i++) {
+    // Excluir sábados y domingos de la UI (días 6 y 7) para practicantes
+    if (i > 5) continue;
+    
+    const d = new Date(hoy)
+    d.setDate(hoy.getDate() - (diaSemanaHoy - i))
+    
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    const fechaStr = `${yyyy}-${mm}-${dd}`
+    
+    // FASE 2: CONEXIÓN CON EL STORE (SINGLE SOURCE OF TRUTH)
+    const registro = p.historial.find((r) => r.fecha === fechaStr)
+    
+    SEMANA_ACTUAL.push(registro || {
+      fecha: fechaStr,
+      estado: 'PENDIENTE',
+      codigoHoja: '-',
+      horaIngreso: '',
+      fuente: 'TERMINAL'
+    })
+  }
+
+  // FASE 3: UI STRICTA EN TAILWIND CSS
+  const getBadgeClass = (estado: string) => {
+    switch(estado) {
+      case 'ASISTIO': return 'bg-emerald-100 text-emerald-800'
+      case 'TARDANZA': return 'bg-amber-100 text-amber-800'
+      case 'FALTA': return 'bg-red-100 text-red-800'
+      case 'COMPENSADO': return 'bg-blue-100 text-blue-800'
+      case 'FALTA_CUBIERTA': return 'bg-emerald-50 text-emerald-800'
+      case 'SEMINARIO': return 'bg-sky-100 text-sky-800'
+      case 'CAMPO': return 'bg-purple-100 text-purple-800'
+      case 'LIBRE': return 'bg-slate-50 text-slate-600'
+      default: return 'bg-slate-100 text-slate-500' // PENDIENTE
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* ── Tarjeta de perfil del día ── */}
+      <Card>
+        <div className="flex items-center gap-3">
+          <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-blue-900 to-blue-600 flex items-center justify-center text-[18px] font-bold text-white shrink-0">
+            {usuario.avatarIniciales}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-[15px] text-slate-900 mb-0.5">
+              {usuario.nombre}
+            </div>
+            <div className="text-[12px] text-slate-500">
+              {p.carrera} ·{' '}
+              <span className="font-semibold text-blue-900 capitalize">
+                {p.modalidadBase}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Badges de estado */}
+        <div className="flex gap-2 flex-wrap">
+          {/* Estado de hoy */}
+          {(() => {
+            const hoyActual = SEMANA_ACTUAL.find((d) => d.fecha === hoyStr)
+            if (hoyActual?.estado === 'ASISTIO') {
+              return (
+                <span className="bg-emerald-100 text-emerald-800 rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1">
+                  <CheckCircle2 size={13} />
+                  ASISTIÓ — {hoyActual.horaIngreso}
+                </span>
+              )
+            }
+            return (
+              <span className="bg-amber-100 text-amber-800 rounded-full px-3 py-1 text-[12px] font-bold">
+                ⏳ Sin registro hoy
+              </span>
+            )
+          })()}
+
+          {/* Almuerzo confirmado */}
+          {p.almuerzosConfirmados.includes(hoyStr) && (
+            <span className="bg-blue-50 text-blue-800 rounded-full px-3 py-1 text-[12px] font-semibold">
+              🍽️ Almuerzo confirmado
+            </span>
+          )}
+
+          {/* Badge horas extras */}
+          {horasExtra > 0 && (
+            <span className="bg-gradient-to-br from-blue-900 to-blue-600 text-white rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1">
+              <Zap size={12} />
+              +{horasExtra}h extras disponibles
+            </span>
+          )}
+        </div>
+      </Card>
+
+      {/* ── Progreso semanal con comparativo ── */}
+      <Card>
+        <div className="flex justify-between items-center">
+          <span className="font-bold text-[14px] text-slate-900">
+            Horas Semanales
+          </span>
+          <span
+            className={`text-[12px] font-bold ${
+              pct >= 100 ? 'text-emerald-600' : 'text-blue-600'
+            }`}
+          >
+            {HORAS_SEMANA_ACTUAL} / 30 hrs
+          </span>
+        </div>
+
+        {/* Barra de progreso */}
+        <div className="h-[10px] bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ease-out ${
+              pct >= 100
+                ? 'bg-emerald-600'
+                : 'bg-gradient-to-r from-blue-900 to-blue-600'
+            }`}
+            style={{ width: `${Math.min(pct, 100)}%` }}
+          />
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-[11px] text-slate-400">
+            {pct}% completado esta semana
+          </span>
+        </div>
+
+        {/* Comparativo semana anterior */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-[10px] py-2 px-3 flex items-center gap-2">
+          <TrendingUp size={14} className="text-emerald-600 shrink-0" />
+          <span className="text-[11px] text-emerald-800 font-semibold">
+            {SEMANA_ANTERIOR_LABEL}: {HORAS_SEMANA_ANTERIOR}h completadas — ✓ Meta alcanzada
+          </span>
+        </div>
+      </Card>
+
+      {/* ── Historial Reciente ── */}
+      <div className="font-bold text-[14px] text-slate-900 pl-0.5 mt-2">
+        Historial Reciente — Semana Actual
+      </div>
+
+      <div className="flex flex-col gap-3 mt-1">
+        {SEMANA_ACTUAL.length === 0 ? (
+          <div className="text-[13px] text-slate-400 italic text-center py-4">No hay historial esta semana.</div>
+        ) : (
+          SEMANA_ACTUAL.map((d) => (
+            <div
+              key={d.fecha}
+              className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3"
+            >
+              <div
+                className={`w-10 h-10 rounded-[10px] shrink-0 flex items-center justify-center text-[12px] font-extrabold ${getBadgeClass(d.estado)}`}
+              >
+                {d.codigoHoja}
+              </div>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold text-slate-800">
+                  {formatFecha(d.fecha)}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {d.horaIngreso
+                    ? `Ingreso: ${d.horaIngreso}`
+                    : 'Sin registro de ingreso'}
+                </div>
+              </div>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getBadgeClass(d.estado)}`}
+              >
+                {d.estado === 'ASISTIO'
+                  ? 'ASISTIÓ'
+                  : d.estado.replace(/_/g, ' ')}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}

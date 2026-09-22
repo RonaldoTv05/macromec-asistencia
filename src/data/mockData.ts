@@ -228,9 +228,9 @@ const modalidades: Modalidad[] = [
 
 // Estados laborales mock para variedad visual
 const estadosLaborales: EstadoLaboral[] = [
-  'activo', 'activo', 'suspendido', 'activo', 'vacaciones',
-  'activo', 'activo', 'activo', 'suspendido', 'activo',
-  'activo', 'vacaciones', 'activo', 'activo', 'activo',
+  'activo', 'activo', 'retirado', 'activo', 'activo',
+  'activo', 'activo', 'activo', 'retirado', 'activo',
+  'activo', 'activo', 'activo', 'activo', 'activo',
   'activo', 'activo', 'activo', 'activo', 'activo',
   'activo', 'activo', 'activo', 'activo', 'activo',
 ]
@@ -292,23 +292,13 @@ export const MOCK_PRACTICANTES: Practicante[] = nombres.map(
       entregaHojaFisica: idx % 5 !== 0,
       almuerzosConfirmados: ['2026-09-17', '2026-09-16', '2026-09-15'],
       estadoLaboral,
-      suspension:
-        estadoLaboral === 'suspendido'
+      retiro:
+        estadoLaboral === 'retirado'
           ? {
               motivo: idx === 2
                 ? 'Falta grave — incumplimiento de normas'
                 : 'Baja temporal por evaluación',
-              vigencia: idx === 2 ? 5 : 'indefinido',
               fechaInicio: '2026-09-16',
-            }
-          : undefined,
-      vacaciones:
-        estadoLaboral === 'vacaciones'
-          ? {
-              fechaInicio: '2026-09-15',
-              fechaFin: '2026-09-22',
-              dias: 5,
-              motivo: 'Vacaciones programadas anualmente',
             }
           : undefined,
     }

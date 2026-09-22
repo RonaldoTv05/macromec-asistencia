@@ -49,59 +49,27 @@ function fechaEnRango(fecha: string, inicio: string, fin: string): boolean {
 type CeldaInfo = { label: string; cls: string; bloqueado: boolean }
 
 function getCeldaAsistencia(p: Practicante, fecha: string): CeldaInfo {
-  if (
-    p.estadoLaboral === 'vacaciones' &&
-    p.vacaciones &&
-    fechaEnRango(fecha, p.vacaciones.fechaInicio, p.vacaciones.fechaFin)
-  ) {
-    return { label: 'V', cls: 'bg-orange-50 text-orange-500 border border-orange-200', bloqueado: true }
-  }
-  if (p.estadoLaboral === 'suspendido' && p.suspension) {
-    const inicio = p.suspension.fechaInicio
-    const fin = p.suspension.vigencia === 'indefinido'
-      ? '9999-12-31'
-      : (() => { const d2 = new Date(inicio); d2.setDate(d2.getDate() + Number(p.suspension!.vigencia)); return d2.toISOString().split('T')[0] })()
+  if (p.estadoLaboral === 'retirado' && p.retiro) {
+    const inicio = p.retiro.fechaInicio
+    const fin = '9999-12-31'
     if (fechaEnRango(fecha, inicio, fin)) {
-      return { label: 'S', cls: 'bg-slate-100 text-slate-400 border border-slate-200', bloqueado: true }
+      return { label: 'R', cls: 'bg-slate-100 text-slate-400 border border-slate-200', bloqueado: true }
     }
   }
   const reg = p.historial.find((h) => h.fecha === fecha)
   switch (reg?.estado) {
-    case 'ASISTIO':        return { label: '\u2713', cls: 'bg-emerald-100 text-emerald-700 border border-emerald-200', bloqueado: false }
-    case 'TARDANZA':       return { label: 'T', cls: 'bg-amber-100 text-amber-700 border border-amber-200', bloqueado: false }
-    case 'FALTA':          return { label: 'F', cls: 'bg-red-100 text-red-700 border border-red-200', bloqueado: false }
-    case 'CAMPO':          return { label: 'C', cls: 'bg-blue-100 text-blue-700 border border-blue-200', bloqueado: false }
+    case 'ASISTIO': return { label: '\u2713', cls: 'bg-emerald-100 text-emerald-700 border border-emerald-200', bloqueado: false }
+    case 'TARDANZA': return { label: 'T', cls: 'bg-amber-100 text-amber-700 border border-amber-200', bloqueado: false }
+    case 'FALTA': return { label: 'F', cls: 'bg-red-100 text-red-700 border border-red-200', bloqueado: false }
+    case 'CAMPO': return { label: 'C', cls: 'bg-blue-100 text-blue-700 border border-blue-200', bloqueado: false }
     case 'COMPENSADO':
     case 'FALTA_CUBIERTA': return { label: 'HE', cls: 'bg-sky-100 text-sky-700 border border-sky-200', bloqueado: false }
-    case 'SEMINARIO':      return { label: 'Se', cls: 'bg-violet-100 text-violet-700 border border-violet-200', bloqueado: false }
-    case 'LIBRE':          return { label: 'L', cls: 'bg-green-50 text-green-700 border border-green-200', bloqueado: false }
-    default:               return { label: '\u00b7', cls: 'bg-slate-50 text-slate-300 border border-slate-100', bloqueado: false }
+    case 'SEMINARIO': return { label: 'Se', cls: 'bg-violet-100 text-violet-700 border border-violet-200', bloqueado: false }
+    case 'LIBRE': return { label: 'L', cls: 'bg-green-50 text-green-700 border border-green-200', bloqueado: false }
+    default: return { label: '\u00b7', cls: 'bg-slate-50 text-slate-300 border border-slate-100', bloqueado: false }
   }
 }
 
-function getCeldaAlmuerzo(p: Practicante, fecha: string): CeldaInfo {
-  if (
-    p.estadoLaboral === 'vacaciones' &&
-    p.vacaciones &&
-    fechaEnRango(fecha, p.vacaciones.fechaInicio, p.vacaciones.fechaFin)
-  ) {
-    return { label: 'V', cls: 'bg-orange-50 text-orange-400 border border-orange-200', bloqueado: true }
-  }
-  if (p.estadoLaboral === 'suspendido' && p.suspension) {
-    const inicio = p.suspension.fechaInicio
-    const fin = p.suspension.vigencia === 'indefinido'
-      ? '9999-12-31'
-      : (() => { const d2 = new Date(inicio); d2.setDate(d2.getDate() + Number(p.suspension!.vigencia)); return d2.toISOString().split('T')[0] })()
-    if (fechaEnRango(fecha, inicio, fin)) {
-      return { label: 'S', cls: 'bg-slate-100 text-slate-300 border border-slate-200', bloqueado: true }
-    }
-  }
-  const reg = p.historial.find((h) => h.fecha === fecha)
-  const almuerza = reg?.estado === 'ASISTIO' && reg?.modalidad === 'presencial'
-  if (almuerza) return { label: '\u2713', cls: 'bg-emerald-100 text-emerald-700 border border-emerald-200', bloqueado: false }
-  if (reg?.estado && reg.estado !== 'PENDIENTE') return { label: '\u2717', cls: 'bg-red-100 text-red-600 border border-red-200', bloqueado: false }
-  return { label: '\u00b7', cls: 'bg-slate-50 text-slate-300 border border-slate-100', bloqueado: false }
-}
 
 // ============================================================
 // TIPOS
@@ -109,7 +77,7 @@ function getCeldaAlmuerzo(p: Practicante, fecha: string): CeldaInfo {
 
 interface AusenciaInfo {
   practicante: Practicante
-  tipo: 'vacaciones' | 'suspendido'
+  tipo: 'retirado'
   inicio: string
   fin: string
 }
@@ -133,7 +101,6 @@ const SHEET_VACIO: SheetState = {
 // ============================================================
 
 function ModalAusencia({ info, onClose }: { info: AusenciaInfo; onClose: () => void }) {
-  const esVac = info.tipo === 'vacaciones'
   return (
     <div
       className="fixed inset-0 z-[300] bg-black/60 flex items-end justify-center"
@@ -149,34 +116,30 @@ function ModalAusencia({ info, onClose }: { info: AusenciaInfo; onClose: () => v
               {info.practicante.nombre} {info.practicante.apellido}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {esVac ? 'En Vacaciones' : 'Suspendido'}
+              Retirado
             </p>
           </div>
           <button onClick={onClose} className="bg-slate-100 rounded-lg p-1.5 cursor-pointer border-0">
             <X size={16} className="text-slate-500" />
           </button>
         </div>
-        <div className={`rounded-2xl p-4 mb-5 ${esVac ? 'bg-orange-50 border border-orange-200' : 'bg-slate-50 border border-slate-200'}`}>
-          <p className={`font-bold text-[13px] mb-2 ${esVac ? 'text-orange-700' : 'text-slate-600'}`}>
-            {esVac ? 'Periodo de Vacaciones' : 'Periodo de Suspension'}
+        <div className="rounded-2xl p-4 mb-5 bg-slate-50 border border-slate-200">
+          <p className="font-bold text-[13px] mb-2 text-slate-600">
+            Periodo de Retiro
           </p>
           <div className="space-y-1">
             <p className="text-[12px] text-slate-600"><strong>Desde:</strong> {info.inicio}</p>
             <p className="text-[12px] text-slate-600">
-              <strong>Hasta:</strong> {info.fin === '9999-12-31' ? 'Indefinido' : info.fin}
+              <strong>Hasta:</strong> Indefinido
             </p>
-            {esVac && info.practicante.vacaciones?.motivo && (
-              <p className="text-[12px] text-slate-600"><strong>Motivo:</strong> {info.practicante.vacaciones.motivo}</p>
-            )}
-            {!esVac && info.practicante.suspension?.motivo && (
-              <p className="text-[12px] text-slate-600"><strong>Motivo:</strong> {info.practicante.suspension.motivo}</p>
+            {info.practicante.retiro?.motivo && (
+              <p className="text-[12px] text-slate-600"><strong>Motivo:</strong> {info.practicante.retiro.motivo}</p>
             )}
           </div>
         </div>
         <button
           onClick={onClose}
-          className="w-full py-3.5 rounded-xl font-bold text-[14px] text-white border-0 cursor-pointer"
-          style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)' }}
+          className="w-full py-3.5 rounded-xl font-bold text-[14px] text-white border-0 cursor-pointer bg-gradient-to-br from-blue-900 to-blue-600"
         >
           Aceptar
         </button>
@@ -214,15 +177,15 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
 
   type BtnDef = { estado: EstadoAsistencia; label: string; activeClass: string }
   const BTNS_PRESENCIAL: BtnDef[] = [
-    { estado: 'ASISTIO',  label: 'Asistio',  activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
+    { estado: 'ASISTIO', label: 'Asistio', activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
     { estado: 'TARDANZA', label: 'Tardanza', activeClass: 'bg-amber-500 border-amber-500 text-white' },
-    { estado: 'FALTA',    label: 'Falta',    activeClass: 'bg-red-500 border-red-500 text-white' },
-    { estado: 'CAMPO',    label: 'Campo',    activeClass: 'bg-blue-500 border-blue-500 text-white' },
+    { estado: 'FALTA', label: 'Falta', activeClass: 'bg-red-500 border-red-500 text-white' },
+    { estado: 'CAMPO', label: 'Campo', activeClass: 'bg-blue-500 border-blue-500 text-white' },
   ]
   const BTNS_VIRTUAL: BtnDef[] = [
-    { estado: 'ASISTIO',  label: 'Asistio',  activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
+    { estado: 'ASISTIO', label: 'Asistio', activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
     { estado: 'TARDANZA', label: 'Tardanza', activeClass: 'bg-amber-500 border-amber-500 text-white' },
-    { estado: 'FALTA',    label: 'Falta',    activeClass: 'bg-red-500 border-red-500 text-white' },
+    { estado: 'FALTA', label: 'Falta', activeClass: 'bg-red-500 border-red-500 text-white' },
   ]
   const btns = esVirtual ? BTNS_VIRTUAL : BTNS_PRESENCIAL
 
@@ -271,16 +234,14 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
         <div className="flex items-center gap-2 mb-5">
           <button
             onClick={handleToggleModalidad}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border-0 cursor-pointer transition-all ${
-              esVirtual ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border-0 cursor-pointer transition-all ${esVirtual ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+              }`}
           >
             {esVirtual ? 'Virtual' : 'Presencial'}
             <span className="text-[9px] opacity-50">cambiar</span>
           </button>
-          <span className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold ${
-            saldoLive > 0 ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-400'
-          }`}>
+          <span className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold ${saldoLive > 0 ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-400'
+            }`}>
             Saldo HE: {saldoLive}h
           </span>
         </div>
@@ -298,9 +259,8 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
               <button
                 key={estado}
                 onClick={() => setEstadoSel(estado)}
-                className={`py-3 rounded-xl text-[12px] font-bold cursor-pointer border-2 transition-all ${
-                  isActive ? activeClass : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}
+                className={`py-3 rounded-xl text-[12px] font-bold cursor-pointer border-2 transition-all ${isActive ? activeClass : 'bg-slate-50 border-slate-200 text-slate-600'
+                  }`}
               >
                 {label}
               </button>
@@ -310,9 +270,8 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
 
         {/* Seccion HE - SOLO para FALTA */}
         {mostrarHE && (
-          <div className={`rounded-2xl p-4 mb-5 ${
-            puedeCompensarHE ? 'bg-green-50 border border-green-200' : 'bg-slate-50 border border-slate-200'
-          }`}>
+          <div className={`rounded-2xl p-4 mb-5 ${puedeCompensarHE ? 'bg-green-50 border border-green-200' : 'bg-slate-50 border border-slate-200'
+            }`}>
             <p className="font-bold text-[12px] text-slate-900 mb-2">Recuperar con Horas Extras</p>
             {puedeCompensarHE ? (
               <>
@@ -358,24 +317,15 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
 // ============================================================
 
 const LEYENDA_ASISTENCIA = [
-  { label: 'OK',  cls: 'bg-emerald-100 text-emerald-700', txt: 'Asistio' },
-  { label: 'T',   cls: 'bg-amber-100 text-amber-700',     txt: 'Tardanza' },
-  { label: 'F',   cls: 'bg-red-100 text-red-700',         txt: 'Falta' },
-  { label: 'C',   cls: 'bg-blue-100 text-blue-700',       txt: 'Campo' },
-  { label: 'HE',  cls: 'bg-sky-100 text-sky-700',         txt: 'Comp. HE' },
-  { label: 'V',   cls: 'bg-orange-50 text-orange-500',    txt: 'Vacaciones' },
-  { label: 'S',   cls: 'bg-slate-100 text-slate-400',     txt: 'Suspendido' },
+  { label: 'OK', cls: 'bg-emerald-100 text-emerald-700', txt: 'Asistio' },
+  { label: 'T', cls: 'bg-amber-100 text-amber-700', txt: 'Tardanza' },
+  { label: 'F', cls: 'bg-red-100 text-red-700', txt: 'Falta' },
+  { label: 'C', cls: 'bg-blue-100 text-blue-700', txt: 'Campo' },
+  { label: 'HE', cls: 'bg-sky-100 text-sky-700', txt: 'Comp. HE' },
+  { label: 'R', cls: 'bg-slate-100 text-slate-400', txt: 'Retirado' },
 ]
-const LEYENDA_ALMUERZOS = [
-  { label: 'OK',  cls: 'bg-emerald-100 text-emerald-700', txt: 'Almorzo' },
-  { label: 'NO',  cls: 'bg-red-100 text-red-600',         txt: 'No almorzo' },
-  { label: 'V',   cls: 'bg-orange-50 text-orange-400',    txt: 'Vacaciones' },
-  { label: 'S',   cls: 'bg-slate-100 text-slate-300',     txt: 'Suspendido' },
-  { label: '-',   cls: 'bg-slate-50 text-slate-300',      txt: 'Pendiente' },
-]
-
-function Leyenda({ modo }: { modo: 'asistencia' | 'almuerzos' }) {
-  const items = modo === 'asistencia' ? LEYENDA_ASISTENCIA : LEYENDA_ALMUERZOS
+function Leyenda() {
+  const items = LEYENDA_ASISTENCIA
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((it, i) => (
@@ -400,11 +350,10 @@ interface TablaMatrizProps {
   month: number
   dias: number[]
   extraHoursBalances: { practicanteId: string; horasDisponibles: number }[]
-  modo: 'asistencia' | 'almuerzos'
   onCeldaClick: (p: Practicante, fecha: string, fechaLegible: string) => void
 }
 
-function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, modo, onCeldaClick }: TablaMatrizProps) {
+function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, onCeldaClick }: TablaMatrizProps) {
   return (
     <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
       <table className="border-collapse" style={{ tableLayout: 'fixed', width: 'max-content' }}>
@@ -416,14 +365,12 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, modo
             >
               PRACTICANTE
             </th>
-            {modo === 'asistencia' && (
-              <th
-                className="sticky z-10 text-center text-[10px] font-bold text-blue-300 py-2.5"
-                style={{ left: 130, background: '#1E3A8A', width: 42, borderRight: '2px solid rgba(255,255,255,0.15)' }}
-              >
-                HE
-              </th>
-            )}
+            <th
+              className="sticky z-10 text-center text-[10px] font-bold text-blue-300 py-2.5"
+              style={{ left: 130, background: '#1E3A8A', width: 42, borderRight: '2px solid rgba(255,255,255,0.15)' }}
+            >
+              HE
+            </th>
             {dias.map((d) => {
               const dow = getDow(year, month, d)
               const esFinde = dow === 0 || dow === 6
@@ -463,23 +410,18 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, modo
                     {p.modalidadBase} · {p.estadoLaboral}
                   </p>
                 </td>
-                {modo === 'asistencia' && (
-                  <td
-                    className="sticky z-[5] text-center py-1"
-                    style={{ left: 130, background: rowBg, width: 42, borderRight: '2px solid #e2e8f0' }}
-                  >
-                    <span className={`inline-block rounded-lg px-1.5 py-0.5 text-[9px] font-extrabold ${
-                      saldo > 0 ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-400'
+                <td
+                  className="sticky z-[5] text-center py-1"
+                  style={{ left: 130, background: rowBg, width: 42, borderRight: '2px solid #e2e8f0' }}
+                >
+                  <span className={`inline-block rounded-lg px-1.5 py-0.5 text-[9px] font-extrabold ${saldo > 0 ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-400'
                     }`}>
-                      {saldo}h
-                    </span>
-                  </td>
-                )}
+                    {saldo}h
+                  </span>
+                </td>
                 {dias.map((d) => {
                   const fecha = getFechaStr(year, month, d)
-                  const info = modo === 'asistencia'
-                    ? getCeldaAsistencia(p, fecha)
-                    : getCeldaAlmuerzo(p, fecha)
+                  const info = getCeldaAsistencia(p, fecha)
                   return (
                     <td
                       key={d}
@@ -508,13 +450,10 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, modo
 // MAIN — GENERAL SCREEN
 // ============================================================
 
-type ModoCalendario = 'asistencia' | 'almuerzos'
-
 export default function GeneralScreen() {
   const practicantes = useAppStore((s) => s.practicantes)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
 
-  const [modo, setModo] = useState<ModoCalendario>('asistencia')
   const [mesOffset, setMesOffset] = useState(0)
   const [sheet, setSheet] = useState<SheetState>(SHEET_VACIO)
   const [ausenciaInfo, setAusenciaInfo] = useState<AusenciaInfo | null>(null)
@@ -525,25 +464,16 @@ export default function GeneralScreen() {
   const dias = useMemo(() => Array.from({ length: diasEnMes }, (_, i) => i + 1), [diasEnMes])
 
   const handleCeldaClick = (p: Practicante, fecha: string, fechaLegible: string) => {
-    // Vacaciones en rango
-    if (p.estadoLaboral === 'vacaciones' && p.vacaciones && fechaEnRango(fecha, p.vacaciones.fechaInicio, p.vacaciones.fechaFin)) {
-      setAusenciaInfo({ practicante: p, tipo: 'vacaciones', inicio: p.vacaciones.fechaInicio, fin: p.vacaciones.fechaFin })
-      return
-    }
-    // Suspendido en rango
-    if (p.estadoLaboral === 'suspendido' && p.suspension) {
-      const inicio = p.suspension.fechaInicio
-      const fin = p.suspension.vigencia === 'indefinido'
-        ? '9999-12-31'
-        : (() => { const d2 = new Date(inicio); d2.setDate(d2.getDate() + Number(p.suspension!.vigencia)); return d2.toISOString().split('T')[0] })()
+    // Retirado en rango
+    if (p.estadoLaboral === 'retirado' && p.retiro) {
+      const inicio = p.retiro.fechaInicio
+      const fin = '9999-12-31'
       if (fechaEnRango(fecha, inicio, fin)) {
-        setAusenciaInfo({ practicante: p, tipo: 'suspendido', inicio, fin })
+        setAusenciaInfo({ practicante: p, tipo: 'retirado', inicio, fin })
         return
       }
     }
-    // Modo almuerzos: solo lectura
-    if (modo === 'almuerzos') return
-    // Modo asistencia: edicion
+    // Edición de asistencia
     const reg = p.historial.find((h) => h.fecha === fecha)
     setSheet({
       open: true,
@@ -561,23 +491,8 @@ export default function GeneralScreen() {
       <div className="rounded-2xl px-5 py-4" style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)' }}>
         <p className="font-bold text-base text-white mb-0.5">Vista General</p>
         <p className="text-[12px] text-white/75">
-          {modo === 'asistencia' ? 'Toca una celda para editar asistencia' : 'Historial de almuerzos (solo lectura)'}
+          Toca una celda para editar asistencia
         </p>
-      </div>
-
-      {/* Toggle Modo */}
-      <div className="flex bg-white rounded-xl p-1 border border-slate-200 gap-1">
-        {(['asistencia', 'almuerzos'] as ModoCalendario[]).map((m) => (
-          <button
-            key={m}
-            onClick={() => setModo(m)}
-            className={`flex-1 py-2 rounded-[9px] text-[12px] font-bold border-0 cursor-pointer transition-all ${
-              modo === m ? 'bg-[#1E3A8A] text-white' : 'bg-transparent text-slate-400'
-            }`}
-          >
-            {m === 'asistencia' ? 'Asistencia' : 'Almuerzos'}
-          </button>
-        ))}
       </div>
 
       {/* Navegador de mes */}
@@ -597,7 +512,7 @@ export default function GeneralScreen() {
 
       {/* Leyenda */}
       <div className="bg-white rounded-xl px-4 py-2.5 border border-slate-200">
-        <Leyenda modo={modo} />
+        <Leyenda />
       </div>
 
       {/* Tabla */}
@@ -608,7 +523,6 @@ export default function GeneralScreen() {
           month={mesActual}
           dias={dias}
           extraHoursBalances={extraHoursBalances}
-          modo={modo}
           onCeldaClick={handleCeldaClick}
         />
       </div>

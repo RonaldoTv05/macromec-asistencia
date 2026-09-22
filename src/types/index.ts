@@ -7,7 +7,7 @@
 export type Rol = 'PRACTICANTE' | 'SUPERVISOR' | 'GERENCIA'
 
 // ── Modalidades de trabajo ───────────────────────────────────
-export type Modalidad = 'presencial' | 'virtual' | 'libre' | 'falto' | 'descanso'
+export type Modalidad = 'presencial' | 'virtual' | 'libre'
 
 // ── Estados de asistencia diaria ─────────────────────────────
 export type EstadoAsistencia =
@@ -41,7 +41,7 @@ export type EstadoHorario =
   | 'rechazado'
 
 // ── Estado laboral del colaborador ───────────────────────────
-export type EstadoLaboral = 'activo' | 'suspendido' | 'vacaciones'
+export type EstadoLaboral = 'activo' | 'retirado'
 
 // ── Día dentro del horario semanal ───────────────────────────
 export interface DiaHorario {
@@ -86,20 +86,13 @@ export interface SemanaFisica {
   label: string
 }
 
-// ── Datos de suspensión ──────────────────────────────────────
-export interface SuspensionData {
+// ── Datos de retiro ──────────────────────────────────────────
+export interface RetiroData {
   motivo: string
-  vigencia: number | 'indefinido'  // días o indefinido
-  fechaInicio: string              // ISO date "2026-09-18"
+  fechaInicio: string
 }
 
-// ── Datos de vacaciones ──────────────────────────────────────
-export interface VacacionesData {
-  fechaInicio: string
-  fechaFin: string
-  dias: number
-  motivo: string
-}
+
 
 // ── Movimiento en el historial de Horas Extras ───────────────
 export interface MovimientoHE {
@@ -138,9 +131,18 @@ export interface Practicante {
   entregaHojaFisica: boolean
   almuerzosConfirmados: string[] // fechas ISO
   estadoLaboral: EstadoLaboral
-  suspension?: SuspensionData
-  vacaciones?: VacacionesData
+  retiro?: RetiroData
   fechaIngreso?: string
+}
+
+// ── Informes Quincenales ──────────────────────────────────────
+export interface InformeQuincenal {
+  id: string
+  practicanteId: string
+  documentos: string[]
+  mensajePracticante: string
+  estado: 'pendiente' | 'revisado'
+  feedbackSupervisor?: string
 }
 
 // ── Usuario autenticado del sistema ──────────────────────────

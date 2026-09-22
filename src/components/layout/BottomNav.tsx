@@ -23,13 +23,13 @@ const TABS_PRACTICANTE: TabDef[] = [
 
 const TABS_SUPERVISOR: TabDef[] = [
   { key: 'hoy', label: 'Inicio', Icon: Home },
-  { key: 'horarios', label: 'Horarios', Icon: CalendarDays },
-  { key: 'general', label: 'General', Icon: Grid3X3 },
+  { key: 'reportes', label: 'Informes', Icon: BarChart2 },
 ]
 
 const TABS_GERENCIA: TabDef[] = [
   { key: 'hoy', label: 'Inicio', Icon: Home },
   { key: 'reportes', label: 'Reportes', Icon: BarChart2 },
+  { key: 'general', label: 'General', Icon: Grid3X3 },
   { key: 'admin', label: 'Admin', Icon: Settings },
 ]
 
@@ -55,24 +55,7 @@ export default function BottomNav() {
     <nav
       role="navigation"
       aria-label="Navegación principal"
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%',
-        maxWidth: '430px',
-        zIndex: 50,
-        background: 'rgba(255,255,255,0.96)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderTop: '1px solid rgba(226,232,240,0.8)',
-        paddingBottom: 'max(28px, env(safe-area-inset-bottom))',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        paddingTop: 8,
-      }}
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 bg-white/95 backdrop-blur-[16px] border-t border-slate-200/80 flex items-center justify-around pt-2 pb-[max(28px,env(safe-area-inset-bottom))]"
     >
       {tabs.map(({ key, label, Icon }) => {
         const isActive = tabActiva === key
@@ -83,51 +66,24 @@ export default function BottomNav() {
             onClick={() => setTabActiva(key)}
             aria-label={`Ir a ${label}`}
             aria-current={isActive ? 'page' : undefined}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '6px 4px',
-              borderRadius: 12,
-              transition: 'all 0.15s ease',
-              color: isActive ? '#1E3A8A' : '#94a3b8',
-            }}
+            className={`flex-1 flex flex-col items-center gap-[3px] bg-transparent border-none cursor-pointer p-1.5 rounded-xl transition-all duration-150 ${
+              isActive ? 'text-blue-900' : 'text-slate-400'
+            }`}
           >
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
               <Icon
                 size={22}
-                style={{
-                  transition: 'all 0.15s ease',
-                  strokeWidth: isActive ? 2.5 : 1.8,
-                }}
+                className="transition-all duration-150"
+                style={{ strokeWidth: isActive ? 2.5 : 1.8 }}
               />
               {isActive && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: -4,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 4,
-                    height: 4,
-                    borderRadius: '50%',
-                    background: '#2563EB',
-                  }}
-                />
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-600" />
               )}
             </div>
             <span
-              style={{
-                fontSize: 10,
-                fontWeight: isActive ? 700 : 500,
-                letterSpacing: '0.3px',
-                transition: 'all 0.15s ease',
-              }}
+              className={`text-[10px] tracking-[0.3px] transition-all duration-150 ${
+                isActive ? 'font-bold' : 'font-medium'
+              }`}
             >
               {label}
             </span>
