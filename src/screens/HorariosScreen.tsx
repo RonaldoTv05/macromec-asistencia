@@ -678,7 +678,7 @@ function SupervisorHorarios() {
                     }}
                   >
                     {p.nombre[0]}
-                    {p.apellido[0]}
+                    {p.apellido?.[0] || ''}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div

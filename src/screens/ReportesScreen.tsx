@@ -80,7 +80,7 @@ export default function ReportesScreen() {
     const iniStr = informe.fechaInicio ? formateador.format(new Date(informe.fechaInicio.split('-').map(Number) as any)) : ''
     const finStr = informe.fechaFin ? formateador.format(new Date(informe.fechaFin.split('-').map(Number) as any)) : ''
 
-    const iniciales = practicante ? `${practicante.nombre[0]}${practicante.apellido[0]}` : 'PD'
+    const iniciales = practicante ? `${practicante.nombre?.[0] || ''}${practicante.apellido?.[0] || ''}` : 'PD'
     const nombreCompleto = practicante ? `${practicante.nombre} ${practicante.apellido}` : 'Practicante Desconocido'
 
     return (
@@ -156,7 +156,7 @@ export default function ReportesScreen() {
         <div className="flex items-center gap-2.5 mb-2.5">
           <div className="w-10 h-10 rounded-full shrink-0 bg-gradient-to-br from-indigo-900 to-indigo-600 flex items-center justify-center text-[14px] font-bold text-white">
             {p.nombre[0]}
-            {p.apellido[0]}
+            {p.apellido?.[0] || ''}
           </div>
           <div className="flex-1">
             <div className="font-bold text-[14px] text-slate-800">

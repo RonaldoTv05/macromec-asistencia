@@ -766,7 +766,7 @@ function DashboardSupervisor() {
                 className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex flex-col justify-between text-left hover:bg-slate-100 active:bg-slate-200 transition-colors"
               >
                 <div className="font-bold text-[11px] text-slate-900 leading-tight mb-1">
-                  {p.nombre} {p.apellido.split(' ')[0]}
+                  {p.nombre} {p.apellido ? p.apellido.split(' ')[0] : ''}
                 </div>
                 {renderBadge(modalidad, estado)}
               </button>
@@ -1082,7 +1082,7 @@ function DashboardGerencia() {
                     border: '1px solid #a7f3d0',
                   }}
                 >
-                  {p.nombre} {p.apellido[0]}. ✓
+                  {p.nombre} {p.apellido?.[0] || ''}. ✓
                 </span>
               )
             })}

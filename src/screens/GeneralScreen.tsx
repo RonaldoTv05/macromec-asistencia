@@ -414,7 +414,7 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, onCe
                   style={{ background: rowBg, minWidth: 130, borderRight: '2px solid #e2e8f0' }}
                 >
                   <p className="text-[11px] font-semibold text-slate-800 whitespace-nowrap">
-                    {p.nombre} {p.apellido.split(' ')[0]}
+                    {p.nombre} {p.apellido ? p.apellido.split(' ')[0] : ''}
                   </p>
                   <p className="text-[9px] text-slate-400 mt-0.5">
                     {p.modalidadBase} · {p.estadoLaboral}

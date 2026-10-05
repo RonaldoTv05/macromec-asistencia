@@ -62,7 +62,7 @@ function TarjetaColaborador({
       {/* Avatar */}
       <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 ${isRetirado ? 'bg-slate-200 text-slate-400' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white'}`}>
         {practicante.nombre[0]}
-        {practicante.apellido[0]}
+        {practicante.apellido?.[0] || ''}
       </div>
 
       {/* Datos */}
