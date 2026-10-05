@@ -7,9 +7,6 @@ import type { EstadoAsistencia, Modalidad, Practicante } from '../types'
 // ============================================================
 // CONSTANTES
 // ============================================================
-
-const MOCK_YEAR = 2026
-const MOCK_MONTH = 8   // Septiembre (0-indexed)
 const HE_HORAS = 5
 
 const DIAS_SEMANA = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa']
@@ -149,12 +146,13 @@ function ModalAusencia({ info, onClose }: { info: AusenciaInfo; onClose: () => v
 }
 
 // ============================================================
-// BOTTOM-SHEET DE EDICION
+// BOTTOM-SHEET DE INCIDENCIA
 // ============================================================
 
-function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: () => void }) {
+function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose: () => void }) {
   const actualizarConModalidad = useAppStore((s) => s.actualizarAsistenciaDiaConModalidad)
-  const compensarFaltaConHE = useAppStore((s) => s.compensarFaltaConHE)
+  const registrarIncidencia = useAppStore((s) => s.registrarIncidencia)
+  const cubrirFaltaConComodin = useAppStore((s) => s.cubrirFaltaConComodin)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
 
   const saldoLive = useMemo(() => {
@@ -164,6 +162,12 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
 
   const [estadoSel, setEstadoSel] = useState<EstadoAsistencia>(sheet.estadoActual ?? 'PENDIENTE')
   const [modalidadLocal, setModalidadLocal] = useState<'presencial' | 'virtual'>(sheet.modalidadDia)
+  
+  const asistenciaActual = sheet.practicante?.asistencia?.[sheet.fecha]
+  const regHistorial = sheet.practicante?.historial.find(h => h.fecha === sheet.fecha)
+  const [observacion, setObservacion] = useState(regHistorial?.observacion || '')
+  const [heManuales, setHeManuales] = useState<number>(asistenciaActual?.horasExtraManuales || 0)
+  const [usarComodin, setUsarComodin] = useState(false)
 
   const esVirtual = modalidadLocal === 'virtual'
   const mostrarHE = estadoSel === 'FALTA'
@@ -192,20 +196,18 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
   const handleGuardar = () => {
     if (!sheet.practicante) return
     actualizarConModalidad(sheet.practicante.id, sheet.fecha, estadoSel, modalidadLocal as Modalidad)
-    toast.success(`Guardado: ${sheet.practicante.nombre} - ${estadoSel} (${modalidadLocal})`)
+    registrarIncidencia(sheet.practicante.id, sheet.fecha, { observacion, horasExtraManuales: heManuales })
+    
+    if (estadoSel === 'FALTA' && usarComodin) {
+      cubrirFaltaConComodin(sheet.practicante.id, sheet.fecha)
+      toast.success('Incidencia guardada y falta cubierta con comodín')
+    } else {
+      toast.success(`Guardado: ${sheet.practicante.nombre} - ${estadoSel} (${modalidadLocal})`)
+    }
     onClose()
   }
 
-  const handleCompensar = () => {
-    if (!sheet.practicante) return
-    const ok = compensarFaltaConHE(sheet.practicante.id, sheet.fecha, HE_HORAS)
-    if (ok) {
-      toast.success(`Falta cubierta con ${HE_HORAS}h de HE`)
-      onClose()
-    } else {
-      toast.error('Saldo insuficiente de Horas Extras')
-    }
-  }
+
 
   return (
     <div
@@ -268,33 +270,41 @@ function BottomSheetEdicion({ sheet, onClose }: { sheet: SheetState; onClose: ()
           })}
         </div>
 
-        {/* Seccion HE - SOLO para FALTA */}
-        {mostrarHE && (
-          <div className={`rounded-2xl p-4 mb-5 ${puedeCompensarHE ? 'bg-green-50 border border-green-200' : 'bg-slate-50 border border-slate-200'
-            }`}>
-            <p className="font-bold text-[12px] text-slate-900 mb-2">Recuperar con Horas Extras</p>
-            {puedeCompensarHE ? (
-              <>
-                <p className="text-[11px] text-slate-500 mb-3">
-                  Saldo actual: <strong className="text-sky-700">{saldoLive}h</strong>
-                  {' - '} Saldo posterior: <strong className="text-red-600">{saldoLive - HE_HORAS}h</strong>
-                </p>
-                <button
-                  onClick={handleCompensar}
-                  className="w-full py-3 rounded-xl text-[13px] font-bold text-white border-0 cursor-pointer"
-                  style={{ background: 'linear-gradient(135deg,#0369a1,#0ea5e9)' }}
-                >
-                  Compensar falta con {HE_HORAS}h de HE
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2 bg-red-50 px-3 py-2.5 rounded-lg">
-                <span className="text-base">Sin saldo</span>
-                <span className="text-[11px] text-red-700 font-semibold">
-                  Minimo {HE_HORAS}h requeridas
-                </span>
-              </div>
-            )}
+        {/* Incidencias (RF-48 y RF-53) */}
+        <div className="flex flex-col gap-3 mb-5">
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 mb-1 block">Observaciones (Ej. Descanso médico, permiso)</label>
+            <textarea 
+              value={observacion}
+              onChange={(e) => setObservacion(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 min-h-[70px] resize-none"
+              placeholder="Escribe la observación..."
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 mb-1 block">Modificar Horas Extras Manuales</label>
+            <input 
+              type="number"
+              min="0"
+              step="0.5"
+              value={heManuales}
+              onChange={(e) => setHeManuales(parseFloat(e.target.value) || 0)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
+        </div>
+
+        {/* RF-54: Cubrir Falta con Comodín */}
+        {estadoSel === 'FALTA' && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-[12px] text-red-900 leading-tight">Cubrir Falta con Horas Extra (Comodín)</p>
+              <p className="text-[11px] text-red-700 mt-0.5">Deduce 6h del saldo (Saldo: {saldoLive}h)</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={usarComodin} onChange={(e) => setUsarComodin(e.target.checked)} disabled={saldoLive < 6} />
+              <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600 peer-disabled:opacity-50"></div>
+            </label>
           </div>
         )}
 
@@ -454,14 +464,19 @@ export default function GeneralScreen() {
   const practicantes = useAppStore((s) => s.practicantes)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
 
-  const [mesOffset, setMesOffset] = useState(0)
+  const [fechaBase, setFechaBase] = useState(new Date())
   const [sheet, setSheet] = useState<SheetState>(SHEET_VACIO)
   const [ausenciaInfo, setAusenciaInfo] = useState<AusenciaInfo | null>(null)
 
-  const mesActual = (MOCK_MONTH + mesOffset + 12) % 12
-  const anioActual = MOCK_YEAR + Math.floor((MOCK_MONTH + mesOffset) / 12)
+  const mesActual = fechaBase.getMonth()
+  const anioActual = fechaBase.getFullYear()
   const diasEnMes = new Date(anioActual, mesActual + 1, 0).getDate()
   const dias = useMemo(() => Array.from({ length: diasEnMes }, (_, i) => i + 1), [diasEnMes])
+
+  const isMesActualOrFuturo = fechaBase.getMonth() >= new Date().getMonth() && fechaBase.getFullYear() >= new Date().getFullYear()
+
+  const handlePrevMes = () => setFechaBase(prev => { const d = new Date(prev); d.setMonth(d.getMonth() - 1); return d })
+  const handleNextMes = () => setFechaBase(prev => { const d = new Date(prev); d.setMonth(d.getMonth() + 1); return d })
 
   const handleCeldaClick = (p: Practicante, fecha: string, fechaLegible: string) => {
     // Retirado en rango
@@ -497,14 +512,16 @@ export default function GeneralScreen() {
 
       {/* Navegador de mes */}
       <div className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 border border-slate-200">
-        <button onClick={() => setMesOffset((o) => o - 1)} className="bg-slate-100 rounded-lg px-2.5 py-1.5 border-0 cursor-pointer">
+        <button onClick={handlePrevMes} className="bg-slate-100 rounded-lg px-2.5 py-1.5 border-0 cursor-pointer">
           <ChevronLeft size={16} className="text-slate-500" />
         </button>
-        <span className="font-bold text-[14px] text-slate-900">{MESES[mesActual]} {anioActual}</span>
+        <span className="font-bold text-[14px] text-slate-900 capitalize">
+          {new Intl.DateTimeFormat('es-PE', { month: 'long', year: 'numeric' }).format(fechaBase)}
+        </span>
         <button
-          onClick={() => setMesOffset((o) => o + 1)}
-          disabled={mesOffset >= 0}
-          className={`bg-slate-100 rounded-lg px-2.5 py-1.5 border-0 cursor-pointer ${mesOffset >= 0 ? 'opacity-30 cursor-default' : ''}`}
+          onClick={handleNextMes}
+          disabled={isMesActualOrFuturo}
+          className={`bg-slate-100 rounded-lg px-2.5 py-1.5 border-0 cursor-pointer ${isMesActualOrFuturo ? 'opacity-30 cursor-default' : ''}`}
         >
           <ChevronRight size={16} className="text-slate-500" />
         </button>
@@ -533,7 +550,7 @@ export default function GeneralScreen() {
       </p>
 
       {ausenciaInfo && <ModalAusencia info={ausenciaInfo} onClose={() => setAusenciaInfo(null)} />}
-      {sheet.open && <BottomSheetEdicion sheet={sheet} onClose={() => setSheet(SHEET_VACIO)} />}
+      {sheet.open && <BottomSheetIncidencia sheet={sheet} onClose={() => setSheet(SHEET_VACIO)} />}
     </div>
   )
 }

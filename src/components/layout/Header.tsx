@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Settings } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import PerfilModal from './PerfilModal'
+import ConfiguracionModal from './ConfiguracionModal'
 
 // ── Badge de rol ─────────────────────────────────────────────
 const ROL_BADGE: Record<
@@ -64,6 +66,7 @@ function formatFechaHoy(): string {
 export default function Header() {
   const usuario = useAppStore((s) => s.usuarioActual)
   const [modalAbierto, setModalAbierto] = useState(false)
+  const [configModalAbierto, setConfigModalAbierto] = useState(false)
   const [fechaHoy, setFechaHoy] = useState(formatFechaHoy)
 
   // Actualizar fecha a medianoche (por si la app queda abierta)
@@ -217,41 +220,67 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Botón de perfil (Avatar circular) */}
-          <button
-            id="btn-abrir-perfil"
-            onClick={() => setModalAbierto(true)}
-            aria-label="Abrir perfil de usuario"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: '50%',
-              background:
-                'linear-gradient(135deg, #1E3A8A 0%, #3b82f6 100%)',
-              border: '2px solid rgba(59,130,246,0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 800,
-              color: 'white',
-              letterSpacing: '0.5px',
-              flexShrink: 0,
-              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-              boxShadow: '0 2px 12px rgba(37,99,235,0.35)',
-            }}
-            onMouseDown={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform =
-                'scale(0.93)'
-            }}
-            onMouseUp={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform =
-                'scale(1)'
-            }}
-          >
-            {usuario.avatarIniciales}
-          </button>
+          {/* Contenedor derecho: Acciones + Avatar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {usuario.rol === 'GERENCIA' && (
+              <button
+                onClick={() => setConfigModalAbierto(true)}
+                aria-label="Abrir configuración global"
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s',
+                  flexShrink: 0,
+                }}
+              >
+                <Settings size={18} />
+              </button>
+            )}
+
+            {/* Botón de perfil (Avatar circular) */}
+            <button
+              id="btn-abrir-perfil"
+              onClick={() => setModalAbierto(true)}
+              aria-label="Abrir perfil de usuario"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background:
+                  'linear-gradient(135deg, #1E3A8A 0%, #3b82f6 100%)',
+                border: '2px solid rgba(59,130,246,0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 800,
+                color: 'white',
+                letterSpacing: '0.5px',
+                flexShrink: 0,
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                boxShadow: '0 2px 12px rgba(37,99,235,0.35)',
+              }}
+              onMouseDown={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform =
+                  'scale(0.93)'
+              }}
+              onMouseUp={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform =
+                  'scale(1)'
+              }}
+            >
+              {usuario.avatarIniciales}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -259,6 +288,12 @@ export default function Header() {
       <PerfilModal
         abierto={modalAbierto}
         onCerrar={() => setModalAbierto(false)}
+      />
+
+      {/* Modal de configuración (Gerencia) */}
+      <ConfiguracionModal
+        abierto={configModalAbierto}
+        onCerrar={() => setConfigModalAbierto(false)}
       />
     </>
   )

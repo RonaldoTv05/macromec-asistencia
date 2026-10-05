@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { CheckCircle2, ChevronDown, ChevronUp, Clock, Send, Trash2, X, FileText } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Clock, Send, Trash2, X, FileText, Download, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
 import type { DiaHorario, Modalidad, RegistroDia } from '../types'
@@ -72,6 +72,7 @@ const DIAS_SEMANA: { key: DiaHorario['dia']; label: string }[] = [
 const MODALIDAD_LABELS: Record<Modalidad, string> = {
   presencial: 'Presencial',
   virtual: 'Virtual',
+  semipresencial: 'Semipresencial',
   libre: 'Libre',
 }
 
@@ -100,48 +101,56 @@ const FECHA_HOY = '2026-09-18' // Mock
 
 function PracticanteHorarios() {
   const practicantes = useAppStore((s) => s.practicantes)
+  const usuarioActual = useAppStore((s) => s.usuarioActual)
   const enviarHorario = useAppStore((s) => s.enviarHorario)
   const cancelarHorario = useAppStore((s) => s.cancelarHorario)
   const acumularHorasExtras = useAppStore((s) => s.acumularHorasExtras)
   const enviarInformeQuincenal = useAppStore((s) => s.enviarInformeQuincenal)
+  const informesQuincenales = useAppStore((s) => s.informesQuincenales)
   const p = practicantes[0]
+  const misInformes = informesQuincenales.filter(i => i.practicanteId === (usuarioActual?.id || p.id))
 
-  // File upload states
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // States for new Informe Quincenal modal
   const [showModal, setShowModal] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [mensaje, setMensaje] = useState('')
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files)
-      if (files.length > 3) {
-        toast.error('Puedes subir un máximo de 3 archivos.')
-        if (fileInputRef.current) fileInputRef.current.value = ''
-        return
-      }
-      if (files.length > 0) {
-        setSelectedFiles(files)
-        setShowModal(true)
-      }
-    }
-  }
+  // Default dates: last 14 days
+  const today = new Date()
+  const fourteenDaysAgo = new Date()
+  fourteenDaysAgo.setDate(today.getDate() - 14)
+
+  const [fechaInicio, setFechaInicio] = useState(fourteenDaysAgo.toISOString().split('T')[0])
+  const [fechaFin, setFechaFin] = useState(today.toISOString().split('T')[0])
+  const [archivoPracticante, setArchivoPracticante] = useState<string | undefined>(undefined)
+  const [mensajePracticante, setMensajePracticante] = useState('')
 
   const handleCerrarModal = () => {
     setShowModal(false)
-    setSelectedFiles([])
-    setMensaje('')
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    setArchivoPracticante(undefined)
+    setMensajePracticante('')
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setArchivoPracticante(e.target.files[0].name)
+      toast.success(`Documento adjuntado: ${e.target.files[0].name}`)
+    }
   }
 
   const handleEnviarInforme = () => {
+    if (!archivoPracticante) {
+      toast.error('Debes adjuntar el documento de SENATI')
+      return
+    }
+
     enviarInformeQuincenal({
-      practicanteId: p.id,
-      documentos: selectedFiles.map((f) => f.name),
-      mensajePracticante: mensaje,
+      practicanteId: usuarioActual?.id || p.id,
+      fechaInicio,
+      fechaFin,
+      archivoPracticanteBase64: archivoPracticante,
+      mensajePracticante,
     })
     handleCerrarModal()
-    toast.success('Informe quincenal enviado correctamente.')
+    toast.success('Informe enviado al supervisor')
   }
 
   const [diasForm, setDiasForm] = useState<DiaForm[]>(
@@ -412,70 +421,149 @@ function PracticanteHorarios() {
         </div>
       </div>
 
-      {/* Botón de envío de informe quincenal */}
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        className="w-full bg-slate-900 text-white rounded-xl py-3.5 text-[14px] font-bold mt-1 border-none cursor-pointer hover:bg-slate-800 transition-colors"
-      >
-        Mandar informe quincenal
-      </button>
+      {/* ── SECCIÓN: Mis Informes Quincenales (RF-57) ── */}
+      <div className="mt-6">
+        <h3 className="text-[16px] font-bold text-slate-800 mb-3">Mis Informes Quincenales</h3>
 
-      <input
-        type="file"
-        multiple
-        accept=".pdf,.doc,.docx"
-        className="hidden"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-      />
+        <div className="flex flex-col gap-3 mb-4">
+          {misInformes.length === 0 ? (
+            <div className="text-center text-[13px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl py-6 italic">
+              Aún no has enviado informes.
+            </div>
+          ) : (
+            misInformes.map((informe) => {
+              // Convert the stored ISO back to a date taking timezone correctly or just parsing simply
+              // For robustness, split and create local date
+              const [yI, mI, dI] = informe.fechaInicio.split('-').map(Number);
+              const [yF, mF, dF] = informe.fechaFin.split('-').map(Number);
+              const dateI = new Date(yI, mI - 1, dI);
+              const dateF = new Date(yF, mF - 1, dF);
 
-      {/* Modal Informe Quincenal */}
+              const formateador = new Intl.DateTimeFormat('es-PE', { day: 'numeric', month: 'short' });
+              const iniStr = formateador.format(dateI);
+              const finStr = formateador.format(dateF);
+
+              const isEnRevision = informe.estado === 'en_revision';
+              const isObservado = informe.estado === 'observado';
+              const isAprobado = informe.estado === 'aprobado_y_firmado';
+
+              return (
+                <div key={informe.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-[14px] text-slate-800 capitalize">
+                      {iniStr} - {finStr}
+                    </span>
+                    <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full ${isEnRevision ? 'bg-amber-100 text-amber-700' : isObservado ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                      {isEnRevision ? 'En Revisión' : isObservado ? 'Observado' : 'Aprobado'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                    <FileText size={14} className="text-blue-500 shrink-0" />
+                    <span className="truncate font-medium">{informe.archivoPracticanteBase64}</span>
+                  </div>
+                  {informe.mensajePracticante && (
+                    <div className="text-[12px] text-slate-500 italic line-clamp-2 mt-1">
+                      "{informe.mensajePracticante}"
+                    </div>
+                  )}
+
+                  {isAprobado && (
+                    <button
+                      onClick={() => alert('Descargando PDF firmado por el monitor...')}
+                      className="mt-1 w-full bg-blue-50 text-blue-600 rounded-xl py-2.5 flex items-center justify-center gap-2 text-[13px] font-bold transition-colors active:bg-blue-100 border-none cursor-pointer"
+                    >
+                      <Download size={16} /> Descargar Informe Final
+                    </button>
+                  )}
+                  {isObservado && informe.feedbackMonitor && (
+                    <div className="mt-1 bg-red-50 text-red-700 p-3 rounded-xl text-[12px]">
+                      <span className="font-bold block mb-1">Feedback del Monitor:</span>
+                      {informe.feedbackMonitor}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Botón de envío de informe quincenal */}
+        <button
+          onClick={() => setShowModal(true)}
+          className="w-full bg-slate-900 text-white rounded-2xl py-3.5 text-[14px] font-bold border-none cursor-pointer active:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+        >
+          <FileText size={18} /> Mandar informe nuevo
+        </button>
+      </div>
+
+      {/* Modal Informe Quincenal BottomSheet */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-[16px] font-bold text-slate-800 m-0">Informe quincenal</h3>
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-end justify-center animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={handleCerrarModal} />
+          <div className="w-full max-w-[430px] mx-auto bg-white rounded-t-[24px] overflow-hidden relative flex flex-col animate-in slide-in-from-bottom-full duration-300 max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <h3 className="text-[18px] font-bold text-slate-800 m-0">Nuevo Informe Quincenal</h3>
               <button
                 onClick={handleCerrarModal}
-                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border-none cursor-pointer hover:bg-slate-200"
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border-none cursor-pointer active:bg-slate-200"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 flex flex-col gap-4">
-              <div>
-                <div className="text-[13px] font-semibold text-slate-700 mb-2">Archivos adjuntos:</div>
-                <div className="flex flex-col gap-2">
-                  {selectedFiles.map((f, i) => (
-                    <div key={i} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                        <FileText size={16} />
-                      </div>
-                      <div className="text-[13px] font-medium text-slate-700 truncate">{f.name}</div>
-                    </div>
-                  ))}
+            <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[13px] font-semibold text-slate-700 mb-1.5 block">Periodo Inicio</label>
+                  <input
+                    type="date"
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[14px] text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[13px] font-semibold text-slate-700 mb-1.5 block">Periodo Fin</label>
+                  <input
+                    type="date"
+                    value={fechaFin}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[14px] text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="text-[13px] font-semibold text-slate-700 mb-2 block">Mensaje (opcional):</label>
+                <label className="text-[13px] font-semibold text-slate-700 mb-1.5 block">Documento de SENATI <span className="text-red-500">*</span></label>
+                <label className="border-2 border-dashed border-slate-300 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-blue-400 transition-colors bg-white">
+                  <Upload size={22} className="text-slate-400 mb-2" />
+                  <span className="text-[13px] font-medium text-slate-600 text-center">
+                    {archivoPracticante ? archivoPracticante : "Toca para subir el documento (.pdf, .doc)"}
+                  </span>
+                  <input type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={handleFileChange} />
+                </label>
+              </div>
+
+              <div>
+                <label className="text-[13px] font-semibold text-slate-700 mb-1.5 block">
+                  Nota extra para el supervisor <span className="font-normal text-slate-500">(Opcional)</span>
+                </label>
                 <textarea
-                  value={mensaje}
-                  onChange={(e) => setMensaje(e.target.value)}
-                  placeholder="Escribe un mensaje para tu supervisor..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] text-slate-700 outline-none resize-none h-24 box-border focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  value={mensajePracticante}
+                  onChange={(e) => setMensajePracticante(e.target.value)}
+                  placeholder="Comentario adicional sobre el informe..."
+                  className="w-full h-24 bg-slate-50 border border-slate-200 rounded-xl p-3 text-[14px] text-slate-800 outline-none resize-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
-            </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100">
-              <button
-                onClick={handleEnviarInforme}
-                className="w-full py-3.5 bg-blue-600 text-white rounded-xl text-[14px] font-bold border-none cursor-pointer hover:bg-blue-700 transition-colors"
-              >
-                Aceptar
-              </button>
+              <div className="pb-22">
+                <button
+                  onClick={handleEnviarInforme}
+                  className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-md flex justify-center items-center"
+                >
+                  Enviar al Supervisor
+                </button>
+              </div>
             </div>
           </div>
         </div>

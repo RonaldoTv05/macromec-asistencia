@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Eye, EyeOff, Lock, LogIn, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
+import PostulacionScreen from './PostulacionScreen'
 
 // ── Helpers de sanitización ──────────────────────────────────
 function sanitize(value: string): string {
@@ -20,6 +21,11 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
+  const [vistaPostulacion, setVistaPostulacion] = useState(false)
+
+  if (vistaPostulacion) {
+    return <PostulacionScreen onVolver={() => setVistaPostulacion(false)} />
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -392,6 +398,26 @@ export default function LoginScreen() {
             )}
           </button>
         </form>
+
+        {/* Enlace postulación */}
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <button
+            type="button"
+            onClick={() => setVistaPostulacion(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(96,165,250,0.9)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              textUnderlineOffset: 3,
+            }}
+          >
+            ¿Deseas hacer tus prácticas en Macromec? Postula aquí
+          </button>
+        </div>
       </div>
 
       {/* Footer */}

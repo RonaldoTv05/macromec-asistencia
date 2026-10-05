@@ -2,17 +2,28 @@
 import { useState } from 'react'
 import type { Modalidad } from '../types'
 import {
+  AlertCircle,
   AlertTriangle,
   Award,
   BarChart2,
+  Check,
   CheckCircle2,
   Clock,
   Clipboard,
+  Download,
+  FileText,
+  FolderOpen,
   TrendingUp,
+  Upload,
   Users,
   Zap,
   ChevronLeft,
   ChevronRight,
+  Trash2,
+  Plus,
+  History,
+  X,
+  Cake,
 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import {
@@ -82,10 +93,16 @@ function DashboardPracticante() {
   const usuario = useAppStore((s) => s.usuarioActual)
   const practicantes = useAppStore((s) => s.practicantes)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
+  const uploadDocumento = useAppStore((s) => s.uploadDocumento)
+  const plantilla = useAppStore((s) => s.plantillaAceptacion)
+
+  const [expedienteOpen, setExpedienteOpen] = useState(false)
 
   const p = practicantes[0]
   const balance = extraHoursBalances[0]
   const horasExtra = balance?.horasDisponibles ?? 0
+
+  const [fechaRegistroModal, setFechaRegistroModal] = useState<string | null>(null)
 
   const pct = Math.round((HORAS_SEMANA_ACTUAL / 30) * 100)
 
@@ -93,8 +110,8 @@ function DashboardPracticante() {
 
   // FASE 1: LÓGICA DE REVELACIÓN PROGRESIVA DE DÍAS (TIEMPO REAL)
   const hoy = new Date();
-  const diaSemanaHoy = hoy.getDay() === 0 ? 7 : hoy.getDay(); 
-  
+  const diaSemanaHoy = hoy.getDay() === 0 ? 7 : hoy.getDay();
+
   const diasAMostrar: Date[] = [];
   for (let i = 1; i <= diaSemanaHoy; i++) {
     const d = new Date(hoy);
@@ -104,13 +121,13 @@ function DashboardPracticante() {
 
   // FASE 2: CONEXIÓN CON EL STORE
   const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
-  
+
   const SEMANA_ACTUAL = diasAMostrar.map(d => {
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth() + 1).padStart(2, '0')
     const dd = String(d.getDate()).padStart(2, '0')
     const fechaStr = `${yyyy}-${mm}-${dd}`
-    
+
     const registro = p.historial.find(r => r.fecha === fechaStr)
     return registro || {
       fecha: fechaStr,
@@ -123,7 +140,7 @@ function DashboardPracticante() {
 
   // FASE 3: UI STRICTA EN TAILWIND CSS
   const getBadgeClass = (estado: string) => {
-    switch(estado) {
+    switch (estado) {
       case 'ASISTIO': return 'bg-emerald-100 text-emerald-800'
       case 'TARDANZA': return 'bg-amber-100 text-amber-800'
       case 'FALTA': return 'bg-red-100 text-red-800'
@@ -212,8 +229,8 @@ function DashboardPracticante() {
         <div className="h-[10px] bg-slate-200 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-700 ease-out ${pct >= 100
-                ? 'bg-emerald-600'
-                : 'bg-gradient-to-r from-blue-900 to-blue-600'
+              ? 'bg-emerald-600'
+              : 'bg-gradient-to-r from-blue-900 to-blue-600'
               }`}
             style={{ width: `${Math.min(pct, 100)}%` }}
           />
@@ -244,9 +261,10 @@ function DashboardPracticante() {
           <div className="text-[13px] text-slate-400 italic text-center py-4">No hay historial esta semana.</div>
         ) : (
           SEMANA_ACTUAL.map((d) => (
-            <div
+            <button
               key={d.fecha}
-              className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3"
+              onClick={() => setFechaRegistroModal(d.fecha)}
+              className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3 w-full text-left active:bg-slate-50 transition-colors"
             >
               <div
                 className={`w-10 h-10 rounded-[10px] shrink-0 flex items-center justify-center text-[12px] font-extrabold ${getBadgeClass(d.estado)}`}
@@ -270,21 +288,399 @@ function DashboardPracticante() {
                   ? 'ASISTIÓ'
                   : d.estado.replace(/_/g, ' ')}
               </span>
-            </div>
+            </button>
           ))
+        )}
+      </div>
+
+      {/* ── Expediente Documentario (RF-28 a RF-37) ── */}
+      {(() => {
+        const docs = p.documentos ?? { cartaPresentacion: null, evidenciaFormulario: null, cartaAceptacionFirmada: null, convenioFirmado: null, registroVinculacion: null }
+        const docsSubidos = Object.values(docs).filter(Boolean).length
+        const pctDocs = Math.round((docsSubidos / 5) * 100)
+
+        return (
+          <Card className="mt-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FolderOpen size={18} className="text-blue-600" />
+                <span className="font-bold text-[14px] text-slate-900">Mi Expediente Documentario</span>
+              </div>
+              <span className={`text-[12px] font-bold ${docsSubidos === 5 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {docsSubidos}/5
+              </span>
+            </div>
+
+            <div className="h-[8px] bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${docsSubidos === 5 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                style={{ width: `${pctDocs}%` }}
+              />
+            </div>
+
+            <button
+              onClick={() => setExpedienteOpen(true)}
+              className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-[14px] flex items-center justify-center gap-2 active:bg-blue-700 transition-colors"
+            >
+              <FileText size={17} />
+              Abrir Expediente
+            </button>
+          </Card>
+        )
+      })()}
+
+      {/* Modal Expediente */}
+      {expedienteOpen && (
+        <ModalExpediente
+          practicante={p}
+          usuario={usuario}
+          plantilla={plantilla}
+          onUpload={uploadDocumento}
+          onCerrar={() => setExpedienteOpen(false)}
+        />
+      )}
+
+      {/* BottomSheet Registro Diario */}
+      {fechaRegistroModal && (
+        <BottomSheetRegistroDiario
+          fecha={fechaRegistroModal}
+          practicante={p}
+          usuarioActual={usuario}
+          onClose={() => setFechaRegistroModal(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── BottomSheet Registro Diario (FASE 2) ────────────────────────
+export function BottomSheetRegistroDiario({
+  fecha,
+  practicante,
+  usuarioActual,
+  onClose,
+  vistaAuditoriaInicial = false
+}: {
+  fecha: string,
+  practicante: import('../types').Practicante,
+  usuarioActual: import('../types').User,
+  onClose: () => void,
+  vistaAuditoriaInicial?: boolean
+}) {
+  const guardarRegistroDiario = useAppStore(s => s.guardarRegistroDiario)
+
+  const registroActual = practicante.registrosDiarios?.[fecha]
+  const [actividadesLocales, setActividadesLocales] = useState<import('../types').ActividadDiaria[]>(
+    registroActual?.actividades || []
+  )
+  const [vistaAuditoria, setVistaAuditoria] = useState(vistaAuditoriaInicial)
+
+  const handleGuardar = () => {
+    guardarRegistroDiario(practicante.id, fecha, actividadesLocales, usuarioActual.nombre)
+    toast.success('Registro diario guardado')
+    onClose()
+  }
+
+  const handleAddActividad = () => {
+    setActividadesLocales([
+      ...actividadesLocales,
+      { id: Date.now().toString(), descripcion: '', tipo: 'Macromec', horas: 1 }
+    ])
+  }
+
+  const handleEliminar = (id: string) => {
+    setActividadesLocales(actividadesLocales.filter(a => a.id !== id))
+  }
+
+  const handleChange = (id: string, campo: keyof import('../types').ActividadDiaria, valor: any) => {
+    setActividadesLocales(actividadesLocales.map(a => a.id === id ? { ...a, [campo]: valor } : a))
+  }
+
+  return (
+    <div className="fixed inset-0 z-[400] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="w-full max-w-[430px] mx-auto bg-slate-50 rounded-t-[24px] p-5 max-h-[90vh] overflow-y-auto relative flex flex-col animate-in slide-in-from-bottom-full duration-300">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5 shrink-0">
+          <div>
+            <h3 className="font-bold text-slate-900 text-[18px]">
+              {vistaAuditoria ? 'Auditoría de Registro' : 'Registro de Actividades'}
+            </h3>
+            <span className="text-[13px] text-slate-500">{formatFecha(fecha)} — {practicante.nombre}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Solo se muestra en perfil supervisor */}
+            {usuarioActual.rol === 'SUPERVISOR' && (
+              <button
+                onClick={() => setVistaAuditoria(!vistaAuditoria)}
+                className={`p-2 rounded-full transition-colors ${vistaAuditoria ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-600'}`}
+              >
+                <History size={20} />
+              </button>
+            )}
+            <button onClick={onClose} className="bg-slate-200 p-2 rounded-full text-slate-600 active:scale-95 transition-transform">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        {vistaAuditoria ? (
+          <div className="flex flex-col gap-4">
+            {!registroActual?.historialVersiones?.length ? (
+              <div className="text-center text-slate-400 py-8 text-[13px]">No hay historial de versiones.</div>
+            ) : (
+              <div className="flex flex-col gap-3 relative before:absolute before:inset-y-0 before:left-3.5 before:w-px before:bg-slate-200">
+                {registroActual.historialVersiones.map((v, i) => (
+                  <div key={v.id} className="flex gap-3 relative">
+                    <div className="w-7 h-7 rounded-full bg-white border-2 border-blue-500 shrink-0 z-10 flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-slate-200 flex-1 shadow-sm">
+                      <div className="text-[13px] text-slate-800 font-bold mb-1">
+                        {v.accion === 'creado' ? 'Creación' : 'Edición'}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Por <span className="font-semibold text-slate-700">{v.autor}</span> a las {new Date(v.fechaEdicion).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {actividadesLocales.length === 0 ? (
+              <div className="text-center text-slate-400 py-6 text-[13px]">
+                {usuarioActual.rol === 'SUPERVISOR'
+                  ? 'El aprendiz no ha registrado actividades hoy.'
+                  : 'No has añadido ninguna actividad para este día.'}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {actividadesLocales.map((act) => (
+                  <div key={act.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <input
+                        type="text"
+                        placeholder="Descripción de la actividad..."
+                        value={act.descripcion}
+                        onChange={(e) => handleChange(act.id, 'descripcion', e.target.value)}
+                        className="flex-1 bg-transparent text-[13px] font-medium text-slate-800 placeholder-slate-400 outline-none w-full"
+                      />
+                      <button
+                        onClick={() => handleEliminar(act.id)}
+                        className="text-red-400 hover:text-red-600 bg-red-50 p-1.5 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <select
+                        value={act.tipo}
+                        onChange={(e) => handleChange(act.id, 'tipo', e.target.value as 'Macromec' | 'SENATI')}
+                        className="bg-slate-100 text-slate-700 text-[12px] font-semibold px-2 py-1.5 rounded-lg border-none outline-none"
+                      >
+                        <option value="Macromec">Macromec</option>
+                        <option value="SENATI">SENATI</option>
+                      </select>
+                      <div className="flex items-center gap-1 bg-slate-100 px-2 py-1.5 rounded-lg">
+                        <input
+                          type="number"
+                          min="0.5"
+                          step="0.5"
+                          value={act.horas}
+                          onChange={(e) => handleChange(act.id, 'horas', parseFloat(e.target.value) || 0)}
+                          className="bg-transparent text-[12px] font-semibold text-slate-700 w-10 text-center outline-none border-none"
+                        />
+                        <span className="text-[12px] font-semibold text-slate-500">hrs</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={handleAddActividad}
+              className="w-full border-2 border-dashed border-slate-300 text-slate-500 font-bold py-3 rounded-xl text-[13px] flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors"
+            >
+              <Plus size={16} />
+              {usuarioActual.rol === 'SUPERVISOR' ? 'Agregar/Editar actividades por el alumno' : 'Añadir Trabajo'}
+            </button>
+
+            <button
+              onClick={handleGuardar}
+              className="w-full mt-2 bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px] flex items-center justify-center gap-2 active:bg-blue-700 transition-transform active:scale-[0.98]"
+            >
+              <CheckCircle2 size={18} />
+              Guardar Registro
+            </button>
+          </div>
         )}
       </div>
     </div>
   )
 }
 
+// ── Modal Expediente Documentario ────────────────────────────────
+const DOC_CONFIG = [
+  { key: 'cartaPresentacion', label: 'Carta de Presentación', rf: 'RF-28' },
+  { key: 'evidenciaFormulario', label: 'Evidencia del Formulario', rf: 'RF-29' },
+  { key: '__generador__', label: '', rf: '' },
+  { key: 'cartaAceptacionFirmada', label: 'Carta de Aceptación Firmada', rf: 'RF-34' },
+  { key: 'convenioFirmado', label: 'Convenio Firmado', rf: 'RF-35' },
+  { key: 'registroVinculacion', label: 'Registro de Vinculación', rf: 'RF-36/37' },
+] as const
 
-// ============================================================
+function ModalExpediente({
+  practicante,
+  usuario,
+  plantilla,
+  onUpload,
+  onCerrar,
+}: {
+  practicante: import('../types').Practicante
+  usuario: any
+  plantilla: import('../types').PlantillaAceptacion
+  onUpload: (id: string, key: string, name: string) => void
+  onCerrar: () => void
+}) {
+  const docs = practicante.documentos ?? {
+    cartaPresentacion: null, evidenciaFormulario: null,
+    cartaAceptacionFirmada: null, convenioFirmado: null,
+    registroVinculacion: null,
+  }
+
+  const handleDescargarCarta = () => {
+    const nombre = usuario?.nombre || practicante.nombre || 'Estudiante'
+    const dni = usuario?.dni || practicante.dni || '--------'
+    const carrera = usuario?.carrera || practicante.carrera || 'No definida'
+
+    let contenido = plantilla?.contenidoHTML || '<p>Carta de Aceptación</p>'
+    contenido = contenido
+      .replace('[Nombre estudiante]', nombre)
+      .replace('[DNI]', dni)
+      .replace('[Carrera]', carrera)
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carta de Aceptación</title><style>body{font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:auto}h1{color:#1E3A8A;font-size:18px}p{line-height:1.6;font-size:14px}</style></head><body><h1>MACROMEC S.A.C. - Carta de Aceptación</h1><p><strong>Estudiante:</strong> ${nombre}</p><p><strong>DNI:</strong> ${dni}</p><p><strong>Carrera:</strong> ${carrera}</p><hr/>${contenido}<br/><p style="margin-top:40px;font-size:12px;color:#666">Documento generado automáticamente por el Sistema MACROMEC © 2026</p></body></html>`
+
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Carta_Aceptacion_${nombre.replace(/\s/g, '_')}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Carta de Aceptación descargada correctamente')
+  }
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
+      <div className="absolute inset-0" onClick={onCerrar} />
+      <div className="w-full max-w-[430px] mx-auto bg-white rounded-t-[20px] p-5 h-[90vh] overflow-y-auto relative shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+
+        <div className="flex items-center justify-between mb-5 shrink-0">
+          <div>
+            <h3 className="font-bold text-slate-800 text-[18px] leading-tight">Expediente Documentario</h3>
+            <span className="text-[12px] text-slate-500 font-medium">Sube tus documentos requeridos</span>
+          </div>
+          <button onClick={onCerrar} className="bg-slate-100 p-2 rounded-full text-slate-500 active:scale-95 transition-transform">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 pb-6">
+          {DOC_CONFIG.map((item, idx) => {
+            if (item.key === '__generador__') {
+              return (
+                <div key="gen" className="bg-blue-50 p-4 rounded-xl mb-1 border border-blue-100">
+                  <div className="text-[12px] font-bold text-blue-700 uppercase tracking-wide mb-2">RF-32/33 — Generador de Carta</div>
+                  <p className="text-[12px] text-blue-600 mb-3">Genera automáticamente tu Carta de Aceptación con los datos de tu cuenta.</p>
+                  <button
+                    onClick={handleDescargarCarta}
+                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-[13px] flex items-center justify-center gap-2 active:bg-blue-700 transition-colors"
+                  >
+                    <Download size={16} />
+                    Descargar Carta de Aceptación
+                  </button>
+                </div>
+              )
+            }
+
+            const docKey = item.key as keyof typeof docs
+            const value = docs[docKey]
+            const inputId = `file-${item.key}-${idx}`
+
+            return (
+              <div key={item.key} className="bg-white border border-slate-200 rounded-xl p-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{item.rf}</span>
+                    <div className="text-[13px] font-bold text-slate-800">{item.label}</div>
+                  </div>
+                  {value ? (
+                    <span className="bg-emerald-100 text-emerald-700 rounded-full px-2.5 py-0.5 text-[10px] font-bold flex items-center gap-1">
+                      <Check size={12} /> Subido
+                    </span>
+                  ) : (
+                    <span className="bg-amber-100 text-amber-700 rounded-full px-2.5 py-0.5 text-[10px] font-bold">
+                      Pendiente
+                    </span>
+                  )}
+                </div>
+
+                {value ? (
+                  <div className="text-[12px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2 truncate">
+                    📄 {value}
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="file"
+                      id={inputId}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          onUpload(practicante.id, item.key, file.name)
+                          toast.success(`${item.label} subido correctamente`)
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor={inputId}
+                      className="w-full bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-200 transition-colors"
+                    >
+                      <Upload size={15} />
+                      Seleccionar archivo
+                    </label>
+                  </>
+                )}
+
+                {item.key === 'registroVinculacion' && (
+                  <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex gap-2 text-yellow-800 text-xs">
+                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                    <span>Recuerda solicitar la hoja de asistencia a tu especialista de seguimiento al entregar este registro.</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}// ============================================================
 // DASHBOARD SUPERVISOR (NUEVO ROL - DÍA A DÍA)
 // ============================================================
 function DashboardSupervisor() {
   const practicantes = useAppStore((s) => s.practicantes)
+  const usuarioActual = useAppStore((s) => s.usuarioActual)
   const [fechaActual, setFechaActual] = useState(new Date(2026, 8, 22))
+  const [practicanteControlModal, setPracticanteControlModal] = useState<string | null>(null)
 
   const handlePrevDay = () => {
     const prev = new Date(fechaActual)
@@ -372,16 +768,30 @@ function DashboardSupervisor() {
             const estado = regHoy?.estado || 'PENDIENTE'
 
             return (
-              <div key={p.id} className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex flex-col justify-between">
+              <button
+                key={p.id}
+                onClick={() => setPracticanteControlModal(p.id)}
+                className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex flex-col justify-between text-left hover:bg-slate-100 active:bg-slate-200 transition-colors"
+              >
                 <div className="font-bold text-[11px] text-slate-900 leading-tight mb-1">
                   {p.nombre} {p.apellido.split(' ')[0]}
                 </div>
                 {renderBadge(modalidad, estado)}
-              </div>
+              </button>
             )
           })}
         </div>
       </div>
+
+      {practicanteControlModal && usuarioActual && (
+        <BottomSheetRegistroDiario
+          fecha={fechaStr}
+          practicante={practicantes.find(p => p.id === practicanteControlModal)!}
+          usuarioActual={usuarioActual}
+          onClose={() => setPracticanteControlModal(null)}
+          vistaAuditoriaInicial={false}
+        />
+      )}
     </div>
   )
 }
@@ -389,47 +799,56 @@ function DashboardSupervisor() {
 // ============================================================
 // DASHBOARD GERENCIA (Antiguo Dashboard Supervisor)
 // ============================================================
+// DASHBOARD GERENCIA (Antiguo Dashboard Supervisor)
+// ============================================================
 function DashboardGerencia() {
   const practicantes = useAppStore((s) => s.practicantes)
   const usuario = useAppStore((s) => s.usuarioActual)
-  const marcarAsistenciaRapida = useAppStore((s) => s.marcarAsistenciaRapida)
   const cambiarModalidadHoy = useAppStore((s) => s.cambiarModalidadHoy)
+  const borradorDiario = useAppStore((s) => s.borradorDiario)
+  const marcarBorrador = useAppStore((s) => s.marcarBorrador)
+  const mostrarAlertasFaltantes = useAppStore((s) => s.mostrarAlertasFaltantes)
+  const setMostrarAlertasFaltantes = useAppStore((s) => s.setMostrarAlertasFaltantes)
+  const confirmarLoteDiario = useAppStore((s) => s.confirmarLoteDiario)
 
-  const FECHA_HOY = '2026-09-18'
+  const HOY = new Date()
+  const FECHA_HOY = HOY.toISOString().split('T')[0]
+  const tituloHoyCapitalized = new Intl.DateTimeFormat('es-PE', { weekday: 'long', day: 'numeric', month: 'short' }).format(HOY)
+
+  const [modalNotificar, setModalNotificar] = useState(false)
+  const [observaciones, setObservaciones] = useState<Record<string, string>>({})
 
   // ── KPI: Solicitudes (reactivo desde store) ────────────────
   const pendientes = practicantes.filter(
     (p) => p.horarioPendiente?.estado === 'pendiente_aprobacion',
   )
 
+  const getEstadoActivo = (p: import('../types').Practicante) =>
+    borradorDiario[p.id] || p.historial.find((d) => d.fecha === FECHA_HOY)?.estado || 'PENDIENTE'
+
   // ── KPI: Presentes Hoy = Asistió + Campo + Tardanza (activos) ──
   const presentesHoy = practicantes.filter(
-    (p) =>
-      p.estadoLaboral === 'activo' &&
-      p.historial.some(
-        (d) =>
-          d.fecha === FECHA_HOY &&
-          ['ASISTIO', 'CAMPO', 'TARDANZA'].includes(d.estado),
-      ),
+    (p) => {
+      if (p.estadoLaboral !== 'activo') return false;
+      return ['ASISTIO', 'CAMPO', 'TARDANZA'].includes(getEstadoActivo(p))
+    }
   ).length
 
   // ── Almuerzos: REGLA — Presencial + (ASISTIO o CAMPO) ──
   const almuerzosHoy = practicantes.filter((p) => {
     if (p.estadoLaboral !== 'activo') return false
-    const reg = p.historial.find((d) => d.fecha === FECHA_HOY)
-    return reg?.modalidad === 'presencial' && (reg?.estado === 'ASISTIO' || reg?.estado === 'CAMPO')
+    const estado = getEstadoActivo(p)
+    const modalidad = p.historial.find((d) => d.fecha === FECHA_HOY)?.modalidad ?? p.modalidadBase
+    return modalidad === 'presencial' && (estado === 'ASISTIO' || estado === 'CAMPO')
   })
 
   const handleCopiarWhatsApp = async () => {
-    const fechaStr = new Date(2026, 8, 18).toLocaleDateString('es-PE', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    })
     const lista = almuerzosHoy.map((p) => {
-      const reg = p.historial.find((d) => d.fecha === FECHA_HOY)
-      const sufijo = reg?.estado === 'CAMPO' ? ' (C)' : ''
+      const estado = getEstadoActivo(p)
+      const sufijo = estado === 'CAMPO' ? ' (C)' : ''
       return `• ${p.nombre} ${p.apellido}${sufijo} ✓`
     }).join('\n')
-    const msg = `🍽️ *MACROMEC — Almuerzos del día*\n📅 ${fechaStr}\n\n*Total almuerzos confirmados:* ${almuerzosHoy.length}\n\n*Lista de personas con almuerzo:*\n${lista}\n\n_Mensaje generado automáticamente_`
+    const msg = `🍽️ *MACROMEC — Almuerzos del día*\n📅 ${tituloHoyCapitalized}\n\n*Total almuerzos confirmados:* ${almuerzosHoy.length}\n\n*Lista de personas con almuerzo:*\n${lista}\n\n_Mensaje generado automáticamente_`
     try {
       await navigator.clipboard.writeText(msg)
       toast.success('📋 Mensaje copiado al portapapeles')
@@ -439,12 +858,11 @@ function DashboardGerencia() {
   }
 
   const handleMarcar = (id: string, estado: import('../types').EstadoAsistencia) => {
-    marcarAsistenciaRapida(id, estado)
-    toast.success(`Asistencia marcada: ${estado.replace(/_/g, ' ')}`)
+    marcarBorrador(id, estado)
   }
 
-  const handleToggleModalidad = (id: string, modalidadActual: Modalidad) => {
-    const nueva: Modalidad = modalidadActual === 'presencial' ? 'virtual' : 'presencial'
+  const handleToggleModalidad = (id: string, modalidadActual: import('../types').Modalidad) => {
+    const nueva: import('../types').Modalidad = modalidadActual === 'presencial' ? 'virtual' : 'presencial'
     cambiarModalidadHoy(id, nueva)
   }
 
@@ -459,6 +877,32 @@ function DashboardGerencia() {
           </span>
         )}
       </div>
+
+      {/* ── Banner Cumpleaños (RF-49) ── */}
+      {(() => {
+        const mesActual = new Date().getMonth() + 1;
+        const cumpleañeros = practicantes.filter(p => {
+          if (!p.fechaNacimiento) return false;
+          const [, mes] = p.fechaNacimiento.split('-');
+          return parseInt(mes) === mesActual;
+        });
+
+        if (cumpleañeros.length === 0) return null;
+
+        return (
+          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex items-center gap-3 shadow-sm">
+            <div className="bg-indigo-100 text-indigo-600 p-2 rounded-full shrink-0">
+              <Cake size={18} />
+            </div>
+            <div>
+              <div className="text-[12px] font-bold text-indigo-900 leading-tight">Cumpleaños próximos este mes:</div>
+              <div className="text-[11px] text-indigo-700 mt-0.5">
+                {cumpleañeros.map(c => c.nombre.split(' ')[0]).join(', ')}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── KPIs ── */}
       <div style={{ display: 'flex', gap: 10 }}>
@@ -484,15 +928,21 @@ function DashboardGerencia() {
 
       {/* ── Asistencia de Hoy ── */}
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>
-          Asistencia de Hoy (Viernes 18 Sep)
+        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12, textTransform: 'capitalize' }}>
+          Asistencia de Hoy ({tituloHoyCapitalized})
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {practicantes.map((p) => {
             const reg = p.historial.find((h) => h.fecha === FECHA_HOY)
-            const estadoActual = reg?.estado
+            const estadoHistorial = reg?.estado
+            const estadoBorrador = borradorDiario[p.id]
+            const estadoActual = estadoBorrador || estadoHistorial || 'PENDIENTE'
+
+            const mostrarAlerta = (estadoBorrador && estadoBorrador !== estadoHistorial) ||
+              (mostrarAlertasFaltantes && !estadoBorrador && !estadoHistorial)
+
             // Modalidad activa hoy: si ya hay registro usa esa modalidad, si no usa modalidadBase
-            const modalidadHoy: Modalidad = (reg?.modalidad as Modalidad) ?? p.modalidadBase
+            const modalidadHoy: import('../types').Modalidad = (reg?.modalidad as import('../types').Modalidad) ?? p.modalidadBase
             const esVirtual = modalidadHoy === 'virtual'
 
             // ── Estado laboral bloqueado ──────────────────────
@@ -523,8 +973,9 @@ function DashboardGerencia() {
                 {/* Fila nombre + toggle modalidad */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {p.nombre} {p.apellido}
+                      {mostrarAlerta && <span className="text-red-500 font-extrabold text-lg animate-pulse">!</span>}
                     </div>
                     {almuerzosHoy.some((a) => a.id === p.id) && (
                       <div style={{ fontSize: 10, color: '#059669', fontWeight: 700, marginTop: 2 }}>
@@ -626,8 +1077,8 @@ function DashboardGerencia() {
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {almuerzosHoy.map((p) => {
-              const reg = p.historial.find((d) => d.fecha === FECHA_HOY)
-              const esCampo = reg?.estado === 'CAMPO'
+              const estado = getEstadoActivo(p)
+              const esCampo = estado === 'CAMPO'
               return (
                 <span
                   key={p.id}
@@ -646,6 +1097,88 @@ function DashboardGerencia() {
         )}
       </Card>
 
+      {/* ── Botón Notificar Incidencias (RF-51) ── */}
+      <button
+        onClick={() => {
+          const hayFaltantes = practicantes.some(p => p.estadoLaboral === 'activo' && !borradorDiario[p.id] && !p.historial.find(h => h.fecha === FECHA_HOY)?.estado)
+          if (hayFaltantes) {
+            setMostrarAlertasFaltantes(true)
+          }
+          setModalNotificar(true)
+        }}
+        className="w-full bg-slate-800 text-white font-bold py-3.5 rounded-xl text-[14px] active:bg-slate-900 transition-colors mt-2"
+      >
+        Notificar asistencia
+      </button>
+
+      {/* Modal BottomSheet Notificar Asistencia */}
+      {modalNotificar && (
+        <div className="fixed inset-0 z-[500] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={() => setModalNotificar(false)} />
+          <div className="w-full max-w-[430px] mx-auto bg-slate-50 rounded-t-[24px] p-5 max-h-[90vh] overflow-y-auto relative flex flex-col animate-in slide-in-from-bottom-full duration-300">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="font-bold text-slate-900 text-[18px]">Notificar asistencia</h3>
+                <span className="text-[13px] text-slate-500 capitalize">{tituloHoyCapitalized}</span>
+              </div>
+              <button onClick={() => setModalNotificar(false)} className="bg-slate-200 p-2 rounded-full text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {practicantes.filter(p => {
+                const est = getEstadoActivo(p)
+                return est === 'TARDANZA' || est === 'FALTA';
+              }).map(p => {
+                const est = getEstadoActivo(p)
+                return (
+                  <div key={p.id} className="bg-white p-3 rounded-xl border border-slate-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-bold text-[13px] text-slate-800">{p.nombre} {p.apellido}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${est === 'FALTA' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {est}
+                      </span>
+                    </div>
+                    <textarea
+                      placeholder="Observación (ej. Justificación, tardanza...)"
+                      value={observaciones[p.id] || ''}
+                      onChange={e => setObservaciones(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-[12px] resize-none outline-none focus:border-blue-400"
+                      rows={2}
+                    />
+                  </div>
+                )
+              })}
+
+              {practicantes.filter(p => {
+                const est = getEstadoActivo(p)
+                return est === 'TARDANZA' || est === 'FALTA';
+              }).length === 0 && (
+                  <div className="text-center text-slate-500 text-[13px] py-4 bg-white border border-slate-200 rounded-xl">
+                    No hay practicantes con tardanza o falta para hoy.
+                  </div>
+                )}
+
+              <button
+                onClick={() => {
+                  const payload = Object.entries(observaciones).map(([id, obs]) => ({
+                    id,
+                    observacion: obs
+                  }))
+                  confirmarLoteDiario(FECHA_HOY, payload)
+                  toast.success('Lote confirmado exitosamente')
+                  setModalNotificar(false)
+                  setObservaciones({})
+                }}
+                className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px]"
+              >
+                Confirmar asistencia
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

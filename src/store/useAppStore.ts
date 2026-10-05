@@ -4,6 +4,12 @@ import {
   EXTRA_HOURS_BALANCES,
   MOCK_PRACTICANTES,
   USUARIOS_SISTEMA,
+  MOCK_MACROMEC_CONFIG,
+  MOCK_CARRERAS,
+  MOCK_ESPECIALISTAS,
+  MOCK_SEMESTRES,
+  MOCK_PLANTILLA,
+  MOCK_MONITORES,
 } from '../data/mockData'
 import type {
   DiaHorario,
@@ -16,6 +22,15 @@ import type {
   Rol,
   RetiroData,
   User,
+  MacromecConfig,
+  Carrera,
+  Especialista,
+  Semestre,
+  PlantillaAceptacion,
+  SemestreConfig,
+  Postulante,
+  ActividadDiaria,
+  Monitor,
 } from '../types'
 
 // ============================================================
@@ -36,10 +51,15 @@ export type Tab =
 
 interface AppState {
   // ── Auth ─────────────────────────────────────────────────
-  usuarioActual: User | null
-  login: (username: string, password: string) => boolean
+  usuarioActual: any | null
+  usuariosSistema: User[]
+  login: (dni: string, pass: string) => boolean
   logout: () => void
   updatePerfil: (data: Partial<Omit<User, 'id' | 'username' | 'rol'>>) => void
+  addUsuario: (usuario: User) => void
+  generarCredenciales: (practicanteId: string) => void
+  sincronizarHikvision: (payload: {dni: string, fecha: string, horaEntrada: string, horaSalida: string, turnoFin: string}) => void
+  uploadDocumento: (practicanteId: string, docKey: string, fileName: string) => void
 
   // ── Rol activo (derivado de usuarioActual) ────────────────
   rolActivo: Rol | null
@@ -50,6 +70,7 @@ interface AppState {
 
   // ── Practicantes ──────────────────────────────────────────
   practicantes: Practicante[]
+  addPracticante: (practicante: Practicante) => void
   getPracticante: (id: string) => Practicante | undefined
 
   // Practicante seleccionado (para supervisor/admin)
@@ -83,6 +104,7 @@ interface AppState {
   ) => void
   marcarAsistenciaRapida: (
     practicanteId: string,
+    fechaISO: string,
     estado: EstadoAsistencia,
   ) => void
 
@@ -150,6 +172,50 @@ interface AppState {
   informesQuincenales: InformeQuincenal[]
   enviarInformeQuincenal: (informe: Omit<InformeQuincenal, 'id' | 'estado'>) => void
   aceptarInformeQuincenal: (informeId: string, feedback: string) => void
+  procesarInformeMonitor: (informeId: string, nuevoEstado: 'observado' | 'aprobado_y_firmado', feedback: string, archivoFirmado?: string) => void
+
+  // ── Postulaciones (RF-13) ─────────────────────────────────────────
+  postulaciones: Postulante[]
+  addPostulacion: (postulante: Postulante) => void
+  updatePostulacion: (id: string, data: Partial<Postulante>) => void
+  removePostulacion: (id: string) => void
+
+  // ── Registro Diario de Actividades ────────────────────────────────
+  guardarRegistroDiario: (practicanteId: string, fecha: string, actividades: ActividadDiaria[], nombreAutor: string) => void
+
+  // ── Módulo de Asistencia, Incidencias y Hikvision ─────────────────
+  borradorDiario: Record<string, import('../types').EstadoAsistencia>
+  mostrarAlertasFaltantes: boolean
+  marcarBorrador: (practicanteId: string, estado: import('../types').EstadoAsistencia) => void
+  setMostrarAlertasFaltantes: (valor: boolean) => void
+  confirmarLoteDiario: (
+    fechaISO: string,
+    observaciones: { id: string; observacion: string }[]
+  ) => void
+  registrarIncidencia: (practicanteId: string, fecha: string, datos: Partial<import('../types').RegistroAsistencia>) => void
+  cubrirFaltaConComodin: (practicanteId: string, fecha: string) => void
+  evaluarTardanzas: (practicanteId: string) => void
+
+  // ── Configuración Institucional y Semestral ───────────────────
+  macromecConfig: MacromecConfig
+  carreras: Carrera[]
+  especialistas: Especialista[]
+  semestres: Semestre[]
+  plantillaAceptacion: PlantillaAceptacion
+  monitores: Monitor[]
+
+  updateMacromecConfig: (config: Partial<MacromecConfig>) => void
+  addCarrera: (carrera: Carrera) => void
+  updateCarrera: (id: string, data: Partial<Carrera>) => void
+  addEspecialista: (especialista: Especialista) => void
+  updateEspecialista: (id: string, data: Partial<Especialista>) => void
+  deleteEspecialista: (id: string) => void
+  addSemestre: (semestre: Semestre) => void
+  updateSemestre: (id: string, semestre: Partial<Semestre>) => void
+  updateSemestreCalendario: (datos: Partial<Semestre>) => void
+  agregarFeriado: (fecha: string, motivo: string) => void
+  eliminarFeriado: (id: string) => void
+  updatePlantilla: (plantilla: Partial<PlantillaAceptacion>) => void
 }
 
 // ============================================================
@@ -162,23 +228,98 @@ export const useAppStore = create<AppState>()(
       // ── Auth ───────────────────────────────────────────────
       usuarioActual: null,
       rolActivo: null,
+      usuariosSistema: USUARIOS_SISTEMA,
 
-      login: (username, password) => {
-        // Sanitizar inputs básicos
-        const uSafe = username.trim().replace(/<[^>]*>/g, '')
-        const pSafe = password.replace(/<[^>]*>/g, '')
+      login: (dni: string, pass: string) => {
+        const dSafe = dni.trim().replace(/<[^>]*>/g, '')
+        const pSafe = pass.replace(/<[^>]*>/g, '')
 
-        const usuario = USUARIOS_SISTEMA.find(
-          (u) => u.username === uSafe && u.password === pSafe,
+        const usuario = get().usuariosSistema.find(
+          (u) => (u.username === dSafe || u.dni === dSafe) && u.password === pSafe,
         )
-        if (!usuario) return false
 
-        set({
-          usuarioActual: usuario,
-          rolActivo: usuario.rol,
-          tabActiva: 'hoy',
-        })
-        return true
+        if (usuario) {
+          set({
+            usuarioActual: usuario,
+            rolActivo: usuario.rol,
+            tabActiva: 'hoy',
+          })
+          return true
+        }
+
+        const practicanteValido = get().practicantes?.find(
+          (p) => (p.dni === dSafe || p.email === dSafe) && p.password === pSafe
+        )
+
+        if (practicanteValido) {
+          set({ 
+            usuarioActual: { ...practicanteValido, rol: 'PRACTICANTE' },
+            rolActivo: 'PRACTICANTE',
+            tabActiva: 'hoy'
+          })
+          return true
+        }
+
+        return false
+      },
+
+      generarCredenciales: (practicanteId) => {
+        const newPassword = Math.random().toString(36).slice(-6)
+        set((state) => ({
+          practicantes: state.practicantes.map((p) =>
+            p.id === practicanteId ? { ...p, password: newPassword } : p
+          )
+        }))
+      },
+
+      sincronizarHikvision: (payload) => {
+        set((state) => ({
+          practicantes: state.practicantes.map((p) => {
+            if (p.dni !== payload.dni) return p
+            let horasExtraHikvision = 0;
+            const hSalida = new Date(`1970-01-01T${payload.horaSalida}:00`)
+            const tFin = new Date(`1970-01-01T${payload.turnoFin}:00`)
+            
+            if (hSalida > tFin) {
+              horasExtraHikvision = (hSalida.getTime() - tFin.getTime()) / (1000 * 60 * 60)
+            }
+            
+            const asistenciaActual = p.asistencia || {}
+            return {
+              ...p,
+              hikvisionSync: true,
+              asistencia: {
+                ...asistenciaActual,
+                [payload.fecha]: {
+                  ...(asistenciaActual[payload.fecha] || { 
+                    estado: 'Asistió', 
+                    horasExtraManuales: 0, 
+                    horasExtraHikvision: 0, 
+                    faltaCubierta: false 
+                  }),
+                  estado: 'Asistió',
+                  horasExtraHikvision: Number(horasExtraHikvision.toFixed(2))
+                }
+              }
+            }
+          })
+        }))
+      },
+
+      uploadDocumento: (practicanteId, docKey, fileName) => {
+        set((state) => ({
+          practicantes: state.practicantes.map((p) => {
+            if (p.id !== practicanteId) return p
+            const docs = p.documentos ?? {
+              cartaPresentacion: null,
+              evidenciaFormulario: null,
+              cartaAceptacionFirmada: null,
+              convenioFirmado: null,
+              registroVinculacion: null,
+            }
+            return { ...p, documentos: { ...docs, [docKey]: fileName } }
+          })
+        }))
       },
 
       logout: () => {
@@ -187,6 +328,12 @@ export const useAppStore = create<AppState>()(
           rolActivo: null,
           tabActiva: 'hoy',
         })
+      },
+
+      addUsuario: (usuario) => {
+        set((state) => ({
+          usuariosSistema: [...state.usuariosSistema, usuario]
+        }))
       },
 
       updatePerfil: (data) => {
@@ -210,6 +357,18 @@ export const useAppStore = create<AppState>()(
 
       // ── Practicantes ────────────────────────────────────────
       practicantes: MOCK_PRACTICANTES,
+      addPracticante: (practicante) => set((state) => ({
+        practicantes: [...state.practicantes, {
+          ...practicante,
+          documentos: practicante.documentos ?? {
+            cartaPresentacion: null,
+            evidenciaFormulario: null,
+            cartaAceptacionFirmada: null,
+            convenioFirmado: null,
+            registroVinculacion: null,
+          },
+        }]
+      })),
       getPracticante: (id) => get().practicantes.find((p) => p.id === id),
 
       practicanteSeleccionadoId: MOCK_PRACTICANTES[0].id,
@@ -327,39 +486,38 @@ export const useAppStore = create<AppState>()(
             const existe = p.historial.some((d) => d.fecha === fecha)
             const hist = existe
               ? p.historial.map((d) =>
-                  d.fecha === fecha
-                    ? {
-                        ...d,
-                        estado,
-                        codigoHoja: estadoACodigo(estado),
-                        fuente: 'SUPERVISOR' as const,
-                      }
-                    : d,
-                )
-              : [
-                  ...p.historial,
-                  {
-                    fecha,
-                    modalidad: p.modalidadBase,
-                    horaIngreso:
-                      estado === 'ASISTIO'
-                        ? '08:05'
-                        : estado === 'TARDANZA'
-                          ? '08:30'
-                          : undefined,
+                d.fecha === fecha
+                  ? {
+                    ...d,
                     estado,
                     codigoHoja: estadoACodigo(estado),
                     fuente: 'SUPERVISOR' as const,
-                  },
-                ]
+                  }
+                  : d,
+              )
+              : [
+                ...p.historial,
+                {
+                  fecha,
+                  modalidad: p.modalidadBase,
+                  horaIngreso:
+                    estado === 'ASISTIO'
+                      ? '08:05'
+                      : estado === 'TARDANZA'
+                        ? '08:30'
+                        : undefined,
+                  estado,
+                  codigoHoja: estadoACodigo(estado),
+                  fuente: 'SUPERVISOR' as const,
+                },
+              ]
             return { ...p, historial: hist }
           }),
         }))
       },
 
-      marcarAsistenciaRapida: (practicanteId, estado) => {
-        const fechaHoy = '2026-09-18' // Mock
-        get().marcarAsistencia(practicanteId, fechaHoy, estado)
+      marcarAsistenciaRapida: (practicanteId, fechaISO, estado) => {
+        get().marcarAsistencia(practicanteId, fechaISO, estado)
       },
 
       cambiarModalidadHoy: (practicanteId, modalidad) => {
@@ -370,18 +528,18 @@ export const useAppStore = create<AppState>()(
             const existe = p.historial.some((d) => d.fecha === fechaHoy)
             const hist = existe
               ? p.historial.map((d) =>
-                  d.fecha === fechaHoy ? { ...d, modalidad } : d,
-                )
+                d.fecha === fechaHoy ? { ...d, modalidad } : d,
+              )
               : [
-                  ...p.historial,
-                  {
-                    fecha: fechaHoy,
-                    modalidad,
-                    estado: 'PENDIENTE' as EstadoAsistencia,
-                    codigoHoja: '-' as const,
-                    fuente: 'SUPERVISOR' as const,
-                  },
-                ]
+                ...p.historial,
+                {
+                  fecha: fechaHoy,
+                  modalidad,
+                  estado: 'PENDIENTE' as EstadoAsistencia,
+                  codigoHoja: '-' as const,
+                  fuente: 'SUPERVISOR' as const,
+                },
+              ]
             return { ...p, historial: hist }
           }),
         }))
@@ -394,27 +552,27 @@ export const useAppStore = create<AppState>()(
             const existe = p.historial.some((d) => d.fecha === fecha)
             const hist = existe
               ? p.historial.map((d) =>
-                  d.fecha === fecha
-                    ? {
-                        ...d,
-                        estado: 'CAMPO' as EstadoAsistencia,
-                        codigoHoja: 'C' as const,
-                        motivoCampo: motivo,
-                        fuente: 'SUPERVISOR' as const,
-                      }
-                    : d,
-                )
-              : [
-                  ...p.historial,
-                  {
-                    fecha,
-                    modalidad: p.modalidadBase,
+                d.fecha === fecha
+                  ? {
+                    ...d,
                     estado: 'CAMPO' as EstadoAsistencia,
                     codigoHoja: 'C' as const,
                     motivoCampo: motivo,
                     fuente: 'SUPERVISOR' as const,
-                  },
-                ]
+                  }
+                  : d,
+              )
+              : [
+                ...p.historial,
+                {
+                  fecha,
+                  modalidad: p.modalidadBase,
+                  estado: 'CAMPO' as EstadoAsistencia,
+                  codigoHoja: 'C' as const,
+                  motivoCampo: motivo,
+                  fuente: 'SUPERVISOR' as const,
+                },
+              ]
             return { ...p, historial: hist }
           }),
         }))
@@ -451,10 +609,10 @@ export const useAppStore = create<AppState>()(
           extraHoursBalances: state.extraHoursBalances.map((b) =>
             b.practicanteId === practicanteId
               ? {
-                  ...b,
-                  horasDisponibles: nuevoBalance,
-                  historial: [...b.historial, movimiento],
-                }
+                ...b,
+                horasDisponibles: nuevoBalance,
+                historial: [...b.historial, movimiento],
+              }
               : b,
           ),
           // Cambiar estado de FALTA → COMPENSADO en historial de asistencia
@@ -465,11 +623,11 @@ export const useAppStore = create<AppState>()(
               historial: p.historial.map((d) =>
                 d.fecha === fecha && d.estado === 'FALTA'
                   ? {
-                      ...d,
-                      estado: 'COMPENSADO' as EstadoAsistencia,
-                      codigoHoja: 'HE' as const,
-                      horasExtrasAplicadas: true,
-                    }
+                    ...d,
+                    estado: 'COMPENSADO' as EstadoAsistencia,
+                    codigoHoja: 'HE' as const,
+                    horasExtrasAplicadas: true,
+                  }
                   : d,
               ),
             }
@@ -490,34 +648,34 @@ export const useAppStore = create<AppState>()(
             const existe = p.historial.some((d) => d.fecha === fecha)
             const hist = existe
               ? p.historial.map((d) =>
-                  d.fecha === fecha
-                    ? {
-                        ...d,
-                        estado: nuevoEstado,
-                        modalidad,
-                        codigoHoja: estadoACodigo(nuevoEstado),
-                        fuente: 'SUPERVISOR' as const,
-                        horaIngreso:
-                          nuevoEstado === 'ASISTIO' ? (d.horaIngreso ?? '08:05')
-                          : nuevoEstado === 'TARDANZA' ? (d.horaIngreso ?? '08:30')
-                          : undefined,
-                      }
-                    : d,
-                )
-              : [
-                  ...p.historial,
-                  {
-                    fecha,
-                    modalidad,
-                    horaIngreso:
-                      nuevoEstado === 'ASISTIO' ? '08:05'
-                      : nuevoEstado === 'TARDANZA' ? '08:30'
-                      : undefined,
+                d.fecha === fecha
+                  ? {
+                    ...d,
                     estado: nuevoEstado,
+                    modalidad,
                     codigoHoja: estadoACodigo(nuevoEstado),
                     fuente: 'SUPERVISOR' as const,
-                  },
-                ]
+                    horaIngreso:
+                      nuevoEstado === 'ASISTIO' ? (d.horaIngreso ?? '08:05')
+                        : nuevoEstado === 'TARDANZA' ? (d.horaIngreso ?? '08:30')
+                          : undefined,
+                  }
+                  : d,
+              )
+              : [
+                ...p.historial,
+                {
+                  fecha,
+                  modalidad,
+                  horaIngreso:
+                    nuevoEstado === 'ASISTIO' ? '08:05'
+                      : nuevoEstado === 'TARDANZA' ? '08:30'
+                        : undefined,
+                  estado: nuevoEstado,
+                  codigoHoja: estadoACodigo(nuevoEstado),
+                  fuente: 'SUPERVISOR' as const,
+                },
+              ]
             return { ...p, historial: hist }
           }),
         }))
@@ -544,10 +702,10 @@ export const useAppStore = create<AppState>()(
           extraHoursBalances: state.extraHoursBalances.map((b) =>
             b.practicanteId === practicanteId
               ? {
-                  ...b,
-                  horasDisponibles: nuevoBalance,
-                  historial: [...b.historial, movimiento],
-                }
+                ...b,
+                horasDisponibles: nuevoBalance,
+                historial: [...b.historial, movimiento],
+              }
               : b,
           ),
           practicantes: state.practicantes.map((p) => {
@@ -556,13 +714,13 @@ export const useAppStore = create<AppState>()(
               ...p,
               historial: p.historial.map((d) =>
                 d.fecha === fecha &&
-                (d.estado === 'FALTA' || d.estado === 'TARDANZA')
+                  (d.estado === 'FALTA' || d.estado === 'TARDANZA')
                   ? {
-                      ...d,
-                      estado: 'COMPENSADO' as EstadoAsistencia,
-                      codigoHoja: 'HE' as const,
-                      horasExtrasAplicadas: true,
-                    }
+                    ...d,
+                    estado: 'COMPENSADO' as EstadoAsistencia,
+                    codigoHoja: 'HE' as const,
+                    horasExtrasAplicadas: true,
+                  }
                   : d,
               ),
             }
@@ -630,48 +788,342 @@ export const useAppStore = create<AppState>()(
         {
           id: 'inf-1',
           practicanteId: 'p1',
-          documentos: ['informe_quincenal_1.pdf'],
-          mensajePracticante: 'Adjunto mi informe de la primera quincena de septiembre.',
-          estado: 'pendiente'
+          fechaInicio: '2026-09-01',
+          fechaFin: '2026-09-15',
+          archivoPracticanteBase64: 'informe_quincenal_1.pdf',
+          mensajePracticante: 'Mantenimiento preventivo, inventario de taller.',
+          estado: 'en_revision'
         },
         {
           id: 'inf-2',
           practicanteId: 'p2',
-          documentos: ['actividades_sep.docx'],
-          mensajePracticante: 'Revisión solicitada.',
-          estado: 'pendiente'
+          fechaInicio: '2026-09-01',
+          fechaFin: '2026-09-15',
+          archivoPracticanteBase64: 'actividades_sep.pdf',
+          mensajePracticante: 'Configuración de red, soporte técnico.',
+          estado: 'observado',
+          feedbackMonitor: 'Falta detalle en soporte técnico.'
         }
       ],
-      enviarInformeQuincenal: (informe) => {
-        set((state) => ({
-          informesQuincenales: [
-            ...state.informesQuincenales,
-            {
-              ...informe,
-              id: Date.now().toString(),
-              estado: 'pendiente'
-            }
-          ]
-        }))
+      enviarInformeQuincenal: (payload) => {
+        set((state) => {
+          const nuevoInforme = {
+            id: `inf-${Date.now()}`,
+            practicanteId: state.usuarioActual?.id || 'p1',
+            fechaInicio: payload.fechaInicio,
+            fechaFin: payload.fechaFin,
+            archivoPracticanteBase64: payload.archivoPracticanteBase64,
+            mensajePracticante: payload.mensajePracticante || '',
+            estado: 'en_revision' as const,
+          };
+          return { informesQuincenales: [nuevoInforme, ...state.informesQuincenales] };
+        })
       },
       aceptarInformeQuincenal: (informeId, feedback) => {
         set((state) => ({
           informesQuincenales: state.informesQuincenales.map(inf =>
             inf.id === informeId
-              ? { ...inf, estado: 'revisado', feedbackSupervisor: feedback }
+              ? { ...inf, estado: 'aprobado_y_firmado', feedbackMonitor: feedback }
               : inf
           )
         }))
       },
+      procesarInformeMonitor: (informeId, nuevoEstado, feedback, archivoFirmado) => {
+        set((state) => ({
+          informesQuincenales: state.informesQuincenales.map(inf => 
+            inf.id === informeId 
+              ? { 
+                  ...inf, 
+                  estado: nuevoEstado, 
+                  feedbackMonitor: feedback, 
+                  archivoFirmadoBase64: archivoFirmado 
+                } 
+              : inf
+          )
+        }))
+      },
+
+      // ── Registro Diario de Actividades ────────────────────────────────
+      guardarRegistroDiario: (practicanteId, fecha, actividades, nombreAutor) => {
+        set((state) => ({
+          practicantes: state.practicantes.map(p => {
+            if (p.id !== practicanteId) return p;
+            
+            const registros = p.registrosDiarios || {};
+            const existeRegistro = !!registros[fecha];
+            
+            const nuevaVersion = {
+              id: Date.now().toString(),
+              fechaEdicion: new Date().toISOString(),
+              autor: nombreAutor,
+              accion: existeRegistro ? 'editado' : 'creado'
+            } as const;
+
+            const historialVersiones = existeRegistro 
+              ? [...(registros[fecha].historialVersiones || []), nuevaVersion]
+              : [nuevaVersion];
+
+            return {
+              ...p,
+              registrosDiarios: {
+                ...registros,
+                [fecha]: {
+                  fecha,
+                  actividades,
+                  historialVersiones
+                }
+              }
+            };
+          })
+        }))
+      },
+
+      // ── Módulo de Asistencia, Incidencias y Hikvision ─────────────────
+      borradorDiario: {},
+      mostrarAlertasFaltantes: false,
+      marcarBorrador: (practicanteId, estado) => {
+        set((state) => ({
+          borradorDiario: {
+            ...state.borradorDiario,
+            [practicanteId]: estado
+          }
+        }))
+      },
+      setMostrarAlertasFaltantes: (valor) => {
+        set({ mostrarAlertasFaltantes: valor })
+      },
+      confirmarLoteDiario: (fechaISO, observaciones) => {
+        set((state) => {
+          const nuevosPracticantes = state.practicantes.map((p) => {
+            const estadoBorrador = state.borradorDiario[p.id]
+            const datoObs = observaciones.find((o) => o.id === p.id)
+            
+            if (!estadoBorrador && !datoObs) return p
+
+            const existe = p.historial.some((h) => h.fecha === fechaISO)
+            let nuevoHistorial = p.historial
+
+            if (existe) {
+              nuevoHistorial = p.historial.map((h) =>
+                h.fecha === fechaISO
+                  ? {
+                      ...h,
+                      ...(estadoBorrador ? { estado: estadoBorrador, codigoHoja: estadoACodigo(estadoBorrador) } : {}),
+                      ...(datoObs ? { observacion: datoObs.observacion } : {}),
+                      fuente: 'SUPERVISOR' as const,
+                    }
+                  : h
+              )
+            } else if (estadoBorrador) {
+              nuevoHistorial = [
+                ...p.historial,
+                {
+                  fecha: fechaISO,
+                  modalidad: p.modalidadBase,
+                  estado: estadoBorrador,
+                  codigoHoja: estadoACodigo(estadoBorrador),
+                  ...(datoObs ? { observacion: datoObs.observacion } : {}),
+                  fuente: 'SUPERVISOR' as const,
+                },
+              ]
+            }
+
+            return { ...p, historial: nuevoHistorial }
+          })
+
+          return {
+            practicantes: nuevosPracticantes,
+            borradorDiario: {},
+            mostrarAlertasFaltantes: false,
+          }
+        })
+      },
+      registrarIncidencia: (practicanteId, fecha, datos) => {
+        set((state) => ({
+          practicantes: state.practicantes.map((p) => {
+            if (p.id !== practicanteId) return p
+            const asistencia = p.asistencia || {}
+            const actual = asistencia[fecha] || { estado: 'Pendiente', horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false }
+            
+            const nuevoHistorial = p.historial.map(h => 
+              h.fecha === fecha && datos.observacion !== undefined
+                ? { ...h, observacion: datos.observacion }
+                : h
+            )
+            
+            return {
+              ...p,
+              historial: nuevoHistorial,
+              asistencia: {
+                ...asistencia,
+                [fecha]: { ...actual, ...datos }
+              }
+            }
+          })
+        }))
+      },
+      cubrirFaltaConComodin: (practicanteId, fecha) => {
+        set((state) => {
+          let horasExtraTotales = 0
+          const balance = state.extraHoursBalances.find(b => b.practicanteId === practicanteId)
+          if (balance) {
+            horasExtraTotales = balance.horasDisponibles
+          }
+
+          if (horasExtraTotales < 6) {
+            return state // No hay horas suficientes
+          }
+
+          return {
+            extraHoursBalances: state.extraHoursBalances.map(b => {
+              if (b.practicanteId !== practicanteId) return b
+              return {
+                ...b,
+                horasDisponibles: b.horasDisponibles - 6,
+                historial: [...b.historial, {
+                  id: `he-comodin-${Date.now()}`,
+                  tipo: 'deduccion',
+                  horas: 6,
+                  fecha: new Date().toISOString().split('T')[0],
+                  descripcion: `Falta cubierta con comodín (${fecha})`,
+                  balanceResultante: b.horasDisponibles - 6
+                }]
+              }
+            }),
+            practicantes: state.practicantes.map(p => {
+              if (p.id !== practicanteId) return p
+              const asistencia = p.asistencia || {}
+              const actual = asistencia[fecha]
+              if (actual && actual.estado === 'Falta') {
+                return {
+                  ...p,
+                  asistencia: {
+                    ...asistencia,
+                    [fecha]: { ...actual, faltaCubierta: true }
+                  }
+                }
+              }
+              return p
+            })
+          }
+        })
+      },
+      evaluarTardanzas: (practicanteId) => {
+        set((state) => ({
+          practicantes: state.practicantes.map(p => {
+            if (p.id !== practicanteId) return p
+            
+            const hoy = new Date()
+            const mesActual = hoy.getMonth()
+            const añoActual = hoy.getFullYear()
+            
+            let tardanzasCount = 0
+            if (p.asistencia) {
+              Object.entries(p.asistencia).forEach(([fecha, reg]) => {
+                const d = new Date(fecha)
+                if (d.getMonth() === mesActual && d.getFullYear() === añoActual && reg.estado === 'Tardanza') {
+                  tardanzasCount++
+                }
+              })
+            }
+            
+            if (tardanzasCount > 0 && tardanzasCount % 3 === 0) {
+              const fechaHoyStr = hoy.toISOString().split('T')[0]
+              const asistencia = p.asistencia || {}
+              return {
+                ...p,
+                asistencia: {
+                  ...asistencia,
+                  [fechaHoyStr]: {
+                    ...(asistencia[fechaHoyStr] || { horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false }),
+                    estado: 'Falta',
+                    observacion: 'Falta generada por acumular 3 tardanzas'
+                  }
+                }
+              }
+            }
+            return p
+          })
+        }))
+      },
+
+      // ── Configuración Institucional y Semestral ───────────────────
+      macromecConfig: MOCK_MACROMEC_CONFIG,
+      carreras: MOCK_CARRERAS,
+      especialistas: MOCK_ESPECIALISTAS,
+      semestres: MOCK_SEMESTRES,
+      plantillaAceptacion: MOCK_PLANTILLA,
+      monitores: MOCK_MONITORES,
+
+      updateMacromecConfig: (config) => set((state) => ({ macromecConfig: { ...state.macromecConfig, ...config } })),
+      addCarrera: (carrera) => set((state) => ({ carreras: [...state.carreras, carrera] })),
+      updateCarrera: (id, data) => set((state) => ({ carreras: state.carreras.map(c => c.id === id ? { ...c, ...data } : c) })),
+      addEspecialista: (especialista) => set((state) => ({ especialistas: [...state.especialistas, especialista] })),
+      updateEspecialista: (id, data) => set((state) => ({ especialistas: state.especialistas.map(e => e.id === id ? { ...e, ...data } : e) })),
+      deleteEspecialista: (id) => set((state) => {
+        return {
+          especialistas: state.especialistas.filter(e => e.id !== id),
+        }
+      }),
+      addSemestre: (semestre) => set((state) => ({ semestres: [...state.semestres, semestre] })),
+      updateSemestre: (id, data) => set((state) => ({ semestres: state.semestres.map(s => s.id === id ? { ...s, ...data } : s) })),
+      updateSemestreCalendario: (datos) => set((state) => ({
+        semestres: state.semestres.map((s, idx) => idx === 0 ? { ...s, ...datos } : s)
+      })),
+      agregarFeriado: (fecha, motivo) => set((state) => ({
+        semestres: state.semestres.map((s, idx) => {
+          if (idx !== 0) return s;
+          const nuevoFeriado = { id: `f-${Date.now()}`, fecha, motivo };
+          return { ...s, feriados: [...s.feriados, nuevoFeriado] };
+        })
+      })),
+      eliminarFeriado: (id) => set((state) => ({
+        semestres: state.semestres.map((s, idx) => {
+          if (idx !== 0) return s;
+          return { ...s, feriados: s.feriados.filter(f => f.id !== id) };
+        })
+      })),
+      updatePlantilla: (plantilla) => set((state) => ({ plantillaAceptacion: { ...state.plantillaAceptacion, ...plantilla } })),
+
+      // ── Postulaciones ─────────────────────────────────────────
+      postulaciones: [],
+      addPostulacion: (postulante) => set((state) => ({ postulaciones: [...state.postulaciones, postulante] })),
+      updatePostulacion: (id, data) => set((state) => ({ postulaciones: state.postulaciones.map(p => p.id === id ? { ...p, ...data } : p) })),
+      removePostulacion: (id) => set((state) => ({ postulaciones: state.postulaciones.filter(p => p.id !== id) })),
     }),
     {
       name: 'macromec-v2-storage',
+      merge: (persistedState: any, currentState) => {
+        if (persistedState?.carreras?.length === 3) {
+          persistedState.carreras = MOCK_CARRERAS;
+        }
+        // Limpiar cache si especialistas tiene el formato antiguo (propiedad 'nombre' en vez de 'nombres')
+        if (persistedState?.especialistas && persistedState.especialistas.length > 0 && 'nombre' in persistedState.especialistas[0]) {
+          persistedState.especialistas = MOCK_ESPECIALISTAS;
+        }
+        // Limpiar cache para forzar los feriados a objetos y datos SENATI
+        if (persistedState?.semestres && persistedState.semestres.length > 0) {
+          const first = persistedState.semestres[0];
+          if (first.feriados && typeof first.feriados[0] === 'string') {
+            persistedState.semestres = MOCK_SEMESTRES;
+          }
+        }
+        return { ...currentState, ...persistedState }
+      },
       partialize: (state) => ({
         tabActiva: state.tabActiva,
         practicantes: state.practicantes,
         practicanteSeleccionadoId: state.practicanteSeleccionadoId,
         extraHoursBalances: state.extraHoursBalances,
         informesQuincenales: state.informesQuincenales,
+        usuariosSistema: state.usuariosSistema,
+        macromecConfig: state.macromecConfig,
+        carreras: state.carreras,
+        especialistas: state.especialistas,
+        semestres: state.semestres,
+        plantillaAceptacion: state.plantillaAceptacion,
+        monitores: state.monitores,
+        postulaciones: state.postulaciones,
       }),
     },
   ),

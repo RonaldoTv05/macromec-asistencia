@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  Camera,
   CheckCircle2,
   Edit3,
   LogOut,
@@ -403,31 +404,85 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
           ) : (
             // ── Modo lectura ────────────────────────────────
             <>
-              <FilaDato
-                icono={<User size={15} style={{ color: '#2563EB' }} />}
-                label="Nombres y Apellidos"
-                valor={usuario.nombre}
-              />
-              <FilaDato
-                icono={<Mail size={15} style={{ color: '#2563EB' }} />}
-                label="Correo Institucional"
-                valor={usuario.email}
-              />
-              <FilaDato
-                icono={<Phone size={15} style={{ color: '#2563EB' }} />}
-                label="Teléfono"
-                valor={usuario.tel}
-              />
-              <FilaDato
-                icono={<Shield size={15} style={{ color: '#2563EB' }} />}
-                label="Carrera / Área"
-                valor={usuario.carrera}
-              />
-              <FilaDato
-                icono={<CheckCircle2 size={15} style={{ color: '#059669' }} />}
-                label="DNI"
-                valor={usuario.dni}
-              />
+              {usuario.rol !== 'PRACTICANTE' && (
+                <>
+                  <FilaDato
+                    icono={<User size={15} style={{ color: '#2563EB' }} />}
+                    label="Nombres y Apellidos"
+                    valor={usuario.nombre}
+                  />
+                  <FilaDato
+                    icono={<Mail size={15} style={{ color: '#2563EB' }} />}
+                    label="Correo Institucional"
+                    valor={usuario.email}
+                  />
+                  <FilaDato
+                    icono={<Phone size={15} style={{ color: '#2563EB' }} />}
+                    label="Teléfono"
+                    valor={usuario.tel}
+                  />
+                  <FilaDato
+                    icono={<Shield size={15} style={{ color: '#2563EB' }} />}
+                    label="Carrera / Área"
+                    valor={usuario.carrera}
+                  />
+                  <FilaDato
+                    icono={<CheckCircle2 size={15} style={{ color: '#059669' }} />}
+                    label="DNI"
+                    valor={usuario.dni}
+                  />
+                </>
+              )}
+
+              {usuario.rol === 'PRACTICANTE' && (
+                <>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 flex flex-col gap-2">
+                    <div className="text-[12px] font-bold text-slate-500 uppercase mb-1">Mis Datos</div>
+                    <FilaDato icono={<CheckCircle2 size={15} style={{ color: '#2563EB' }} />} label="DNI" valor={usuario.dni} />
+                    <FilaDato icono={<Shield size={15} style={{ color: '#2563EB' }} />} label="Carrera" valor={usuario.carrera} />
+                    <FilaDato icono={<User size={15} style={{ color: '#2563EB' }} />} label="Semestre" valor={usuario.semestre || 'No definido'} />
+                  </div>
+                  
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+                    <div className="text-[12px] font-bold text-slate-500 uppercase mb-2">Datos de la Empresa</div>
+                    <div className="text-[13px] text-slate-700">
+                      <strong>RUC:</strong> 20546789123<br/>
+                      <strong>Razón Social:</strong> MACROMEC S.A.C.<br/>
+                      <strong>Sede:</strong> Callao
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+                    <div className="text-[12px] font-bold text-slate-500 uppercase mb-2 flex items-center justify-between">
+                      Registro Facial Hikvision
+                      {usuario.fotoHikvision && <CheckCircle2 size={15} className="text-emerald-500" />}
+                    </div>
+                    <div className="border-dashed border-2 border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center gap-2">
+                      <Camera size={24} className="text-slate-400" />
+                      <div className="text-[12px] text-slate-500 text-center mb-1">
+                        Sube una foto frontal clara para el acceso biométrico
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        id="fotoHikvision" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            toast.success('Foto subida y optimizada para Hikvision')
+                          }
+                        }}
+                      />
+                      <label 
+                        htmlFor="fotoHikvision" 
+                        className="bg-blue-600 text-white font-bold text-[13px] px-4 py-2 rounded-xl cursor-pointer hover:bg-blue-700 transition-colors"
+                      >
+                        Subir Foto
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Botón editar */}
               <button
