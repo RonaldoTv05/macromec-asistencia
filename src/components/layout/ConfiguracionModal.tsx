@@ -18,7 +18,7 @@ function BottomSheetCarrera({
 }) {
   if (!carrera) return null;
 
-  const updateCarreraConfig = useAppStore(s => s.updateCarreraConfig)
+  const updateCarrera = useAppStore(s => s.updateCarrera)
   const especialistas = useAppStore(s => s.especialistas)
 
   // Estados locales con null safety (Fase 3)
@@ -45,7 +45,7 @@ function BottomSheetCarrera({
       semestres,
       peaArchivo
     }
-    updateCarreraConfig(carrera.id, nuevaConfig)
+    updateCarrera(carrera.id, { configuraciones: [nuevaConfig] })
     toast.success('Configuración guardada')
     onCerrar()
   }
@@ -435,7 +435,7 @@ function SeccionCarreras() {
                   <span className="text-[13px] font-bold text-slate-800">{c.nombre}</span>
                   <div className="flex flex-col mt-0.5 gap-0.5">
                     {c.configuraciones && c.configuraciones.length > 0 ? (
-                      c.configuraciones.map((conf, idx) => {
+                      c.configuraciones.map((conf: any, idx: number) => {
                         const esp = especialistas.find(e => e.id === conf.especialistaId)
                         return (
                           <span key={idx} className="text-[11px] text-emerald-600 font-medium leading-tight">

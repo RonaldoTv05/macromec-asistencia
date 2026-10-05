@@ -239,6 +239,7 @@ export interface Carrera {
   id: string;
   nombre: string;
   especialistaNombre: string;
+  configuraciones?: any[];
 }
 
 export interface Monitor {

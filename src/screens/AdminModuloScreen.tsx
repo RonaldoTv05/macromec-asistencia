@@ -682,7 +682,7 @@ function BottomSheetPracticante({
     toast.loading("Conectando con dispositivo...", { id: 'hikvision' })
     setTimeout(() => {
       sincronizarHikvision({
-        dni: practicante.dni,
+        dni: practicante.dni || '',
         fecha: new Date().toISOString().split('T')[0],
         horaEntrada: '08:00',
         horaSalida: '17:00',
