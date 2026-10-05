@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil } from 'lucide-react'
+import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone } from 'lucide-react'
 import type { Especialista } from '../../types'
-import { useAppStore } from '../../store/useAppStore'
+import { useAppStore, enviarCredencialesWhatsApp } from '../../store/useAppStore'
 import { toast } from 'sonner'
 import type { Carrera, SemestreConfig } from '../../types'
 
@@ -375,9 +375,9 @@ function BottomSheetListaEspecialistas({
             <div key={esp.id} className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
               <div className="flex flex-col pr-2">
                 <span className="text-[13px] font-bold text-slate-800">{esp.nombres} {esp.apellidos}</span>
-                <span className="text-[11px] text-slate-500 mt-0.5">DNI: {esp.dni} | Cel: {esp.celular}</span>
+                <span className="text-[11px] text-slate-500 mt-0.5 mb-2">DNI: {esp.dni} | Cel: {esp.celular}</span>
               </div>
-              <div className="flex gap-2 shrink-0">
+              <div className="flex gap-2 shrink-0 self-start">
                 <button onClick={() => onEditar(esp)} className="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
                   <Pencil size={14} />
                 </button>

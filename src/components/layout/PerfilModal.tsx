@@ -40,28 +40,35 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
   const usuario = useAppStore((s) => s.usuarioActual)
   const updatePerfil = useAppStore((s) => s.updatePerfil)
   const logout = useAppStore((s) => s.logout)
+  const practicantes = useAppStore((s) => s.practicantes)
+  const monitores = useAppStore((s) => s.monitores || [])
+
+  const practicanteCompleto = usuario?.rol === 'PRACTICANTE'
+    ? practicantes.find(p => p.dni === usuario.dni)
+    : null;
 
   const [editando, setEditando] = useState(false)
   const [guardando, setGuardando] = useState(false)
+  const [verMasDatos, setVerMasDatos] = useState(false)
 
   // Form state (local, sólo se aplica al guardar)
   const [formNombre, setFormNombre] = useState('')
   const [formEmail, setFormEmail] = useState('')
   const [formTel, setFormTel] = useState('')
-  const [formCarrera, setFormCarrera] = useState('')
+  const [formFechaNacimiento, setFormFechaNacimiento] = useState('')
   const [errores, setErrores] = useState<Record<string, string>>({})
 
   // Sincronizar form con usuario actual al abrir
   useEffect(() => {
     if (abierto && usuario) {
-      setFormNombre(usuario.nombre)
-      setFormEmail(usuario.email)
-      setFormTel(usuario.tel)
-      setFormCarrera(usuario.carrera)
+      setFormNombre(usuario.nombre || practicanteCompleto?.nombre || '')
+      setFormEmail(usuario.email || practicanteCompleto?.email || '')
+      setFormTel(usuario.tel || practicanteCompleto?.celular || '')
+      setFormFechaNacimiento(usuario.fechaNacimiento || practicanteCompleto?.fechaNacimiento || '')
       setEditando(false)
       setErrores({})
     }
-  }, [abierto, usuario])
+  }, [abierto, usuario, practicanteCompleto])
 
   // Bloquear scroll del body cuando el modal está abierto
   useEffect(() => {
@@ -97,7 +104,7 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
       nombre: sanitize(formNombre),
       email: sanitize(formEmail),
       tel: sanitize(formTel),
-      carrera: sanitize(formCarrera),
+      fechaNacimiento: sanitize(formFechaNacimiento),
       avatarIniciales:
         sanitize(formNombre)
           .split(' ')
@@ -105,7 +112,7 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
           .map((n) => n[0])
           .join('')
           .toUpperCase() || usuario.avatarIniciales,
-    })
+    } as any);
     setGuardando(false)
     setEditando(false)
     setErrores({})
@@ -336,12 +343,13 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
                 type="tel"
               />
               <CampoEditable
-                id="edit-carrera"
-                label="Carrera / Área"
-                icono={<Shield size={15} />}
-                valor={formCarrera}
-                onChange={setFormCarrera}
-                placeholder="Tu carrera o área"
+                id="edit-fecha"
+                label="Fecha de Nacimiento"
+                icono={<User size={15} />}
+                valor={formFechaNacimiento}
+                onChange={setFormFechaNacimiento}
+                placeholder="YYYY-MM-DD"
+                type="date"
               />
 
               {/* Botones edición */}
@@ -436,18 +444,61 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
 
               {usuario.rol === 'PRACTICANTE' && (
                 <>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 flex flex-col gap-2">
-                    <div className="text-[12px] font-bold text-slate-500 uppercase mb-1">Mis Datos</div>
-                    <FilaDato icono={<CheckCircle2 size={15} style={{ color: '#2563EB' }} />} label="DNI" valor={usuario.dni} />
-                    <FilaDato icono={<Shield size={15} style={{ color: '#2563EB' }} />} label="Carrera" valor={usuario.carrera} />
-                    <FilaDato icono={<User size={15} style={{ color: '#2563EB' }} />} label="Semestre" valor={usuario.semestre || 'No definido'} />
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+                    <div className="text-[12px] font-bold text-slate-500 uppercase mb-3">Mis Datos</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">DNI</span>
+                        <span className="text-xs font-semibold text-slate-800">{usuario.dni}</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">Celular</span>
+                        <span className="text-xs font-semibold text-slate-800">{usuario.tel}</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">Carrera</span>
+                        <span className="text-xs font-semibold text-slate-800 line-clamp-1" title={usuario.carrera}>{usuario.carrera}</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">Semestre</span>
+                        <span className="text-xs font-semibold text-slate-800">{usuario.semestre || practicanteCompleto?.semestre || 'No definido'}</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">Modalidad</span>
+                        <span className="text-xs font-semibold text-slate-800 capitalize">{usuario.modalidadBase || practicanteCompleto?.modalidadBase || 'Presencial'}</span>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">Estado</span>
+                        <span className="text-xs font-semibold text-emerald-600 capitalize">{practicanteCompleto?.estadoLaboral || 'Activo'}</span>
+                      </div>
+                    </div>
+
+                    {verMasDatos && (
+                      <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
+                        <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col col-span-2">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase">Email Institucional</span>
+                          <span className="text-xs font-semibold text-slate-800">{practicanteCompleto?.email || usuario.email || 'No registrado'}</span>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col col-span-2">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase">Fecha de Nacimiento</span>
+                          <span className="text-xs font-semibold text-slate-800">{usuario.fechaNacimiento || practicanteCompleto?.fechaNacimiento || 'No registrada'}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => setVerMasDatos(!verMasDatos)}
+                      className="w-full text-center text-xs text-blue-600 font-semibold mt-3 py-2 hover:bg-blue-100 rounded-lg transition-colors"
+                    >
+                      {verMasDatos ? 'Ver menos' : 'Ver más datos'}
+                    </button>
                   </div>
-                  
+
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
                     <div className="text-[12px] font-bold text-slate-500 uppercase mb-2">Datos de la Empresa</div>
                     <div className="text-[13px] text-slate-700">
-                      <strong>RUC:</strong> 20546789123<br/>
-                      <strong>Razón Social:</strong> MACROMEC S.A.C.<br/>
+                      <strong>RUC:</strong> 20546789123<br />
+                      <strong>Razón Social:</strong> MACROMEC S.A.C.<br />
                       <strong>Sede:</strong> Callao
                     </div>
                   </div>
@@ -462,19 +513,19 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
                       <div className="text-[12px] text-slate-500 text-center mb-1">
                         Sube una foto frontal clara para el acceso biométrico
                       </div>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        id="fotoHikvision" 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        accept="image/*"
+                        id="fotoHikvision"
+                        className="hidden"
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
                             toast.success('Foto subida y optimizada para Hikvision')
                           }
                         }}
                       />
-                      <label 
-                        htmlFor="fotoHikvision" 
+                      <label
+                        htmlFor="fotoHikvision"
                         className="bg-blue-600 text-white font-bold text-[13px] px-4 py-2 rounded-xl cursor-pointer hover:bg-blue-700 transition-colors"
                       >
                         Subir Foto

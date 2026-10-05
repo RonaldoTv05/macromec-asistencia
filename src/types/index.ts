@@ -148,11 +148,13 @@ export interface RegistroAsistencia {
 export interface Practicante {
   id: string
   nombre: string
-  apellido: string
+  apellido?: string
   email: string
   fechaNacimiento?: string
   dni?: string
   tel?: string
+  celular?: string
+  password?: string
   carrera?: string
   carreraId: string;
   semestre?: string
@@ -170,7 +172,6 @@ export interface Practicante {
   estadoLaboral: EstadoLaboral
   retiro?: RetiroData
   fechaIngreso?: string
-  password?: string
   hikvisionSync?: boolean
   fotoHikvision?: string
   documentos?: {
@@ -246,6 +247,12 @@ export interface Monitor {
   id: string;
   nombre: string;
   area: string;
+  dni?: string;
+  celular?: string;
+  rol?: string;
+  especialistasAsignados?: string[];
+  correoGmail?: string;
+  password?: string;
 }
 
 export interface Especialista {
@@ -272,6 +279,8 @@ export interface Postulante {
   correo: string
   carreraId: string
   semestre: string
+  fechaNacimiento?: string
+  edad?: number
   fechaPostulacion: string
   estado: 'pendiente' | 'entrevistado'
   observaciones: string

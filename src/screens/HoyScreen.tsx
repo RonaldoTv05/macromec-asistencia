@@ -28,8 +28,6 @@ import {
 import { useAppStore } from '../store/useAppStore'
 import {
   HORAS_SEMANA_ACTUAL,
-  KPI_ALMUERZOS_HOY,
-  REPORTE_GERENCIA,
   SEMANA_ANTERIOR_LABEL,
   HORAS_SEMANA_ANTERIOR,
 } from '../data/mockData'
@@ -95,6 +93,15 @@ function DashboardPracticante() {
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
   const uploadDocumento = useAppStore((s) => s.uploadDocumento)
   const plantilla = useAppStore((s) => s.plantillaAceptacion)
+  const carreras = useAppStore((s) => s.carreras || [])
+  const monitores = useAppStore((s) => s.monitores || [])
+
+  const carreraAsignada = carreras.find(c => c.nombre === usuario?.carrera);
+  const nombreEspecialista = carreraAsignada ? carreraAsignada.especialistaNombre : 'Especialista no asignado';
+  
+  const practicanteCompleto = practicantes.find(p => p.dni === usuario?.dni);
+  const supervisorAsignado = monitores.find(m => m.id === practicanteCompleto?.monitorId);
+  const nombreSupervisor = supervisorAsignado ? supervisorAsignado.nombre : 'Supervisor no asignado';
 
   const [expedienteOpen, setExpedienteOpen] = useState(false)
 
@@ -166,10 +173,28 @@ function DashboardPracticante() {
               {usuario.nombre}
             </div>
             <div className="text-[12px] text-slate-500">
-              {p.carrera} ·{' '}
+              {usuario.carrera || p.carrera || 'Sin carrera'} ·{' '}
               <span className="font-semibold text-blue-900 capitalize">
-                {p.modalidadBase}
+                {usuario?.modalidadBase || p?.modalidadBase || 'Semipresencial'}
               </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4 space-y-2">
+          <div className="flex flex-col">
+            <span className="text-xs text-slate-500 font-semibold uppercase">Carrera SENATI</span>
+            <span className="text-sm font-medium text-slate-800">{usuario?.carrera || 'Sin carrera registrada'}</span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 mt-2">
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-500 font-semibold uppercase">Especialista (SENATI)</span>
+              <span className="text-sm font-medium text-blue-700">{nombreEspecialista}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-500 font-semibold uppercase">Supervisor (MACROMEC)</span>
+              <span className="text-sm font-medium text-green-700">{nombreSupervisor}</span>
             </div>
           </div>
         </div>
@@ -211,45 +236,6 @@ function DashboardPracticante() {
         </div>
       </Card>
 
-      {/* ── Progreso semanal con comparativo ── */}
-      <Card>
-        <div className="flex justify-between items-center">
-          <span className="font-bold text-[14px] text-slate-900">
-            Horas Semanales
-          </span>
-          <span
-            className={`text-[12px] font-bold ${pct >= 100 ? 'text-emerald-600' : 'text-blue-600'
-              }`}
-          >
-            {HORAS_SEMANA_ACTUAL} / 30 hrs
-          </span>
-        </div>
-
-        {/* Barra de progreso */}
-        <div className="h-[10px] bg-slate-200 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ease-out ${pct >= 100
-              ? 'bg-emerald-600'
-              : 'bg-gradient-to-r from-blue-900 to-blue-600'
-              }`}
-            style={{ width: `${Math.min(pct, 100)}%` }}
-          />
-        </div>
-
-        <div className="flex justify-between items-center">
-          <span className="text-[11px] text-slate-400">
-            {pct}% completado esta semana
-          </span>
-        </div>
-
-        {/* Comparativo semana anterior */}
-        <div className="bg-emerald-50 border border-emerald-200 rounded-[10px] py-2 px-3 flex items-center gap-2">
-          <TrendingUp size={14} className="text-emerald-600 shrink-0" />
-          <span className="text-[11px] text-emerald-800 font-semibold">
-            {SEMANA_ANTERIOR_LABEL}: {HORAS_SEMANA_ANTERIOR}h completadas — ✓ Meta alcanzada
-          </span>
-        </div>
-      </Card>
 
       {/* ── Historial Reciente ── */}
       <div className="font-bold text-[14px] text-slate-900 pl-0.5 mt-2">
@@ -677,8 +663,14 @@ function ModalExpediente({
 // DASHBOARD SUPERVISOR (NUEVO ROL - DÍA A DÍA)
 // ============================================================
 function DashboardSupervisor() {
-  const practicantes = useAppStore((s) => s.practicantes)
+  const todosPracticantes = useAppStore((s) => s.practicantes)
   const usuarioActual = useAppStore((s) => s.usuarioActual)
+
+  // PASO 4: Filtro relacional estricto — el Supervisor solo ve sus practicantes
+  const practicantes = usuarioActual
+    ? todosPracticantes.filter((p) => p.monitorId === usuarioActual.id)
+    : todosPracticantes
+
   const [fechaActual, setFechaActual] = useState(new Date(2026, 8, 22))
   const [practicanteControlModal, setPracticanteControlModal] = useState<string | null>(null)
 
@@ -802,6 +794,7 @@ function DashboardSupervisor() {
 // DASHBOARD GERENCIA (Antiguo Dashboard Supervisor)
 // ============================================================
 function DashboardGerencia() {
+  // PASO 4: GERENCIA ve todos los practicantes sin filtro
   const practicantes = useAppStore((s) => s.practicantes)
   const usuario = useAppStore((s) => s.usuarioActual)
   const cambiarModalidadHoy = useAppStore((s) => s.cambiarModalidadHoy)

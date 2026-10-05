@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ArrowLeft, GraduationCap, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
@@ -27,12 +27,29 @@ export default function PostulacionScreen({
   const [correo, setCorreo] = useState('')
   const [carreraId, setCarreraId] = useState('')
   const [semestre, setSemestre] = useState('')
+  const [fechaNacimiento, setFechaNacimiento] = useState('')
+  const [edad, setEdad] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
+
+  useEffect(() => {
+    if (fechaNacimiento) {
+      const hoy = new Date()
+      const cumple = new Date(fechaNacimiento)
+      let e = hoy.getFullYear() - cumple.getFullYear()
+      const m = hoy.getMonth() - cumple.getMonth()
+      if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) {
+        e--
+      }
+      setEdad(e)
+    } else {
+      setEdad(null)
+    }
+  }, [fechaNacimiento])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!nombres.trim() || !apellidos.trim() || !dni.trim() || !celular.trim() || !correo.trim() || !carreraId || !semestre) {
+    if (!nombres.trim() || !apellidos.trim() || !dni.trim() || !celular.trim() || !correo.trim() || !carreraId || !semestre || !fechaNacimiento) {
       toast.error('Todos los campos son obligatorios')
       return
     }
@@ -59,6 +76,8 @@ export default function PostulacionScreen({
       correo: sanitize(correo),
       carreraId,
       semestre,
+      fechaNacimiento,
+      edad: edad || undefined,
       fechaPostulacion: new Date().toISOString(),
       estado: 'pendiente' as const,
       observaciones: '',
@@ -191,6 +210,27 @@ export default function PostulacionScreen({
               />
             </div>
 
+            {/* Fecha de Nacimiento */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 6 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Fecha de Nacimiento</label>
+                {edad !== null && (
+                  <span className="bg-blue-100 text-blue-800 text-[12px] px-2 py-0.5 rounded-full font-bold">
+                    {edad} años
+                  </span>
+                )}
+              </div>
+              <input
+                type="date"
+                value={fechaNacimiento}
+                onChange={(e) => setFechaNacimiento(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  color: fechaNacimiento ? 'white' : 'rgba(148,163,184,0.6)',
+                }}
+              />
+            </div>
+
             {/* Celular */}
             <div>
               <label style={labelStyle}>Celular</label>
@@ -242,9 +282,9 @@ export default function PostulacionScreen({
               </select>
             </div>
 
-            {/* Ciclo SENATI */}
+            {/* Semestre */}
             <div>
-              <label style={labelStyle}>Ciclo SENATI</label>
+              <label style={labelStyle}>Semestre</label>
               <select
                 value={semestre}
                 onChange={(e) => setSemestre(e.target.value)}

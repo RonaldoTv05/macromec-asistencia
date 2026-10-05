@@ -35,16 +35,16 @@ export const USUARIOS_SISTEMA: User[] = [
     avatarIniciales: 'JS',
   },
   {
-    id: 'm1',
-    username: 'RonaldoTv',
-    password: 'RonaldoTv05',
-    nombre: 'Ronaldo Torres',
+    id: 'sup-alexander',
+    username: 'Alexander',
+    password: 'Alexander05',
+    nombre: 'Alexander Marquez',
     rol: 'SUPERVISOR',
-    email: 'ronaldotv@macromec.pe',
+    email: 'alexander@macromec.pe',
     dni: '70192834',
     tel: '+51 912 345 678',
-    carrera: 'Supervisión de Operaciones',
-    avatarIniciales: 'RT',
+    carrera: 'Mecatrónica Industrial',
+    avatarIniciales: 'AM',
   },
   {
     id: 'usr-gerencia',
@@ -195,122 +195,46 @@ function makeHistorial(
 // DATOS MOCK — 25 PRACTICANTES PERUANOS
 // ============================================================
 
-const nombres: [string, string, string][] = [
-  ['María', 'Quispe', 'Huanca'],
-  ['Luis', 'Rojas', 'Paredes'],
-  ['Ana', 'García', 'Llanos'],
-  ['Pedro', 'Cruz', 'Mamani'],
-  ['Sofía', 'Vargas', 'Torres'],
-  ['Carlos', 'Flores', 'Condori'],
-  ['Lucía', 'Mendoza', 'Cárdenas'],
-  ['Diego', 'Huanca', 'Apaza'],
-  ['Valentina', 'Pizarro', 'Ramos'],
-  ['Andrés', 'Salazar', 'Beltrán'],
-  ['Camila', 'Reyes', 'Ccopa'],
-  ['Fabricio', 'Mamani', 'Quispe'],
-  ['Gabriela', 'Ccama', 'Flores'],
-  ['Jorge', 'Tapia', 'Soto'],
-  ['Daniela', 'Lozano', 'Vega'],
-  ['Rodrigo', 'Arce', 'Meza'],
-  ['Valeria', 'Sucari', 'Puma'],
-  ['Emilio', 'Bautista', 'Ríos'],
-  ['Isabella', 'Chávez', 'Inca'],
-  ['Mateo', 'Neira', 'Lazo'],
-  ['Renata', 'Palomino', 'Yucra'],
-  ['Sebastián', 'Cuentas', 'Gutierrez'],
-  ['Fernanda', 'Aliaga', 'Coyla'],
-  ['Óscar', 'Linares', 'Zevallos'],
-  ['Mariana', 'Espinoza', 'Herrera'],
-]
+export const practicantesData: any[] = [
+  { id: 'p1', nombre: 'Junior', apellido: 'Sandoval', dni: '72849102', celular: '999999999', carrera: 'Ingeniería Industrial', semestre: 'S6', modalidadBase: 'Presencial', monitorId: 'sup-1', estado: 'activo', fechaNacimiento: '2004-01-01' },
+  { id: 'prac-0', nombre: 'Paul Anderson', apellido: 'Velasquez Rivera', dni: '72033653', celular: '989 997 058', carrera: 'Electricidad Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2005-01-01' },
+  { id: 'prac-1', nombre: 'Fernando', apellido: 'Laime Fernandez', dni: '71544323', celular: '900 253 793', carrera: 'Electricidad Industrial', semestre: 'VI Semestre', modalidadBase: 'Presencial', monitorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2005-01-08' },
+  { id: 'prac-2', nombre: 'Joseph Andriy', apellido: 'Hidalgo Romero', dni: '60481186', celular: '921 729 939', carrera: 'Electricidad Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2007-03-30' },
+  { id: 'prac-3', nombre: 'Luis Angel', apellido: 'Lavado Bernardo', dni: '60010984', celular: '987398164', carrera: 'Mecatrónica Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2007-01-17' },
+  { id: 'prac-4', nombre: 'Francisc Leonid', apellido: 'De la cruz alberto', dni: '70945793', celular: '957649763', carrera: 'Mecatrónica Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2004-03-12' },
+  { id: 'prac-5', nombre: 'Jhomar Grover', apellido: 'Buenalaya Vargas', dni: '60316214', celular: '957582141', carrera: 'Mecatrónica Industrial', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2007-12-21' },
+  { id: 'prac-6', nombre: 'Luis Alexandro', apellido: 'Flores Galvan', dni: '60316202', celular: '918 273 785', carrera: 'Electricidad Industrial', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2005-01-01' },
+  { id: 'prac-7', nombre: 'Jesus David', apellido: 'Ledesma Fernandez', dni: '76339946', celular: '983243884', carrera: 'Electricidad Industrial', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2005-01-01' },
+  { id: 'prac-8', nombre: 'Brayann Jesus', apellido: 'Huamalies Rodriguez', dni: '76515619', celular: '912309138', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2002-04-03' },
+  { id: 'prac-9', nombre: 'Rossel Robiño', apellido: 'Alfonso Vilcarano', dni: '71306749', celular: '918587422', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-david', estado: 'activo', fechaNacimiento: '2005-05-20' },
+  { id: 'prac-10', nombre: 'Cristopher Raúl', apellido: 'Alfaro Benito', dni: '60005824', celular: '913138969', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-david', estado: 'activo', fechaNacimiento: '2006-07-03' },
+  { id: 'prac-11', nombre: 'Jhojan Jesus', apellido: 'Ccente Chocca', dni: '60005813', celular: '936364152', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-david', estado: 'activo', fechaNacimiento: '2006-06-02' },
+  { id: 'prac-12', nombre: 'Jenifer Mercedes', apellido: 'Carhuamaca Morales', dni: '62916601', celular: '906561817', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '1999-07-08' },
+  { id: 'prac-13', nombre: 'Yhoner', apellido: 'Carreon uzco', dni: '60243679', celular: '985756873', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '2007-11-14' },
+  { id: 'prac-14', nombre: 'Franco', apellido: 'Acuña Huaman', dni: '75252121', celular: '933977111', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '2006-06-25' },
+  { id: 'prac-15', nombre: 'Leydi Xiomi', apellido: 'RIMARI VENTURA', dni: '73644362', celular: '962566085', carrera: 'Administración', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-tamy', estado: 'activo', fechaNacimiento: '2001-08-27' },
+  { id: 'prac-16', nombre: 'Yhesely Nandely', apellido: 'Pariona Paez', dni: '60273212', celular: '930483472', carrera: 'Administración', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-tamy', estado: 'activo', fechaNacimiento: '2007-07-05' },
+  { id: 'prac-17', nombre: 'Álvaro Cristofer', apellido: 'Díaz Castro', dni: '61695399', celular: '+51 934 870 269', carrera: 'Ingeniería de Software', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2003-10-12' },
+  { id: 'prac-18', nombre: 'WILLY ROY', apellido: 'PASMINIO AREVALO', dni: '47215963', celular: '999146946', carrera: 'Ingeniería de Software', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '1992-07-27' },
+  { id: 'prac-19', nombre: 'Mayerly Ayelen', apellido: 'Galarza Sánchez', dni: '60514630', celular: '922067673', carrera: 'Ingeniería de Software', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2007-08-22' },
+  { id: 'prac-20', nombre: 'Luis Alexander', apellido: 'Márquez Oré', dni: '72402294', celular: '961041473', carrera: 'Mecatrónica Industrial', semestre: 'Egresado', modalidadBase: 'Semipresencial', monitorId: 'sup-1', estado: 'activo', fechaNacimiento: '2002-09-08' },
+  { id: 'prac-21', nombre: 'Tatiana Maybet', apellido: 'Pacheco Quijano', dni: '80836189', celular: '989418140', carrera: 'Ingeniería de Software', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2006-05-14' },
+  { id: 'prac-22', nombre: 'Estefany', apellido: 'Vilchez Gutierrez', dni: '70720431', celular: '925132541', carrera: 'Ingeniería de Software', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2007-07-31' }
+];
 
-const modalidades: Modalidad[] = [
-  'presencial', 'virtual', 'presencial', 'presencial', 'virtual',
-  'presencial', 'presencial', 'virtual', 'presencial', 'presencial',
-  'virtual', 'presencial', 'presencial', 'presencial', 'virtual',
-  'presencial', 'presencial', 'virtual', 'presencial', 'presencial',
-  'presencial', 'virtual', 'presencial', 'presencial', 'virtual',
-]
-
-// Estados laborales mock para variedad visual
-const estadosLaborales: EstadoLaboral[] = [
-  'activo', 'activo', 'retirado', 'activo', 'activo',
-  'activo', 'activo', 'activo', 'retirado', 'activo',
-  'activo', 'activo', 'activo', 'activo', 'activo',
-  'activo', 'activo', 'activo', 'activo', 'activo',
-  'activo', 'activo', 'activo', 'activo', 'activo',
-]
-
-export const MOCK_PRACTICANTES: Practicante[] = nombres.map(
-  ([nombre, ap1, ap2], idx) => {
-    const id = `prac-${idx + 1}`
-    const modalidadBase = modalidades[idx]
-    const estadoLaboral = estadosLaborales[idx]
-
-    const horarioDias: Partial<DiaHorario>[] = [
-      { modalidad: modalidadBase, horaInicio: '08:00', horaFin: '13:00' },
-      { modalidad: modalidadBase, horaInicio: '08:00', horaFin: '13:00' },
-      { modalidad: 'virtual', horaInicio: '08:00', horaFin: '14:00' },
-      { modalidad: modalidadBase, horaInicio: '08:00', horaFin: '13:00' },
-      { modalidad: modalidadBase, horaInicio: '08:00', horaFin: '10:00' },
-    ]
-
-    const historial = makeHistorial(modalidadBase, idx)
-
-    const tienePendiente = idx < 4
-    const horarioPendiente: HorarioSemanal | undefined = tienePendiente
-      ? {
-        id: `hp-${id}-${Date.now()}`,
-        semana: 38,
-        anio: 2026,
-        dias: (
-          ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'] as const
-        ).map((dia, di) => ({
-          dia,
-          modalidad: horarioDias[di].modalidad!,
-          horaInicio: horarioDias[di].horaInicio!,
-          horaFin: horarioDias[di].horaFin!,
-          horasCalculadas: calcHoras(
-            horarioDias[di].horaInicio!,
-            horarioDias[di].horaFin!,
-          ),
-        })),
-        totalHoras: 30,
-        estado: 'pendiente_aprobacion',
-        fechaEnvio: '2026-09-17T08:30:00',
-      }
-      : undefined
-
-    return {
-      id,
-      nombre,
-      apellido: `${ap1} ${ap2}`,
-      carreraId: `c${(idx % 3) + 1}`,
-      monitorId: `m${(idx % 3) + 1}`,
-      email: `${nombre.toLowerCase()}.${ap1.toLowerCase()}@macromec.pe`,
-      dni: `7${(1000000 + idx * 137493).toString().slice(0, 7)}`,
-      tel: `+51 9${String(80000000 + idx * 1234567).slice(0, 8)}`,
-      carrera: 'Ingeniería Industrial',
-      modalidadBase,
-      horasSemanalesTarget: 30,
-      historial,
-      horarioActual: makeHorario(37, horarioDias),
-      horarioPendiente,
-      semanasHojaFisica: makeSemanas(),
-      entregaHojaFisica: idx % 5 !== 0,
-      almuerzosConfirmados: ['2026-09-17', '2026-09-16', '2026-09-15'],
-      estadoLaboral,
-      retiro:
-        estadoLaboral === 'retirado'
-          ? {
-            motivo: idx === 2
-              ? 'Falta grave — incumplimiento de normas'
-              : 'Baja temporal por evaluación',
-            fechaInicio: '2026-09-16',
-          }
-          : undefined,
-    }
-  },
-)
+export const MOCK_PRACTICANTES: Practicante[] = practicantesData.map(p => ({
+  ...p,
+  email: `${p.nombre.toLowerCase().split(' ')[0]}@macromec.pe`,
+  tel: p.celular,
+  carreraId: p.carrera, // Mock relation mapping
+  horasSemanalesTarget: 30,
+  historial: [], // empty for new data
+  semanasHojaFisica: [],
+  almuerzosConfirmados: [],
+  estadoLaboral: p.estado || 'activo',
+  entregaHojaFisica: false,
+  modalidadBase: (p.modalidadBase.toLowerCase()) as Modalidad,
+})) as Practicante[];
 
 export const PRACTICANTE_PRINCIPAL = MOCK_PRACTICANTES[0]
 
@@ -369,13 +293,11 @@ export const PROYECCION_COCINERA = [
 export const REPORTE_GERENCIA = MOCK_PRACTICANTES.slice(0, 15).map((p) => ({
   id: p.id,
   nombre: `${p.nombre} ${p.apellido}`,
-  faltas: p.historial.filter((d) => d.estado === 'FALTA').length,
-  tardanzas: p.historial.filter((d) => d.estado === 'TARDANZA').length,
-  horasExtrasUsadas: p.historial.filter(
-    (d) => d.estado === 'COMPENSADO',
-  ).length,
-  seminario: p.historial.some((d) => d.estado === 'SEMINARIO'),
-  campo: p.historial.some((d) => d.estado === 'CAMPO'),
+  faltas: 0,
+  tardanzas: 0,
+  horasExtrasUsadas: 0,
+  seminario: false,
+  campo: false,
   estadoLaboral: p.estadoLaboral,
 }))
 
@@ -402,11 +324,18 @@ export const MOCK_MACROMEC_CONFIG: MacromecConfig = {
   fotoMapaBase64: '',
 }
 
-export const MOCK_MONITORES: import('../types').Monitor[] = [
-  { id: 'm1', nombre: 'Juan Pérez', area: 'Taller Mecánico' },
-  { id: 'm2', nombre: 'Carlos Rodríguez', area: 'Soldadura' },
-  { id: 'm3', nombre: 'Ana Torres', area: 'Desarrollo TI' }
+export const monitoresData = [
+  { id: 'sup-1', nombre: 'Ronaldo Torres', rol: 'SUPERVISOR', dni: '70192834', celular: '+51 912 345 678', area: 'Supervisión de Operaciones', correoGmail: 'ronaldotv@macromec.pe', password: '123' },
+  { id: 'sup-omar', nombre: 'Jhonny Omar Chacon Colonio', rol: 'SUPERVISOR', dni: '08172882', celular: '968273238', area: 'Mantenimiento / Electricidad Industrial', correoGmail: 'omar.chacon@gmail.com', password: '123' },
+  { id: 'sup-tamy', nombre: 'Tamy Adela Chacon Rojas', rol: 'SUPERVISOR', dni: '73019151', celular: '947042215', area: 'Diseño Grafico', correoGmail: 'tamy.chacon@gmail.com', password: '123' },
+  { id: 'sup-juan', nombre: 'Juan Luis Alfonso Alva Cuadros', rol: 'SUPERVISOR', dni: '76143396', celular: '979134594', area: 'Software', correoGmail: 'juan.alva@gmail.com', password: '123' },
+  { id: 'sup-alexander', nombre: 'Alexander Márquez', rol: 'SUPERVISOR', dni: '00000001', celular: '900000001', area: 'Mecatrónica Industrial', correoGmail: 'alexander@gmail.com', password: '123' },
+  { id: 'sup-jheferson', nombre: 'Jheferson Roque', rol: 'SUPERVISOR', dni: '00000002', celular: '900000002', area: 'Electricidad Industrial', correoGmail: 'jheferson@gmail.com', password: '123' },
+  { id: 'sup-david', nombre: 'David Tolentino', rol: 'SUPERVISOR', dni: '00000003', celular: '900000003', area: 'Electricidad Industrial', correoGmail: 'david@gmail.com', password: '123' },
+  { id: 'sup-jeremy', nombre: 'Jeremy Calderón', rol: 'SUPERVISOR', dni: '00000004', celular: '900000004', area: 'Electricidad Industrial', correoGmail: 'jeremy@gmail.com', password: '123' }
 ];
+
+export const MOCK_MONITORES: import('../types').Monitor[] = monitoresData as import('../types').Monitor[];
 
 export const MOCK_CARRERAS: Carrera[] = [
   { id: 'c1', nombre: 'Diseño Gráfico Digital', especialistaNombre: 'Luis Gabriel Quispe' },
@@ -438,13 +367,15 @@ export const MOCK_SEMESTRES: Semestre[] = [
   }
 ]
 
-export const MOCK_ESPECIALISTAS: Especialista[] = [
-  { id: 'e1', nombres: 'Luis Gabriel', apellidos: 'Quispe', dni: '11111111', correo: 'lquispe@senati.pe', celular: '963 352 136' },
-  { id: 'e2', nombres: 'Saul', apellidos: 'Urco Torres', dni: '22222222', correo: 'surco@senati.pe', celular: '980 548 616' },
-  { id: 'e3', nombres: 'Jack C.', apellidos: 'Hinostroza Calderón', dni: '33333333', correo: 'jhinostroza@senati.pe', celular: '980 547 713' },
-  { id: 'e4', nombres: 'Miguel A.', apellidos: 'Hidalgo Arcos', dni: '44444444', correo: 'mhidalgo@senati.pe', celular: '966 722 643' },
-  { id: 'e5', nombres: 'Jazmín E.', apellidos: 'Espinoza Huamán', dni: '55555555', correo: 'jespinoza@senati.pe', celular: '963 352 050' }
-]
+export const especialistasData = [
+  { id: 'esp-1', nombres: 'Luis Gabriel', apellidos: 'Quispe', dni: '11111111', celular: '963 352 136', correo: 'lquispe@senati.pe', carrerasCargo: ['Diseño Gráfico Digital', 'Ing. Ciberseguridad', 'Ing. Software con IA', 'Mecánico de Mantenimiento'], semestres: ['S4', 'S5', 'S6'], sede: 'Huancayo' },
+  { id: 'esp-2', nombres: 'Saul', apellidos: 'Urco Torres', dni: '22222222', celular: '980 548 616', correo: 'surco@senati.pe', carrerasCargo: ['Mecatrónica Automotriz', 'Electricidad Industrial'], semestres: ['S5', 'S6'], sede: 'Huancayo' },
+  { id: 'esp-3', nombres: 'Jack C.', apellidos: 'Hinostroza Calderón', dni: '33333333', celular: '980 547 713', correo: 'jhinostroza@senati.pe', carrerasCargo: ['Mecatrónica Automotriz'], semestres: ['S4', 'S6'], sede: 'Huancayo' },
+  { id: 'esp-4', nombres: 'Miguel A.', apellidos: 'Hidalgo Arcos', dni: '44444444', celular: '966 722 643', correo: 'mhidalgo@senati.pe', carrerasCargo: ['Administración de Empresas', 'Administración Industrial', 'Electricidad Industrial'], semestres: ['S4', 'S5', 'S6'], sede: 'Huancayo' },
+  { id: 'esp-5', nombres: 'Jazmín E.', apellidos: 'Espinoza Huamán', dni: '55555555', celular: '963 352 050', correo: 'jespinoza@senati.pe', carrerasCargo: ['Seguridad Industrial y Prevención de Riesgo', 'Administración de Negocios Internacionales', 'Mecánico Automotriz', 'Campus Virtual'], semestres: ['S4', 'S5', 'S6'], sede: 'Huancayo' }
+];
+
+export const MOCK_ESPECIALISTAS: Especialista[] = especialistasData as any as Especialista[];
 
 export const MOCK_PLANTILLA: PlantillaAceptacion = {
   id: 'tpl-1',

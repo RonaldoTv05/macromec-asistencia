@@ -58,7 +58,7 @@ interface AppState {
   updatePerfil: (data: Partial<Omit<User, 'id' | 'username' | 'rol'>>) => void
   addUsuario: (usuario: User) => void
   generarCredenciales: (practicanteId: string) => void
-  sincronizarHikvision: (payload: {dni: string, fecha: string, horaEntrada: string, horaSalida: string, turnoFin: string}) => void
+  sincronizarHikvision: (payload: { dni: string, fecha: string, horaEntrada: string, horaSalida: string, turnoFin: string }) => void
   uploadDocumento: (practicanteId: string, docKey: string, fileName: string) => void
 
   // ── Rol activo (derivado de usuarioActual) ────────────────
@@ -219,6 +219,13 @@ interface AppState {
 }
 
 // ============================================================
+// FUNCIONES AUXILIARES
+// ============================================================
+export const enviarCredencialesWhatsApp = async (celular: string, nombre: string, pass: string, rol: string) => {
+  return new Promise((resolve) => setTimeout(resolve, 1500));
+};
+
+// ============================================================
 // STORE
 // ============================================================
 
@@ -231,36 +238,67 @@ export const useAppStore = create<AppState>()(
       usuariosSistema: USUARIOS_SISTEMA,
 
       login: (dni: string, pass: string) => {
-        const dSafe = dni.trim().replace(/<[^>]*>/g, '')
-        const pSafe = pass.replace(/<[^>]*>/g, '')
+        const dSafe = dni.trim().replace(/<[^>]*>/g, '');
+        const pSafe = pass.replace(/<[^>]*>/g, '');
 
-        const usuario = get().usuariosSistema.find(
-          (u) => (u.username === dSafe || u.dni === dSafe) && u.password === pSafe,
-        )
+        // 1. Gerencia
+        const adminGerencia = get().usuariosSistema.find(
+          (u) => u.rol === 'GERENCIA' && (u.username === dSafe || u.dni === dSafe) && u.password === pSafe
+        );
+        if (adminGerencia) {
+          set({ usuarioActual: adminGerencia, rolActivo: adminGerencia.rol, tabActiva: 'hoy' } as any);
+          return true;
+        }
 
-        if (usuario) {
+        // 2. Monitores (forzamos el tipado a any para evitar bloqueos)
+        const monitor = get().monitores?.find(
+          (m: any) => (m.dni === dSafe || m.correoGmail === dSafe) && m.password === pSafe
+        ) as any;
+        if (monitor) {
           set({
-            usuarioActual: usuario,
-            rolActivo: usuario.rol,
+            usuarioActual: {
+              id: monitor.id,
+              username: monitor.dni || monitor.correoGmail || '',
+              nombre: monitor.nombre || '',
+              rol: 'SUPERVISOR',
+              email: monitor.correoGmail || '',
+              dni: monitor.dni || '',
+              tel: monitor.celular || '',
+              carrera: monitor.area || '',
+              avatarIniciales: monitor.nombre ? monitor.nombre.slice(0, 2).toUpperCase() : 'SU',
+            } as any,
+            rolActivo: 'SUPERVISOR' as any,
             tabActiva: 'hoy',
-          })
-          return true
+          });
+          return true;
         }
 
-        const practicanteValido = get().practicantes?.find(
-          (p) => (p.dni === dSafe || p.email === dSafe) && p.password === pSafe
-        )
-
-        if (practicanteValido) {
-          set({ 
-            usuarioActual: { ...practicanteValido, rol: 'PRACTICANTE' },
-            rolActivo: 'PRACTICANTE',
-            tabActiva: 'hoy'
-          })
-          return true
+        // 3. Practicantes
+        const practicante = get().practicantes?.find(
+          (p: any) => p.dni === dSafe && (p.password === pSafe || pSafe === p.dni)
+        ) as any;
+        if (practicante) {
+          set({
+            usuarioActual: {
+              id: practicante.id,
+              username: practicante.dni || '',
+              nombre: `${practicante.nombre || ''} ${practicante.apellido || ''}`,
+              rol: 'PRACTICANTE',
+              email: '',
+              dni: practicante.dni || '',
+              tel: practicante.celular || '',
+              carrera: practicante.carrera || '',
+              semestre: practicante.semestre || 'No definido',
+              fechaNacimiento: practicante.fechaNacimiento || '',
+              modalidadBase: practicante.modalidadBase || '',
+              avatarIniciales: (practicante.nombre?.charAt(0) || '') + (practicante.apellido?.charAt(0) || ''),
+            } as any,
+            rolActivo: 'PRACTICANTE' as any,
+            tabActiva: 'hoy',
+          });
+          return true;
         }
-
-        return false
+        return false;
       },
 
       generarCredenciales: (practicanteId) => {
@@ -279,11 +317,11 @@ export const useAppStore = create<AppState>()(
             let horasExtraHikvision = 0;
             const hSalida = new Date(`1970-01-01T${payload.horaSalida}:00`)
             const tFin = new Date(`1970-01-01T${payload.turnoFin}:00`)
-            
+
             if (hSalida > tFin) {
               horasExtraHikvision = (hSalida.getTime() - tFin.getTime()) / (1000 * 60 * 60)
             }
-            
+
             const asistenciaActual = p.asistencia || {}
             return {
               ...p,
@@ -291,11 +329,11 @@ export const useAppStore = create<AppState>()(
               asistencia: {
                 ...asistenciaActual,
                 [payload.fecha]: {
-                  ...(asistenciaActual[payload.fecha] || { 
-                    estado: 'Asistió', 
-                    horasExtraManuales: 0, 
-                    horasExtraHikvision: 0, 
-                    faltaCubierta: false 
+                  ...(asistenciaActual[payload.fecha] || {
+                    estado: 'Asistió',
+                    horasExtraManuales: 0,
+                    horasExtraHikvision: 0,
+                    faltaCubierta: false
                   }),
                   estado: 'Asistió',
                   horasExtraHikvision: Number(horasExtraHikvision.toFixed(2))
@@ -830,14 +868,14 @@ export const useAppStore = create<AppState>()(
       },
       procesarInformeMonitor: (informeId, nuevoEstado, feedback, archivoFirmado) => {
         set((state) => ({
-          informesQuincenales: state.informesQuincenales.map(inf => 
-            inf.id === informeId 
-              ? { 
-                  ...inf, 
-                  estado: nuevoEstado, 
-                  feedbackMonitor: feedback, 
-                  archivoFirmadoBase64: archivoFirmado 
-                } 
+          informesQuincenales: state.informesQuincenales.map(inf =>
+            inf.id === informeId
+              ? {
+                ...inf,
+                estado: nuevoEstado,
+                feedbackMonitor: feedback,
+                archivoFirmadoBase64: archivoFirmado
+              }
               : inf
           )
         }))
@@ -848,10 +886,10 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           practicantes: state.practicantes.map(p => {
             if (p.id !== practicanteId) return p;
-            
+
             const registros = p.registrosDiarios || {};
             const existeRegistro = !!registros[fecha];
-            
+
             const nuevaVersion = {
               id: Date.now().toString(),
               fechaEdicion: new Date().toISOString(),
@@ -859,7 +897,7 @@ export const useAppStore = create<AppState>()(
               accion: existeRegistro ? 'editado' : 'creado'
             } as const;
 
-            const historialVersiones = existeRegistro 
+            const historialVersiones = existeRegistro
               ? [...(registros[fecha].historialVersiones || []), nuevaVersion]
               : [nuevaVersion];
 
@@ -897,7 +935,7 @@ export const useAppStore = create<AppState>()(
           const nuevosPracticantes = state.practicantes.map((p) => {
             const estadoBorrador = state.borradorDiario[p.id]
             const datoObs = observaciones.find((o) => o.id === p.id)
-            
+
             if (!estadoBorrador && !datoObs) return p
 
             const existe = p.historial.some((h) => h.fecha === fechaISO)
@@ -907,11 +945,11 @@ export const useAppStore = create<AppState>()(
               nuevoHistorial = p.historial.map((h) =>
                 h.fecha === fechaISO
                   ? {
-                      ...h,
-                      ...(estadoBorrador ? { estado: estadoBorrador, codigoHoja: estadoACodigo(estadoBorrador) } : {}),
-                      ...(datoObs ? { observacion: datoObs.observacion } : {}),
-                      fuente: 'SUPERVISOR' as const,
-                    }
+                    ...h,
+                    ...(estadoBorrador ? { estado: estadoBorrador, codigoHoja: estadoACodigo(estadoBorrador) } : {}),
+                    ...(datoObs ? { observacion: datoObs.observacion } : {}),
+                    fuente: 'SUPERVISOR' as const,
+                  }
                   : h
               )
             } else if (estadoBorrador) {
@@ -944,13 +982,13 @@ export const useAppStore = create<AppState>()(
             if (p.id !== practicanteId) return p
             const asistencia = p.asistencia || {}
             const actual = asistencia[fecha] || { estado: 'Pendiente', horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false }
-            
-            const nuevoHistorial = p.historial.map(h => 
+
+            const nuevoHistorial = p.historial.map(h =>
               h.fecha === fecha && datos.observacion !== undefined
                 ? { ...h, observacion: datos.observacion }
                 : h
             )
-            
+
             return {
               ...p,
               historial: nuevoHistorial,
@@ -1012,11 +1050,11 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           practicantes: state.practicantes.map(p => {
             if (p.id !== practicanteId) return p
-            
+
             const hoy = new Date()
             const mesActual = hoy.getMonth()
             const añoActual = hoy.getFullYear()
-            
+
             let tardanzasCount = 0
             if (p.asistencia) {
               Object.entries(p.asistencia).forEach(([fecha, reg]) => {
@@ -1026,7 +1064,7 @@ export const useAppStore = create<AppState>()(
                 }
               })
             }
-            
+
             if (tardanzasCount > 0 && tardanzasCount % 3 === 0) {
               const fechaHoyStr = hoy.toISOString().split('T')[0]
               const asistencia = p.asistencia || {}

@@ -461,8 +461,14 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, onCe
 // ============================================================
 
 export default function GeneralScreen() {
-  const practicantes = useAppStore((s) => s.practicantes)
+  const todosPracticantes = useAppStore((s) => s.practicantes)
+  const usuarioActual = useAppStore((s) => s.usuarioActual)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
+
+  // Filtro relacional estricto: Supervisor solo ve sus propios practicantes
+  const practicantes = usuarioActual?.rol === 'SUPERVISOR'
+    ? todosPracticantes.filter((p) => p.monitorId === usuarioActual.id)
+    : todosPracticantes
 
   const [fechaBase, setFechaBase] = useState(new Date())
   const [sheet, setSheet] = useState<SheetState>(SHEET_VACIO)

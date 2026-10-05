@@ -17,7 +17,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, enviarCredencialesWhatsApp } from '../store/useAppStore'
 import type { EstadoLaboral, Practicante, RetiroData, User, Postulante } from '../types'
 
 // ── Sanitización ───────────────────────────────────────────────
@@ -117,7 +117,19 @@ function TarjetaColaborador({
 }
 
 // ── Tarjeta de Supervisor ─────────────────────────────────────
-function TarjetaSupervisor({ supervisor }: { supervisor: User }) {
+function TarjetaSupervisor({ supervisor }: { supervisor: any }) {
+  const handleReenviar = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toast.promise(
+      enviarCredencialesWhatsApp(supervisor.tel, supervisor.nombre, supervisor.password || '', supervisor.rol),
+      {
+        loading: 'Enviando WhatsApp...',
+        success: 'Credenciales enviadas',
+        error: 'Error'
+      }
+    );
+  };
+
   return (
     <div className="rounded-[14px] p-3 flex items-center gap-3 border bg-white border-slate-200">
       <div className="w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 bg-gradient-to-br from-indigo-900 to-indigo-600 text-white">
@@ -128,10 +140,19 @@ function TarjetaSupervisor({ supervisor }: { supervisor: User }) {
           {supervisor.nombre}
         </div>
         <div className="text-[11px] text-slate-500 mb-0.5">
-          DNI: {supervisor.dni} • Tel: {supervisor.tel}
+          DNI: {supervisor.dni} • Cel: {supervisor.celular || supervisor.tel}
         </div>
         <div className="text-[11px] text-slate-400 font-medium">
-          Cargo: {supervisor.carrera || 'Supervisor'}
+          Área / Carreras a cargo: {supervisor.area || supervisor.carrera || 'Supervisor'}
+        </div>
+        <div className="mt-2">
+          <button
+            onClick={handleReenviar}
+            className="bg-green-100 text-green-700 hover:bg-green-200 text-[12px] px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            <Smartphone size={14} />
+            Reenviar Accesos
+          </button>
         </div>
       </div>
     </div>
@@ -145,34 +166,46 @@ function ModalRegistroSupervisor({
   onCerrar: () => void
 }) {
   const addUsuario = useAppStore((s) => s.addUsuario)
-
   const [nombre, setNombre] = useState('')
   const [dni, setDni] = useState('')
   const [tel, setTel] = useState('')
   const [cargo, setCargo] = useState('')
+  const [correoGmail, setCorreoGmail] = useState('')
 
   const handleGuardar = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!nombre.trim() || !dni.trim() || !tel.trim() || !cargo.trim()) {
+    if (!nombre.trim() || !dni.trim() || !tel.trim() || !cargo.trim() || !correoGmail.trim()) {
       toast.error('Todos los campos son obligatorios')
       return
     }
 
-    const newSupervisor: User = {
+    const pass = Math.random().toString(36).slice(-6)
+
+    const newSupervisor = {
       id: `usr-sup-${Date.now()}`,
       username: dni.trim(),
-      password: dni.trim(),
+      password: pass,
       nombre: sanitize(nombre),
       rol: 'SUPERVISOR',
       email: `${dni.trim()}@macromec.pe`,
+      correoGmail: sanitize(correoGmail),
       dni: sanitize(dni),
       tel: sanitize(tel),
       carrera: sanitize(cargo),
       avatarIniciales: nombre.trim().slice(0, 2).toUpperCase()
-    }
+    } as any
 
     addUsuario(newSupervisor)
-    toast.success('Supervisor registrado correctamente')
+
+    toast.promise(
+      enviarCredencialesWhatsApp(newSupervisor.tel, newSupervisor.nombre, pass, newSupervisor.rol),
+      {
+        loading: 'Enviando WhatsApp...',
+        success: 'Credenciales enviadas',
+        error: 'Error'
+      }
+    )
+
     onCerrar()
   }
 
@@ -202,8 +235,12 @@ function ModalRegistroSupervisor({
             <input type="text" value={tel} onChange={(e) => setTel(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="Ej. +51 999 888 777" />
           </div>
           <div>
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">Cargo/Área</label>
-            <input type="text" value={cargo} onChange={(e) => setCargo(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="Ej. Supervisor de Planta" />
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Área / Carreras a cargo</label>
+            <input type="text" value={cargo} onChange={(e) => setCargo(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="Ej. Mantenimiento / Electricidad Industrial" />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Correo de Gmail</label>
+            <input type="email" value={correoGmail} onChange={(e) => setCorreoGmail(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="ej.correo@gmail.com" />
           </div>
           <button type="submit" className="w-full bg-indigo-600 border-none cursor-pointer text-white font-bold py-3.5 rounded-xl mt-2 text-[14px]">
             Guardar Supervisor
@@ -424,14 +461,18 @@ function BottomSheetEvaluacion({
   const updatePostulacion = useAppStore(s => s.updatePostulacion)
   const removePostulacion = useAppStore(s => s.removePostulacion)
   const addPracticante = useAppStore(s => s.addPracticante)
-  const supervisores = useAppStore(s => s.usuariosSistema).filter(u => u.rol === 'SUPERVISOR')
+  const monitores = useAppStore(s => s.monitores)
+  const carrerasGlobal = useAppStore(s => s.carreras)
 
   const [observaciones, setObservaciones] = useState(postulante.observaciones)
   const [vistaContratacion, setVistaContratacion] = useState(false)
   const [monitorId, setMonitorId] = useState('')
-  const [modalidad, setModalidad] = useState<'presencial' | 'virtual' | 'semipresencial'>('presencial')
+  const [modalidad, setModalidad] = useState<'presencial' | 'virtual' | 'semipresencial'>('semipresencial')
   const [periodo, setPeriodo] = useState('2026-20')
   const [cicloActual, setCicloActual] = useState(postulante.semestre || 'S5')
+  const [carreraIdSeleccionada, setCarreraIdSeleccionada] = useState(postulante.carreraId || '')
+
+  const [edicionHabilitada, setEdicionHabilitada] = useState(false)
 
   const handleProgramarEntrevista = () => {
     updatePostulacion(postulante.id, { estado: 'entrevistado' })
@@ -466,7 +507,7 @@ function BottomSheetEvaluacion({
       email: postulante.correo,
       dni: postulante.dni,
       tel: postulante.celular,
-      carreraId: postulante.carreraId,
+      carreraId: carreraIdSeleccionada,
       semestre: cicloActual,
       monitorId: monitorId,
       modalidadBase: modalidad,
@@ -484,11 +525,15 @@ function BottomSheetEvaluacion({
     addPracticante(nuevoPracticante)
     removePostulacion(postulante.id)
 
-    const numeroDestino = '51949520960'
-    const mensaje = `Bienvenido a Macromec Estudiante ${nuevoPracticante.nombre}.\n\nAquí están tus datos para loguearte en el sistema:\n👤 Usuario (DNI): ${nuevoPracticante.dni}\n🔑 Contraseña: ${passGenerada}`
-    window.open(`https://wa.me/${numeroDestino}?text=${encodeURIComponent(mensaje)}`, '_blank')
+    toast.promise(
+      enviarCredencialesWhatsApp(nuevoPracticante.tel || '', nuevoPracticante.nombre, passGenerada, 'PRACTICANTE'),
+      {
+        loading: 'Enviando WhatsApp...',
+        success: 'Credenciales enviadas',
+        error: 'Error'
+      }
+    )
 
-    toast.success('Practicante registrado y credenciales enviadas')
     onCerrar()
   }
 
@@ -556,9 +601,14 @@ function BottomSheetEvaluacion({
           </div>
         ) : (
           <div className="flex-1 flex flex-col gap-5 overflow-y-auto pb-6 animate-in slide-in-from-right-4 duration-300">
-            <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-200 mb-2">
+            <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-200 mb-2 relative">
               <h4 className="font-bold text-[14px]">Confirmar Ingreso</h4>
               <p className="text-[12px] opacity-80 mt-0.5">Verifica los datos y asigna modalidad y supervisor.</p>
+              <div className="mt-2">
+                <span onClick={() => setEdicionHabilitada(!edicionHabilitada)} className="text-blue-600 text-[13px] underline cursor-pointer">
+                  {edicionHabilitada ? 'Deshabilitar edición' : 'Habilitar edición de datos base'}
+                </span>
+              </div>
             </div>
 
             {/* Resumen Read-Only del postulante (RF-18) */}
@@ -567,16 +617,31 @@ function BottomSheetEvaluacion({
               <span className="text-[13px] text-slate-600"><strong>Nombres:</strong> {postulante.nombres}</span>
               <span className="text-[13px] text-slate-600"><strong>Apellidos:</strong> {postulante.apellidos}</span>
               <span className="text-[13px] text-slate-600"><strong>DNI:</strong> {postulante.dni}</span>
-              <span className="text-[13px] text-slate-600"><strong>Carrera:</strong> {carrera?.nombre || 'N/A'}</span>
+            </div>
+
+            {/* Carrera */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 mb-2 block">Carrera</label>
+              <select
+                disabled={!edicionHabilitada}
+                value={carreraIdSeleccionada}
+                onChange={e => setCarreraIdSeleccionada(e.target.value)}
+                className={`w-full border border-slate-200 rounded-xl px-3.5 py-3 text-[14px] outline-none focus:ring-2 focus:ring-emerald-500/40 ${!edicionHabilitada ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-slate-50 text-slate-700'}`}
+              >
+                {carrerasGlobal.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
             </div>
 
             {/* Periodo de Ingreso */}
             <div>
               <label className="text-[11px] font-bold text-slate-500 mb-2 block">Periodo de Ingreso</label>
               <select
+                disabled={!edicionHabilitada}
                 value={periodo}
                 onChange={e => setPeriodo(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 text-[14px] text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                className={`w-full border border-slate-200 rounded-xl px-3.5 py-3 text-[14px] outline-none focus:ring-2 focus:ring-emerald-500/40 ${!edicionHabilitada ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-slate-50 text-slate-700'}`}
               >
                 <option value="2026-10">2026-10</option>
                 <option value="2026-20">2026-20</option>
@@ -585,11 +650,12 @@ function BottomSheetEvaluacion({
 
             {/* Ciclo Actual */}
             <div>
-              <label className="text-[11px] font-bold text-slate-500 mb-2 block">Ciclo Actual</label>
+              <label className="text-[11px] font-bold text-slate-500 mb-2 block">Semestre Actual</label>
               <select
+                disabled={!edicionHabilitada}
                 value={cicloActual}
                 onChange={e => setCicloActual(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 text-[14px] text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                className={`w-full border border-slate-200 rounded-xl px-3.5 py-3 text-[14px] outline-none focus:ring-2 focus:ring-emerald-500/40 ${!edicionHabilitada ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-slate-50 text-slate-700'}`}
               >
                 <option value="S4">S4</option>
                 <option value="S5">S5</option>
@@ -605,8 +671,8 @@ function BottomSheetEvaluacion({
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 text-[14px] text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/40"
               >
                 <option value="">-- Seleccionar --</option>
-                {supervisores.map(s => (
-                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                {monitores.map(m => (
+                  <option key={m.id} value={m.id}>{m.nombre}</option>
                 ))}
               </select>
             </div>
@@ -859,8 +925,8 @@ export default function AdminModuloScreen() {
         : nameB.localeCompare(nameA, 'es')
     })
 
-  // Filtrar Supervisores
-  const supervisores = usuariosSistema.filter(u => u.rol === 'SUPERVISOR')
+  // Filtrar Supervisores (leyendo directamente de Monitores en lugar de usuariosSistema)
+  const supervisores = useAppStore((s) => s.monitores || [])
   const filtradosSupervisores = supervisores
     .filter((u) => {
       const texto = `${u.nombre} ${u.dni ?? ''}`.toLowerCase()
