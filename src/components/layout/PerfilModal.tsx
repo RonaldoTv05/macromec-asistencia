@@ -42,6 +42,7 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
   const logout = useAppStore((s) => s.logout)
   const practicantes = useAppStore((s) => s.practicantes)
   const monitores = useAppStore((s) => s.monitores || [])
+  const datosEmpresa = useAppStore((s) => s.datosEmpresa)
 
   const practicanteCompleto = usuario?.rol === 'PRACTICANTE'
     ? practicantes.find(p => p.dni === usuario.dni)
@@ -494,12 +495,21 @@ export default function PerfilModal({ abierto, onCerrar }: PerfilModalProps) {
                     </button>
                   </div>
 
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
-                    <div className="text-[12px] font-bold text-slate-500 uppercase mb-2">Datos de la Empresa</div>
-                    <div className="text-[13px] text-slate-700">
-                      <strong>RUC:</strong> 20546789123<br />
-                      <strong>Razón Social:</strong> MACROMEC S.A.C.<br />
-                      <strong>Sede:</strong> Callao
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-4 mb-3">
+                    <h4 className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Datos de la Empresa</h4>
+                    <div className="flex flex-col gap-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-700">RUC:</span>
+                        <span className="text-slate-600">{datosEmpresa.ruc}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-slate-700">Razón Social:</span>
+                        <span className="text-slate-600 text-right">{datosEmpresa.razonSocial}</span>
+                      </div>
+                      <div className="flex justify-between mt-1">
+                        <span className="font-semibold text-slate-700">Sede Principal:</span>
+                        <span className="text-slate-600 text-right">{datosEmpresa.provincia} - {datosEmpresa.distrito}</span>
+                      </div>
                     </div>
                   </div>
 

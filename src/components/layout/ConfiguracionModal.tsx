@@ -3,7 +3,7 @@ import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus
 import type { Especialista } from '../../types'
 import { useAppStore, enviarCredencialesWhatsApp } from '../../store/useAppStore'
 import { toast } from 'sonner'
-import type { Carrera, SemestreConfig } from '../../types'
+import type { Carrera, AsignacionCarreraEspecialista } from '../../types'
 
 // ============================================================
 // BOTTOM SHEET (RF-03, RF-04)
@@ -22,13 +22,13 @@ function BottomSheetCarrera({
   const especialistas = useAppStore(s => s.especialistas)
 
   // Estados locales con null safety (Fase 3)
-  const configInicial = carrera.configuraciones?.[0]
+  const configInicial = carrera.asignaciones?.[0]
   const [especialistaId, setEspecialistaId] = useState(configInicial?.especialistaId || '')
   const [semestres, setSemestres] = useState<string[]>(configInicial?.semestres || [])
   const [peaArchivo, setPeaArchivo] = useState<string | null>(configInicial?.peaArchivo || null)
 
   const toggleSemestre = (sem: string) => {
-    setSemestres(prev => 
+    setSemestres(prev =>
       prev.includes(sem) ? prev.filter(s => s !== sem) : [...prev, sem]
     )
   }
@@ -39,13 +39,14 @@ function BottomSheetCarrera({
       return
     }
 
-    const nuevaConfig: SemestreConfig = {
-      idConfig: configInicial?.idConfig || `conf-${Date.now()}`,
+    const nuevaConfig: AsignacionCarreraEspecialista = {
+      id: configInicial?.id || `asign-${Date.now()}`,
+      carreraId: carrera.id,
       especialistaId,
       semestres,
       peaArchivo
     }
-    updateCarrera(carrera.id, { configuraciones: [nuevaConfig] })
+    updateCarrera(carrera.id, { asignaciones: [nuevaConfig] })
     toast.success('Configuración guardada')
     onCerrar()
   }
@@ -61,9 +62,9 @@ function BottomSheetCarrera({
   return (
     <div className="fixed inset-0 z-[300] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
       <div className="absolute inset-0" onClick={onCerrar} />
-      
+
       <div className="w-full max-w-[430px] mx-auto bg-white rounded-t-[20px] p-5 h-[85vh] overflow-y-auto relative shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col animate-in slide-in-from-bottom-full duration-300">
-        
+
         {/* Cabecera sin tabs */}
         <div className="flex items-center justify-between mb-5 shrink-0">
           <div>
@@ -76,15 +77,15 @@ function BottomSheetCarrera({
         </div>
 
         <div className="flex-1 flex flex-col gap-5 overflow-y-auto pb-6">
-          
+
           {/* RF-03 (Especialista) */}
           <div className="flex flex-col gap-3">
             <h4 className="font-bold text-slate-800 text-[14px]">Especialista de Gestión</h4>
-            
+
             <div>
               <label className="text-[11px] font-bold text-slate-500 mb-1 block">Seleccionar Especialista</label>
-              <select 
-                value={especialistaId} 
+              <select
+                value={especialistaId}
                 onChange={e => setEspecialistaId(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-700"
               >
@@ -94,7 +95,7 @@ function BottomSheetCarrera({
                 ))}
               </select>
             </div>
-            
+
             {/* Información del Especialista Auto-completada */}
             {especialistaId && especialistaSeleccionado && (
               <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col gap-1 mt-1 animate-in fade-in zoom-in-95 duration-200">
@@ -113,11 +114,10 @@ function BottomSheetCarrera({
                 <button
                   key={sem}
                   onClick={() => toggleSemestre(sem)}
-                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-colors ${
-                    semestres.includes(sem)
-                      ? 'bg-blue-600 text-white shadow-sm' 
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-colors ${semestres.includes(sem)
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                 >
                   {sem}
                 </button>
@@ -127,8 +127,8 @@ function BottomSheetCarrera({
 
           {/* Formulario RF-04 (PEA) */}
           <div className="flex flex-col gap-3">
-             <h4 className="font-bold text-slate-800 text-[14px]">Plan de Aprendizaje (PEA)</h4>
-            
+            <h4 className="font-bold text-slate-800 text-[14px]">Plan de Aprendizaje (PEA)</h4>
+
             {peaArchivo ? (
               <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
                 <div className="flex items-center gap-2 overflow-hidden">
@@ -146,9 +146,9 @@ function BottomSheetCarrera({
               </div>
             ) : (
               <label className="border-2 border-dashed border-slate-300 bg-slate-50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 transition-colors group">
-                 <UploadCloud size={28} className="text-slate-400 group-hover:text-blue-500 transition-colors mb-2" />
-                 <span className="text-[13px] font-bold text-slate-700">Subir PEA (PDF)</span>
-                 <input type="file" accept=".pdf" onChange={handleFakeUpload} className="hidden" />
+                <UploadCloud size={28} className="text-slate-400 group-hover:text-blue-500 transition-colors mb-2" />
+                <span className="text-[13px] font-bold text-slate-700">Subir PEA (PDF)</span>
+                <input type="file" accept=".pdf" onChange={handleFakeUpload} className="hidden" />
               </label>
             )}
           </div>
@@ -170,19 +170,30 @@ function BottomSheetCarrera({
 // ============================================================
 
 function SeccionEmpresa() {
-  const config = useAppStore(s => s.macromecConfig)
-  const updateConfig = useAppStore(s => s.updateMacromecConfig)
+  const { datosEmpresa, actualizarDatosEmpresa } = useAppStore()
 
   // RF-01 States
-  const [ruc, setRuc] = useState(config?.ruc || '')
-  const [nombreComercial, setNombreComercial] = useState(config?.nombreComercial || '')
-  const [correo, setCorreo] = useState(config?.correo || '')
-  const [telefono, setTelefono] = useState(config?.telefono || '')
-  const [direccion, setDireccion] = useState(config?.direccion || '')
+  const [ruc, setRuc] = useState(datosEmpresa.ruc)
+  const [razonSocial, setRazonSocial] = useState(datosEmpresa.razonSocial)
+  const [correo, setCorreo] = useState(datosEmpresa.correo)
+  const [telefono, setTelefono] = useState(datosEmpresa.telefono)
+  const [direccion, setDireccion] = useState(datosEmpresa.direccion)
+  const [departamento, setDepartamento] = useState(datosEmpresa.departamento)
+  const [provincia, setProvincia] = useState(datosEmpresa.provincia)
+  const [distrito, setDistrito] = useState(datosEmpresa.distrito)
 
-  const handleGuardarDatos = () => {
-    updateConfig({ ruc, nombreComercial, correo, telefono, direccion })
-    toast.success('Datos de la empresa actualizados')
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleGuardar = async () => {
+    setIsSaving(true);
+    // Simulación de latencia hacia NestJS
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // El Payload que viajará a PostgreSQL
+    actualizarDatosEmpresa({ ruc, razonSocial, correo, telefono, direccion, departamento, provincia, distrito });
+
+    toast.success('Configuración de la empresa actualizada globalmente');
+    setIsSaving(false);
   }
 
   return (
@@ -190,7 +201,7 @@ function SeccionEmpresa() {
       {/* RF-01: Datos Principales */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-3">
         <h3 className="font-bold text-slate-800 text-[14px] mb-1">Datos Principales</h3>
-        
+
         <div className="flex gap-2">
           <div className="flex-[0.4]">
             <label className="text-[11px] font-bold text-slate-500 mb-1 block">RUC</label>
@@ -198,10 +209,10 @@ function SeccionEmpresa() {
           </div>
           <div className="flex-[0.6]">
             <label className="text-[11px] font-bold text-slate-500 mb-1 block">Razón Social</label>
-            <input type="text" value={nombreComercial} onChange={e => setNombreComercial(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50" />
+            <input type="text" value={razonSocial} onChange={e => setRazonSocial(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50" />
           </div>
         </div>
-        
+
         <div>
           <label className="text-[11px] font-bold text-slate-500 mb-1 block">Correo Electrónico</label>
           <input type="email" value={correo} onChange={e => setCorreo(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50" />
@@ -217,9 +228,24 @@ function SeccionEmpresa() {
             <input type="text" value={direccion} onChange={e => setDireccion(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50" />
           </div>
         </div>
-        
-        <button onClick={handleGuardarDatos} className="bg-slate-800 text-white rounded-lg py-2.5 font-bold text-[13px] mt-2 flex justify-center items-center gap-2 active:bg-slate-700 transition-colors">
-          <Save size={16} /> Guardar Datos
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Departamento</label>
+            <input type="text" value={departamento} onChange={e => setDepartamento(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50" />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Provincia</label>
+            <input type="text" value={provincia} onChange={e => setProvincia(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50" />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Distrito</label>
+            <input type="text" value={distrito} onChange={e => setDistrito(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-blue-500/50" />
+          </div>
+        </div>
+
+        <button onClick={handleGuardar} disabled={isSaving} className="bg-slate-800 text-white rounded-lg py-2.5 font-bold text-[13px] mt-2 flex justify-center items-center gap-2 active:bg-slate-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed">
+          <Save size={16} /> {isSaving ? 'Guardando...' : 'Guardar Datos'}
         </button>
       </div>
 
@@ -397,7 +423,7 @@ function SeccionCarreras() {
   const carreras = useAppStore(s => s.carreras)
   const especialistas = useAppStore(s => s.especialistas)
   const [carreraActiva, setCarreraActiva] = useState<Carrera | null>(null)
-  
+
   const [modalEspecialistaAbierto, setModalEspecialistaAbierto] = useState(false)
   const [especialistaEditar, setEspecialistaEditar] = useState<Especialista | null>(null)
   const [modalListaEspecialistasAbierto, setModalListaEspecialistasAbierto] = useState(false)
@@ -412,15 +438,15 @@ function SeccionCarreras() {
       <div className="flex flex-col gap-5 pb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
         <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-4">
           <h3 className="font-bold text-slate-800 text-[14px]">Gestión de Carreras y PEA</h3>
-          
+
           <div className="flex gap-2 mb-1">
-            <button 
+            <button
               onClick={() => { setEspecialistaEditar(null); setModalEspecialistaAbierto(true) }}
               className="flex-1 bg-emerald-50 text-emerald-700 py-2.5 rounded-xl text-[12px] font-bold flex justify-center items-center gap-1.5 hover:bg-emerald-100 transition-colors"
             >
               <UserPlus size={16} /> Nuevo Especialista
             </button>
-            <button 
+            <button
               onClick={() => setModalListaEspecialistasAbierto(true)}
               className="flex-1 bg-blue-50 text-blue-700 py-2.5 rounded-xl text-[12px] font-bold flex justify-center items-center gap-1.5 hover:bg-blue-100 transition-colors"
             >
@@ -434,8 +460,8 @@ function SeccionCarreras() {
                 <div className="flex flex-col pr-2">
                   <span className="text-[13px] font-bold text-slate-800">{c.nombre}</span>
                   <div className="flex flex-col mt-0.5 gap-0.5">
-                    {c.configuraciones && c.configuraciones.length > 0 ? (
-                      c.configuraciones.map((conf: any, idx: number) => {
+                    {c.asignaciones && c.asignaciones.length > 0 ? (
+                      c.asignaciones.map((conf: AsignacionCarreraEspecialista, idx: number) => {
                         const esp = especialistas.find(e => e.id === conf.especialistaId)
                         return (
                           <span key={idx} className="text-[11px] text-emerald-600 font-medium leading-tight">
@@ -448,7 +474,7 @@ function SeccionCarreras() {
                     )}
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setCarreraActiva(c)}
                   className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 hover:bg-blue-100 transition-colors shrink-0"
                 >
@@ -462,14 +488,14 @@ function SeccionCarreras() {
       </div>
 
       {carreraActiva && (
-        <BottomSheetCarrera 
-          carrera={carreraActiva} 
-          onCerrar={() => setCarreraActiva(null)} 
+        <BottomSheetCarrera
+          carrera={carreraActiva}
+          onCerrar={() => setCarreraActiva(null)}
         />
       )}
 
       {modalListaEspecialistasAbierto && (
-        <BottomSheetListaEspecialistas 
+        <BottomSheetListaEspecialistas
           onCerrar={() => setModalListaEspecialistasAbierto(false)}
           onEditar={openEditarEspecialista}
         />
@@ -494,9 +520,9 @@ function SeccionSemestres() {
   const updateSemestreCalendario = useAppStore(s => s.updateSemestreCalendario)
   const agregarFeriado = useAppStore(s => s.agregarFeriado)
   const eliminarFeriado = useAppStore(s => s.eliminarFeriado)
-  
+
   const activo = semestres[0]
-  
+
   const [fInicioPost, setFInicioPost] = useState(activo?.fechaInicioPostulacion ?? '')
   const [fFinPost, setFFinPost] = useState(activo?.fechaFinPostulacion ?? '')
   const [fInicioConv, setFInicioConv] = useState(activo?.fechaInicioConvenio ?? '')
@@ -504,7 +530,7 @@ function SeccionSemestres() {
   const [fInicioPrac, setFInicioPrac] = useState(activo?.fechaInicioPracticas ?? '')
   const [fFinPrac, setFFinPrac] = useState(activo?.fechaFinPracticas ?? '')
   const [linkPost, setLinkPost] = useState(activo?.linkPostulacion ?? '')
-  
+
   const [nuevoFeriadoFecha, setNuevoFeriadoFecha] = useState('')
   const [nuevoFeriadoMotivo, setNuevoFeriadoMotivo] = useState('')
 
@@ -631,7 +657,7 @@ function SeccionSemestres() {
 function SeccionPlantillas() {
   const plantilla = useAppStore(s => s.plantillaAceptacion)
   const updatePlantilla = useAppStore(s => s.updatePlantilla)
-  
+
   const [html, setHtml] = useState(plantilla?.contenidoHTML ?? '')
 
   const handleGuardar = () => {
@@ -643,7 +669,7 @@ function SeccionPlantillas() {
     <div className="flex flex-col gap-4 pb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-4">
         <h3 className="font-bold text-slate-800 text-[14px]">Plantilla de Aceptación</h3>
-        
+
         <div>
           <label className="text-[11px] font-bold text-slate-500 mb-2 block">Variables dinámicas permitidas:</label>
           <div className="flex flex-wrap gap-2">
@@ -653,7 +679,7 @@ function SeccionPlantillas() {
           </div>
         </div>
 
-        <textarea 
+        <textarea
           value={html}
           onChange={e => setHtml(e.target.value)}
           className="w-full h-64 bg-slate-50 border border-slate-200 rounded-lg p-3 text-[13px] font-mono text-slate-700 outline-none focus:ring-2 focus:ring-purple-500/50 resize-none transition-shadow"
@@ -699,11 +725,11 @@ export default function ConfiguracionModal({
 
   return (
     // Contenedor global centrador 
-    <div 
+    <div
       className={`fixed inset-0 z-[200] bg-black/60 flex justify-center transition-opacity duration-300 ${abierto ? 'opacity-100' : 'opacity-0'}`}
     >
       {/* Contenedor estricto iPhone 15 Pro Max */}
-      <div 
+      <div
         className={`w-full max-w-[430px] mx-auto bg-slate-50 h-[100dvh] flex flex-col relative shadow-2xl transition-transform duration-300 ease-out overflow-hidden ${abierto ? 'translate-y-0 scale-100' : 'translate-y-12 scale-95'}`}
       >
         {/* Cabecera fija */}
@@ -731,7 +757,7 @@ export default function ConfiguracionModal({
               <X size={18} />
             </button>
           )}
-          
+
           {seccionActiva && (
             <div className="font-bold text-slate-800 text-[14px] truncate max-w-[200px] text-right">
               {seccionActiva === 'empresa' && 'Institución y Sedes'}

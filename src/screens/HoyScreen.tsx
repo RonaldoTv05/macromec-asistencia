@@ -1,5 +1,5 @@
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { Modalidad } from '../types'
 import {
   AlertCircle,
@@ -96,16 +96,18 @@ function DashboardPracticante() {
   const carreras = useAppStore((s) => s.carreras || [])
   const monitores = useAppStore((s) => s.monitores || [])
 
-  const carreraAsignada = carreras.find(c => c.nombre === usuario?.carrera);
-  const nombreEspecialista = carreraAsignada ? carreraAsignada.especialistaNombre : 'Especialista no asignado';
-  
-  const practicanteCompleto = practicantes.find(p => p.dni === usuario?.dni);
+  const getEspecialistaAsignado = useAppStore(s => s.getEspecialistaAsignado);
+
+  const practicanteCompleto = practicantes.find(p => p.dni === usuario?.dni) || practicantes[0];
+  const especialistaObjeto = getEspecialistaAsignado(practicanteCompleto.carreraId || practicanteCompleto.carrera, practicanteCompleto.semestre);
+  const nombreEspecialista = especialistaObjeto ? `${especialistaObjeto.nombres} ${especialistaObjeto.apellidos}` : 'Especialista no asignado';
+
   const supervisorAsignado = monitores.find(m => m.id === practicanteCompleto?.monitorId);
   const nombreSupervisor = supervisorAsignado ? supervisorAsignado.nombre : 'Supervisor no asignado';
 
   const [expedienteOpen, setExpedienteOpen] = useState(false)
 
-  const p = practicantes[0]
+  const p = practicanteCompleto;
   const balance = extraHoursBalances[0]
   const horasExtra = balance?.horasDisponibles ?? 0
 
@@ -117,6 +119,12 @@ function DashboardPracticante() {
 
   // FASE 1: LÓGICA DE REVELACIÓN PROGRESIVA DE DÍAS (TIEMPO REAL)
   const hoy = new Date();
+  const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+
+  // Feriados y Semestres
+  const semestres = useAppStore.getState().semestres;
+  const semestreActivo = semestres[0];
+  const esFeriadoHoy = semestreActivo?.feriados?.find(f => f.fecha === fechaHoy);
   const diaSemanaHoy = hoy.getDay() === 0 ? 7 : hoy.getDay();
 
   const diasAMostrar: Date[] = [];
@@ -127,7 +135,6 @@ function DashboardPracticante() {
   }
 
   // FASE 2: CONEXIÓN CON EL STORE
-  const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
 
   const SEMANA_ACTUAL = diasAMostrar.map(d => {
     const yyyy = d.getFullYear()
@@ -186,7 +193,7 @@ function DashboardPracticante() {
             <span className="text-xs text-slate-500 font-semibold uppercase">Carrera SENATI</span>
             <span className="text-sm font-medium text-slate-800">{usuario?.carrera || 'Sin carrera registrada'}</span>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 mt-2">
             <div className="flex flex-col">
               <span className="text-xs text-slate-500 font-semibold uppercase">Especialista (SENATI)</span>
@@ -209,6 +216,13 @@ function DashboardPracticante() {
                 <span className="bg-emerald-100 text-emerald-800 rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1">
                   <CheckCircle2 size={13} />
                   ASISTIÓ — {hoyActual.horaIngreso}
+                </span>
+              )
+            }
+            if (esFeriadoHoy) {
+              return (
+                <span className="bg-purple-100 text-purple-800 rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1">
+                  🏖️ Feriado: {esFeriadoHoy.motivo}
                 </span>
               )
             }
@@ -568,7 +582,7 @@ function ModalExpediente({
       <div className="absolute inset-0" onClick={onCerrar} />
       <div className="w-full max-w-[430px] mx-auto bg-white rounded-t-[20px] p-5 h-[90vh] overflow-y-auto relative shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col animate-in slide-in-from-bottom-full duration-300">
 
-        <div className="flex items-center justify-between mb-5 shrink-0">
+        <div className="flex items-center justify-between mb-3 shrink-0">
           <div>
             <h3 className="font-bold text-slate-800 text-[18px] leading-tight">Expediente Documentario</h3>
             <span className="text-[12px] text-slate-500 font-medium">Sube tus documentos requeridos</span>
@@ -577,6 +591,25 @@ function ModalExpediente({
             <X size={18} />
           </button>
         </div>
+
+        {/* Info Fechas de Convenio Sincronizadas */}
+        {(() => {
+          const semestres = useAppStore(s => s.semestres);
+          const semestreActivo = semestres[0];
+          return semestreActivo ? (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-5 flex flex-col gap-1">
+              <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wide">Plazos Legales del Semestre Activo</span>
+              <div className="text-[12px] text-indigo-700 font-medium flex justify-between">
+                <span>Inicio de Convenio:</span>
+                <span>{semestreActivo.fechaInicioConvenio}</span>
+              </div>
+              <div className="text-[12px] text-indigo-700 font-medium flex justify-between">
+                <span>Fin de Convenio:</span>
+                <span>{semestreActivo.fechaFinConvenio}</span>
+              </div>
+            </div>
+          ) : null;
+        })()}
 
         <div className="flex flex-col gap-3 pb-6">
           {DOC_CONFIG.map((item, idx) => {
@@ -798,6 +831,42 @@ function DashboardGerencia() {
   const practicantes = useAppStore((s) => s.practicantes)
   const usuario = useAppStore((s) => s.usuarioActual)
   const cambiarModalidadHoy = useAppStore((s) => s.cambiarModalidadHoy)
+
+  const [modalCumplesOpen, setModalCumplesOpen] = useState(false);
+
+  const cumpleañosOrdenados = useMemo(() => {
+    if (!practicantes) return [];
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const hoyActual = new Date();
+
+    return practicantes.map(p => {
+      const [year, month, day] = p.fechaNacimiento.split('-');
+      const anioNac = parseInt(year, 10);
+      const mesIndex = parseInt(month, 10) - 1;
+      const diaNum = parseInt(day, 10);
+
+      // Cálculo exacto de la edad actual
+      let edad = hoyActual.getFullYear() - anioNac;
+      const m = hoyActual.getMonth() - mesIndex;
+      if (m < 0 || (m === 0 && hoyActual.getDate() < diaNum)) {
+        edad--;
+      }
+
+      return {
+        id: p.id,
+        nombreCompleto: `${p.nombre} ${p.apellido || ''}`.trim(),
+        dia: diaNum,
+        mesIndex: mesIndex,
+        mesTexto: meses[mesIndex],
+        edadActual: edad,
+        avatar: p.nombre.substring(0, 2).toUpperCase()
+      };
+    })
+      .sort((a, b) => a.mesIndex === b.mesIndex ? a.dia - b.dia : a.mesIndex - b.mesIndex);
+  }, [practicantes]);
+
+  const mesActual = new Date().getMonth();
+  const cumpleañosEsteMes = cumpleañosOrdenados.filter(c => c.mesIndex === mesActual);
   const borradorDiario = useAppStore((s) => s.borradorDiario)
   const marcarBorrador = useAppStore((s) => s.marcarBorrador)
   const mostrarAlertasFaltantes = useAppStore((s) => s.mostrarAlertasFaltantes)
@@ -872,30 +941,31 @@ function DashboardGerencia() {
       </div>
 
       {/* ── Banner Cumpleaños (RF-49) ── */}
-      {(() => {
-        const mesActual = new Date().getMonth() + 1;
-        const cumpleañeros = practicantes.filter(p => {
-          if (!p.fechaNacimiento) return false;
-          const [, mes] = p.fechaNacimiento.split('-');
-          return parseInt(mes) === mesActual;
-        });
-
-        if (cumpleañeros.length === 0) return null;
-
-        return (
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex items-center gap-3 shadow-sm">
-            <div className="bg-indigo-100 text-indigo-600 p-2 rounded-full shrink-0">
-              <Cake size={18} />
-            </div>
-            <div>
-              <div className="text-[12px] font-bold text-indigo-900 leading-tight">Cumpleaños próximos este mes:</div>
-              <div className="text-[11px] text-indigo-700 mt-0.5">
-                {cumpleañeros.map(c => c.nombre.split(' ')[0]).join(', ')}
-              </div>
-            </div>
+      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-indigo-800 font-bold text-sm">
+            <span>🎂</span> Cumpleaños este mes
           </div>
-        );
-      })()}
+          <button
+            onClick={() => setModalCumplesOpen(true)}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100/50 px-3 py-1 rounded-full"
+          >
+            Ver todos
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {cumpleañosEsteMes.length > 0 ? (
+            cumpleañosEsteMes.map(c => (
+              <span key={c.id} className="text-sm font-medium text-indigo-900">
+                • {c.nombreCompleto} <span className="text-indigo-500 font-normal">({c.dia} de {c.mesTexto})</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-sm text-indigo-400 italic">No hay cumpleaños este mes.</span>
+          )}
+        </div>
+      </div>
 
       {/* ── KPIs ── */}
       <div style={{ display: 'flex', gap: 10 }}>
@@ -1168,6 +1238,34 @@ function DashboardGerencia() {
               >
                 Confirmar asistencia
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cumpleaños (RF-49 ampliado) */}
+      {modalCumplesOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg text-slate-800">Cumpleaños del Año</h3>
+              <button onClick={() => setModalCumplesOpen(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 font-bold">✕</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 flex flex-col gap-3 pr-2">
+              {cumpleañosOrdenados.map((c) => (
+                <div key={c.id} className={`flex items-center justify-between p-3 rounded-xl border ${c.mesIndex === mesActual ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-100'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">
+                      {c.avatar}
+                    </div>
+                    <span className="font-bold text-sm text-slate-700">{c.nombreCompleto}</span>
+                  </div>
+                  <div className={`px-3 py-1 rounded-lg text-xs font-bold ${c.mesIndex === mesActual ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {c.dia} {c.mesTexto}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

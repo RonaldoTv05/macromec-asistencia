@@ -9,19 +9,12 @@ import GeneralScreen from './screens/GeneralScreen'
 import ReportesScreen from './screens/ReportesScreen'
 import AdminModuloScreen from './screens/AdminModuloScreen'
 
-// ── Altura del header fijo (safe area + logo row) ────────────
-// paddingTop (safe-area ~59px) + logo row (~58px) = ~117px con margen
 const HEADER_HEIGHT = 120
-
-// ============================================================
-// APP ROOT — Auth Guard + Routing por rol
-// ============================================================
 
 export default function App() {
   const usuarioActual = useAppStore((s) => s.usuarioActual)
   const tabActiva = useAppStore((s) => s.tabActiva)
 
-  // ── Guard de autenticación ──────────────────────────────────
   if (!usuarioActual) {
     return (
       <>

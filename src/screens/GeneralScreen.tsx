@@ -45,7 +45,11 @@ function fechaEnRango(fecha: string, inicio: string, fin: string): boolean {
 
 type CeldaInfo = { label: string; cls: string; bloqueado: boolean }
 
-function getCeldaAsistencia(p: Practicante, fecha: string): CeldaInfo {
+function getCeldaAsistencia(p: Practicante, fecha: string, feriados: import('../types').Feriado[]): CeldaInfo {
+  if (feriados.some(f => f.fecha === fecha)) {
+    return { label: 'Fe', cls: 'bg-purple-100 text-purple-700 border border-purple-200', bloqueado: true }
+  }
+
   if (p.estadoLaboral === 'retirado' && p.retiro) {
     const inicio = p.retiro.fechaInicio
     const fin = '9999-12-31'
@@ -162,7 +166,7 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
 
   const [estadoSel, setEstadoSel] = useState<EstadoAsistencia>(sheet.estadoActual ?? 'PENDIENTE')
   const [modalidadLocal, setModalidadLocal] = useState<'presencial' | 'virtual'>(sheet.modalidadDia)
-  
+
   const asistenciaActual = sheet.practicante?.asistencia?.[sheet.fecha]
   const regHistorial = sheet.practicante?.historial.find(h => h.fecha === sheet.fecha)
   const [observacion, setObservacion] = useState(regHistorial?.observacion || '')
@@ -197,7 +201,7 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
     if (!sheet.practicante) return
     actualizarConModalidad(sheet.practicante.id, sheet.fecha, estadoSel, modalidadLocal as Modalidad)
     registrarIncidencia(sheet.practicante.id, sheet.fecha, { observacion, horasExtraManuales: heManuales })
-    
+
     if (estadoSel === 'FALTA' && usarComodin) {
       cubrirFaltaConComodin(sheet.practicante.id, sheet.fecha)
       toast.success('Incidencia guardada y falta cubierta con comodín')
@@ -274,7 +278,7 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
         <div className="flex flex-col gap-3 mb-5">
           <div>
             <label className="text-[11px] font-bold text-slate-600 mb-1 block">Observaciones (Ej. Descanso médico, permiso)</label>
-            <textarea 
+            <textarea
               value={observacion}
               onChange={(e) => setObservacion(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 min-h-[70px] resize-none"
@@ -283,7 +287,7 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
           </div>
           <div>
             <label className="text-[11px] font-bold text-slate-600 mb-1 block">Modificar Horas Extras Manuales</label>
-            <input 
+            <input
               type="number"
               min="0"
               step="0.5"
@@ -359,11 +363,12 @@ interface TablaMatrizProps {
   year: number
   month: number
   dias: number[]
-  extraHoursBalances: { practicanteId: string; horasDisponibles: number }[]
+  extraHoursBalances: Array<{ practicanteId: string; horasDisponibles: number }>
+  feriados: import('../types').Feriado[]
   onCeldaClick: (p: Practicante, fecha: string, fechaLegible: string) => void
 }
 
-function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, onCeldaClick }: TablaMatrizProps) {
+function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feriados, onCeldaClick }: TablaMatrizProps) {
   return (
     <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
       <table className="border-collapse" style={{ tableLayout: 'fixed', width: 'max-content' }}>
@@ -431,7 +436,7 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, onCe
                 </td>
                 {dias.map((d) => {
                   const fecha = getFechaStr(year, month, d)
-                  const info = getCeldaAsistencia(p, fecha)
+                  const info = getCeldaAsistencia(p, fecha, feriados)
                   return (
                     <td
                       key={d}
@@ -439,8 +444,13 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, onCe
                       style={{ padding: '3px 2px', borderLeft: '1px solid #f1f5f9' }}
                     >
                       <button
-                        onClick={() => onCeldaClick(p, fecha, getFechaLegible(year, month, d))}
-                        className={`w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold cursor-pointer transition-all ${info.cls}`}
+                        onClick={() => {
+                          if (!info.bloqueado) {
+                            onCeldaClick(p, fecha, getFechaLegible(year, month, d))
+                          }
+                        }}
+                        disabled={info.bloqueado}
+                        className={`w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold cursor-pointer transition-all ${info.cls} ${info.bloqueado ? 'cursor-not-allowed opacity-80' : ''}`}
                       >
                         {info.label}
                       </button>
@@ -546,6 +556,7 @@ export default function GeneralScreen() {
           month={mesActual}
           dias={dias}
           extraHoursBalances={extraHoursBalances}
+          feriados={useAppStore.getState().semestres[0]?.feriados || []}
           onCeldaClick={handleCeldaClick}
         />
       </div>

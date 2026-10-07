@@ -150,14 +150,14 @@ export interface Practicante {
   nombre: string
   apellido?: string
   email: string
-  fechaNacimiento?: string
-  dni?: string
+  fechaNacimiento: string
+  dni: string
   tel?: string
-  celular?: string
-  password?: string
-  carrera?: string
+  celular: string
+  password: string
+  carrera: string
   carreraId: string;
-  semestre?: string
+  semestre: string
   monitorId: string;
   modalidadBase: Modalidad
   horasSemanalesTarget: number
@@ -218,6 +218,17 @@ export interface ToastMessage {
 }
 
 // ── Configuración Institucional y Semestral ───────────────────
+export interface DatosEmpresa {
+  ruc: string;
+  razonSocial: string;
+  correo: string;
+  telefono: string;
+  direccion: string;
+  departamento: string;
+  provincia: string;
+  distrito: string;
+}
+
 export interface MacromecConfig {
   id: string
   ruc: string
@@ -236,11 +247,19 @@ export interface SemestreConfig {
   peaArchivo: string | null
 }
 
+// Relación Carrera - Especialista - Semestre (Many-to-Many o One-to-Many con pivote)
+export interface AsignacionCarreraEspecialista {
+  id: string;
+  carreraId: string;
+  especialistaId: string;
+  semestres: string[]; // ej: ['S4', 'S5', 'S6']
+  peaArchivo: string | null; // Configuración del Plan de Aprendizaje
+}
+
 export interface Carrera {
   id: string;
   nombre: string;
-  especialistaNombre: string;
-  configuraciones?: any[];
+  asignaciones?: AsignacionCarreraEspecialista[]; // Relación TypeORM
 }
 
 export interface Monitor {
@@ -253,6 +272,8 @@ export interface Monitor {
   especialistasAsignados?: string[];
   correoGmail?: string;
   password?: string;
+  estado?: 'Activo' | 'Suspendido' | 'Retirado';
+  motivoSuspension?: string;
 }
 
 export interface Especialista {

@@ -43,10 +43,13 @@ export default function LoginScreen() {
     // Simular latencia de red (UX premium)
     await new Promise((r) => setTimeout(r, 700))
 
-    const ok = login(u, p)
+    const resultado = login(u, p)
     setCargando(false)
 
-    if (!ok) {
+    if (typeof resultado === 'string') {
+      setError(resultado)
+      toast.error('Acceso denegado')
+    } else if (!resultado) {
       setError('Usuario o contraseña incorrectos')
       toast.error('Credenciales inválidas — Verifica tus datos')
     } else {
@@ -344,16 +347,8 @@ export default function LoginScreen() {
           {error && (
             <div
               role="alert"
-              style={{
-                background: 'rgba(239,68,68,0.12)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                borderRadius: 10,
-                padding: '10px 14px',
-                marginBottom: 20,
-                fontSize: 13,
-                color: '#fca5a5',
-                fontWeight: 500,
-              }}
+              className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-lg text-sm text-center font-medium mt-4 mb-5"
+              style={{ marginBottom: 20 }}
             >
               ⚠️ {error}
             </div>

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, GraduationCap, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
-
 // ── Sanitización ────────────────────────────────────────────────
 function sanitize(value: string): string {
   return value.replace(/<[^>]*>/g, '').trim()
@@ -13,13 +12,14 @@ function sanitize(value: string): string {
 // ============================================================
 
 export default function PostulacionScreen({
+
   onVolver,
 }: {
   onVolver: () => void
 }) {
   const carreras = useAppStore((s) => s.carreras)
   const addPostulacion = useAppStore((s) => s.addPostulacion)
-
+  
   const [nombres, setNombres] = useState('')
   const [apellidos, setApellidos] = useState('')
   const [dni, setDni] = useState('')

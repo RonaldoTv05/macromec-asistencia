@@ -29,8 +29,9 @@ import type {
   PlantillaAceptacion,
   SemestreConfig,
   Postulante,
-  ActividadDiaria,
   Monitor,
+  DatosEmpresa,
+  ActividadDiaria
 } from '../types'
 
 // ============================================================
@@ -53,7 +54,7 @@ interface AppState {
   // ── Auth ─────────────────────────────────────────────────
   usuarioActual: any | null
   usuariosSistema: User[]
-  login: (dni: string, pass: string) => boolean
+  login: (dni: string, pass: string) => boolean | string
   logout: () => void
   updatePerfil: (data: Partial<Omit<User, 'id' | 'username' | 'rol'>>) => void
   addUsuario: (usuario: User) => void
@@ -76,6 +77,10 @@ interface AppState {
   // Practicante seleccionado (para supervisor/admin)
   practicanteSeleccionadoId: string
   setPracticanteSeleccionadoId: (id: string) => void
+
+  asignarMonitor: (practicanteId: string, monitorId: string) => void
+  removerMonitor: (practicanteId: string) => void
+  cambiarEstadoSupervisor: (supervisorId: string, nuevoEstado: 'Activo' | 'Suspendido', motivo?: string) => void
 
   // ── Horario semanal ───────────────────────────────────────
   // Guardar y enviar horario (practicante)
@@ -197,12 +202,17 @@ interface AppState {
   evaluarTardanzas: (practicanteId: string) => void
 
   // ── Configuración Institucional y Semestral ───────────────────
+  datosEmpresa: DatosEmpresa
+  actualizarDatosEmpresa: (nuevosDatos: Partial<DatosEmpresa>) => void
+
   macromecConfig: MacromecConfig
   carreras: Carrera[]
   especialistas: Especialista[]
   semestres: Semestre[]
   plantillaAceptacion: PlantillaAceptacion
   monitores: Monitor[]
+
+  getEspecialistaAsignado: (carreraId: string, semestre: string) => Especialista | undefined
 
   updateMacromecConfig: (config: Partial<MacromecConfig>) => void
   addCarrera: (carrera: Carrera) => void
@@ -226,7 +236,24 @@ export const enviarCredencialesWhatsApp = async (celular: string, nombre: string
 };
 
 // ============================================================
-// STORE
+// STORE (Preparación para NestJS & PostgreSQL)
+// ============================================================
+//
+// 📌 ARQUITECTURA DE MIGRACIÓN:
+// Las entidades `Carrera`, `Especialista` y la tabla pivote `AsignacionCarreraEspecialista`
+// formarán una relación Many-to-Many o One-to-Many en NestJS usando TypeORM.
+//
+// Entity (NestJS):
+// @Entity('asignaciones_especialistas')
+// export class AsignacionEntity {
+//    @PrimaryGeneratedColumn('uuid') id: string;
+//    @ManyToOne(() => CarreraEntity, c => c.asignaciones) carrera: CarreraEntity;
+//    @ManyToOne(() => EspecialistaEntity, e => e.asignaciones) especialista: EspecialistaEntity;
+//    @Column('simple-array') semestres: string[];
+// }
+//
+// DTOs (NestJS): CreateAsignacionDto y UpdateAsignacionDto
+// validarán la inserción de arreglos de semestres permitidos (ej. `enum: ['S4','S5','S6']`).
 // ============================================================
 
 export const useAppStore = create<AppState>()(
@@ -237,9 +264,43 @@ export const useAppStore = create<AppState>()(
       rolActivo: null,
       usuariosSistema: USUARIOS_SISTEMA,
 
+      getEspecialistaAsignado: (carreraId: string, semestre: string) => {
+        const { carreras, especialistas } = get();
+        // 1. Buscar la carrera por ID o nombre
+        let carrera = carreras.find(c => c.id === carreraId || c.nombre === carreraId);
+
+        // 1.5. Fallback defensivo para Zustand Persist (Si el caché tiene la interfaz antigua sin asignaciones)
+        // 1.5. Fallback defensivo con tipado estricto (sin any)
+        if (carrera && !carrera.asignaciones) {
+          const carrerasDefault = get().carreras || [];
+          carrera = carrerasDefault.find((c: Carrera) => c.id === carreraId || c.nombre === carreraId);
+        }
+
+        if (!carrera || !carrera.asignaciones) return undefined;
+
+        // 2. Normalizar el semestre entrante ('VI Semestre' -> 'S6')
+        const normalizeSemestre = (s: string) => {
+          if (!s) return '';
+          const upper = s.toUpperCase();
+          if (upper.includes('IV ') || upper === 'S4') return 'S4';
+          if (upper.includes('VI ') || upper === 'S6') return 'S6';
+          if (upper.includes('V ') || upper === 'S5') return 'S5';
+          return s; // Fallback
+        };
+        const semNormalizado = normalizeSemestre(semestre);
+
+        // 3. Encontrar la asignación que incluya este semestre normalizado
+        const asignacion = carrera.asignaciones.find(a => a.semestres.includes(semNormalizado));
+        if (!asignacion) return undefined;
+
+        // 4. Devolver el especialista
+        return especialistas.find(e => e.id === asignacion.especialistaId);
+      },
+
       login: (dni: string, pass: string) => {
         const dSafe = dni.trim().replace(/<[^>]*>/g, '');
         const pSafe = pass.replace(/<[^>]*>/g, '');
+        const errorSuspension = 'Su cuenta está suspendida por inactividad/retiro. Si crees que fue un error contáctese con el Admin (número: +51 979 134 594)';
 
         // 1. Gerencia
         const adminGerencia = get().usuariosSistema.find(
@@ -255,6 +316,12 @@ export const useAppStore = create<AppState>()(
           (m: any) => (m.dni === dSafe || m.correoGmail === dSafe) && m.password === pSafe
         ) as any;
         if (monitor) {
+          if (monitor.estado === 'Suspendido') {
+            return `Su cuenta está suspendida por: ${monitor.motivoSuspension || 'Motivo no especificado'}. Si cree que fue un error contáctese con el Admin (número: +51 979 134 594)`;
+          }
+          if (monitor.estado === 'Retirado') {
+            return errorSuspension;
+          }
           set({
             usuarioActual: {
               id: monitor.id,
@@ -278,6 +345,9 @@ export const useAppStore = create<AppState>()(
           (p: any) => p.dni === dSafe && (p.password === pSafe || pSafe === p.dni)
         ) as any;
         if (practicante) {
+          if (practicante.estadoLaboral === 'retirado' || practicante.estado === 'Retirado' || practicante.estado === 'Suspendido') {
+            return errorSuspension;
+          }
           set({
             usuarioActual: {
               id: practicante.id,
@@ -412,6 +482,37 @@ export const useAppStore = create<AppState>()(
       practicanteSeleccionadoId: MOCK_PRACTICANTES[0].id,
       setPracticanteSeleccionadoId: (id) =>
         set({ practicanteSeleccionadoId: id }),
+
+      asignarMonitor: (practicanteId, monitorId) => set((state) => ({
+        practicantes: state.practicantes.map((p) =>
+          p.id === practicanteId ? { ...p, monitorId } : p
+        )
+      })),
+
+      removerMonitor: (practicanteId) => set((state) => ({
+        practicantes: state.practicantes.map((p) =>
+          p.id === practicanteId ? { ...p, monitorId: undefined as any } : p
+        )
+      })),
+
+      cambiarEstadoSupervisor: (supervisorId, nuevoEstado, motivo) => {
+        set((state) => {
+          // 1. Cambiar estado del supervisor
+          const monitoresActualizados = state.monitores?.map(m =>
+            m.id === supervisorId ? { ...m, estado: nuevoEstado, motivoSuspension: motivo || '' } : m
+          );
+
+          // 2. CASCADA: Si es Suspendido, liberar a sus practicantes
+          let practicantesActualizados = state.practicantes;
+          if (nuevoEstado === 'Suspendido') {
+            practicantesActualizados = state.practicantes?.map(p =>
+              p.monitorId === supervisorId ? { ...p, monitorId: null as any } : p
+            );
+          }
+
+          return { monitores: monitoresActualizados, practicantes: practicantesActualizados };
+        });
+      },
 
       // ── Horario ─────────────────────────────────────────────
       enviarHorario: (practicanteId, dias) => {
@@ -1086,6 +1187,20 @@ export const useAppStore = create<AppState>()(
       },
 
       // ── Configuración Institucional y Semestral ───────────────────
+      datosEmpresa: {
+        ruc: '20569033561',
+        razonSocial: 'MACROMEC J&S S.A.C.',
+        correo: 'contacto@macromec.com.pe',
+        telefono: '999888777',
+        direccion: 'JR. VISTA ALEGRE NRO. 1381',
+        departamento: 'JUNIN',
+        provincia: 'HUANCAYO',
+        distrito: 'SICAYA'
+      },
+      actualizarDatosEmpresa: (nuevosDatos) => set((state) => ({
+        datosEmpresa: { ...state.datosEmpresa, ...nuevosDatos }
+      })),
+
       macromecConfig: MOCK_MACROMEC_CONFIG,
       carreras: MOCK_CARRERAS,
       especialistas: MOCK_ESPECIALISTAS,

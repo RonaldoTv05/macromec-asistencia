@@ -70,22 +70,13 @@ function TarjetaColaborador({
         <div className={`text-[13px] font-bold mb-0.5 truncate ${isRetirado ? 'text-slate-400' : 'text-slate-800'}`}>
           {practicante.nombre} {practicante.apellido}
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <BadgeEstado estado={practicante.estadoLaboral} />
-          <span className="text-[10px] text-slate-400 capitalize">
-            {practicante.modalidadBase}
-          </span>
-        </div>
-
-        <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-          {practicante.password ? (
-            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Acceso Generado</span>
-          ) : (
-            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Falta Acceso</span>
-          )}
-          {practicante.hikvisionSync && (
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Hikvision OK</span>
-          )}
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <BadgeEstado estado={practicante.estadoLaboral} />
+            <span className="text-[10px] text-slate-400 capitalize">
+              {practicante.modalidadBase}
+            </span>
+          </div>
 
           {/* Badge Expediente */}
           {docsSubidos === 5 ? (
@@ -117,41 +108,51 @@ function TarjetaColaborador({
 }
 
 // ── Tarjeta de Supervisor ─────────────────────────────────────
-function TarjetaSupervisor({ supervisor }: { supervisor: any }) {
-  const handleReenviar = (e: React.MouseEvent) => {
+function TarjetaSupervisor({ supervisor, onEditar }: { supervisor: any, onEditar: (s: any) => void }) {
+  const isRetirado = supervisor.estado === 'Retirado' || supervisor.estado === 'Suspendido'
+
+  const handleCredencialesWhatsapp = (e: React.MouseEvent) => {
     e.stopPropagation();
-    toast.promise(
-      enviarCredencialesWhatsApp(supervisor.tel, supervisor.nombre, supervisor.password || '', supervisor.rol),
-      {
-        loading: 'Enviando WhatsApp...',
-        success: 'Credenciales enviadas',
-        error: 'Error'
-      }
-    );
+    const numeroLimpio = supervisor.celular?.replace(/\D/g, '') || supervisor.tel?.replace(/\D/g, '') || '';
+    const numeroFinal = numeroLimpio.startsWith('51') ? numeroLimpio : `51${numeroLimpio}`;
+    const mensaje = `Hola ${supervisor.nombre}, tu acceso al Sistema MACROMEC es. Usuario: ${supervisor.dni} Clave: ${supervisor.dni}`;
+    window.open(`https://wa.me/${numeroFinal}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   return (
-    <div className="rounded-[14px] p-3 flex items-center gap-3 border bg-white border-slate-200">
-      <div className="w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 bg-gradient-to-br from-indigo-900 to-indigo-600 text-white">
-        {supervisor.avatarIniciales}
+    <div className={`rounded-[14px] p-3 flex items-center gap-3 border ${isRetirado ? 'bg-slate-50 border-slate-200 opacity-70' : 'bg-white border-slate-200'}`}>
+      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 ${isRetirado ? 'bg-slate-300 text-slate-500' : 'bg-gradient-to-br from-indigo-900 to-indigo-600 text-white'}`}>
+        {supervisor.avatarIniciales || supervisor.nombre.substring(0, 2).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-bold mb-0.5 text-slate-800 truncate">
-          {supervisor.nombre}
+        <div className="text-[13px] font-bold mb-0.5 flex items-center gap-2">
+          <span className={`truncate ${isRetirado ? 'text-slate-500' : 'text-slate-800'}`}>{supervisor.nombre}</span>
+          {isRetirado ? (
+            <span className="bg-red-100 text-red-700 rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide uppercase">RETIRADO</span>
+          ) : (
+            <span className="bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide uppercase">ACTIVO</span>
+          )}
         </div>
         <div className="text-[11px] text-slate-500 mb-0.5">
           DNI: {supervisor.dni} • Cel: {supervisor.celular || supervisor.tel}
         </div>
-        <div className="text-[11px] text-slate-400 font-medium">
-          Área / Carreras a cargo: {supervisor.area || supervisor.carrera || 'Supervisor'}
+        <div className="text-[11px] text-slate-400 font-medium truncate">
+          {supervisor.area || supervisor.carrera || 'Supervisor'}
         </div>
-        <div className="mt-2">
+        <div className="mt-2 flex items-center gap-2">
           <button
-            onClick={handleReenviar}
-            className="bg-green-100 text-green-700 hover:bg-green-200 text-[12px] px-3 py-1.5 rounded-lg flex items-center gap-1"
+            onClick={handleCredencialesWhatsapp}
+            className="flex-1 bg-green-100 text-green-700 hover:bg-green-200 text-[12px] py-1.5 rounded-lg flex items-center justify-center gap-1 font-semibold"
           >
             <Smartphone size={14} />
-            Reenviar Accesos
+            Credenciales
+          </button>
+          <button
+            onClick={() => onEditar(supervisor)}
+            className="flex-1 border border-slate-200 text-slate-600 py-1.5 rounded-lg flex items-center justify-center gap-1 text-[12px] font-semibold hover:bg-slate-50"
+          >
+            <Edit3 size={14} />
+            Editar
           </button>
         </div>
       </div>
@@ -505,7 +506,10 @@ function BottomSheetEvaluacion({
       nombre: postulante.nombres,
       apellido: postulante.apellidos,
       email: postulante.correo,
+      fechaNacimiento: (postulante as any).fechaNacimiento || '2000-01-01',
       dni: postulante.dni,
+      celular: postulante.celular,
+      carrera: 'Especialidad Asignada',
       tel: postulante.celular,
       carreraId: carreraIdSeleccionada,
       semestre: cicloActual,
@@ -741,22 +745,43 @@ function BottomSheetPracticante({
   practicante: Practicante
   onCerrar: () => void
 }) {
-  const generarCredenciales = useAppStore(s => s.generarCredenciales)
-  const sincronizarHikvision = useAppStore(s => s.sincronizarHikvision)
+  const [isSendingWhatsapp, setIsSendingWhatsapp] = useState(false);
+  const [isSyncingHikvision, setIsSyncingHikvision] = useState(false);
 
-  const handleSincronizar = () => {
-    toast.loading("Conectando con dispositivo...", { id: 'hikvision' })
+  const handleReenviarCredenciales = () => {
+    setIsSendingWhatsapp(true);
+
+    // Limpiar el número de teléfono (quitar espacios, '+' y asegurar que sea válido)
+    const numeroLimpio = practicante.tel?.replace(/\D/g, '') || '';
+    const numeroFinal = numeroLimpio.startsWith('51') ? numeroLimpio : `51${numeroLimpio}`;
+
+    // Armar el mensaje dinámico
+    const mensaje = `Hola ${practicante.nombre}, tu acceso al Sistema de Asistencia MACROMEC es. Usuario: ${practicante.dni} Clave: ${practicante.dni}`;
+    const mensajeEncodeado = encodeURIComponent(mensaje);
+
+    // URL universal de WhatsApp
+    const whatsappUrl = `https://wa.me/${numeroFinal}?text=${mensajeEncodeado}`;
+
+    // Pequeña pausa visual antes de abrir la pestaña
     setTimeout(() => {
-      sincronizarHikvision({
-        dni: practicante.dni || '',
-        fecha: new Date().toISOString().split('T')[0],
-        horaEntrada: '08:00',
-        horaSalida: '17:00',
-        turnoFin: '17:00'
-      })
-      toast.success("Sincronización exitosa con Hikvision API", { id: 'hikvision' })
-    }, 1500)
-  }
+      window.open(whatsappUrl, '_blank');
+      setIsSendingWhatsapp(false);
+    }, 800);
+  };
+
+  const handleSincronizarHikvision = async () => {
+    setIsSyncingHikvision(true);
+    try {
+      // Futuro endpoint NestJS -> Python ISAPI Recolector
+      // await axios.post('/api/hikvision/forzar-sincronizacion');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      alert('Marcaciones sincronizadas con el terminal Hikvision');
+    } catch (error) {
+      alert('Error al conectar con el terminal en la red local');
+    } finally {
+      setIsSyncingHikvision(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[300] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
@@ -774,45 +799,29 @@ function BottomSheetPracticante({
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-            <h4 className="text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-3">Gestión de Acceso (App)</h4>
-
-            {!practicante.password ? (
-              <button
-                onClick={() => generarCredenciales(practicante.id)}
-                className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px] flex items-center justify-center gap-2 active:bg-blue-700 transition-colors"
-              >
-                <Key size={18} />
-                Generar Acceso
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  const msg = `Hola ${practicante.nombre}, tu acceso a Macromec es. Usuario: ${practicante.dni} Clave: ${practicante.password}`
-                  window.open(`https://wa.me/51${practicante.tel}?text=${encodeURIComponent(msg)}`, '_blank')
-                }}
-                className="w-full bg-emerald-500 text-white font-bold py-3.5 rounded-xl text-[14px] flex items-center justify-center gap-2 active:bg-emerald-600 transition-colors"
-              >
-                <Smartphone size={18} />
-                Enviar Credenciales por WhatsApp
-              </button>
-            )}
+          <div className="mb-6">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Gestión de Acceso y Credenciales</span>
+            <button
+              onClick={handleReenviarCredenciales}
+              disabled={isSendingWhatsapp}
+              className="w-full h-12 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
+            >
+              {isSendingWhatsapp ? 'Conectando con Evolution API...' : '📱 Reenviar Credenciales por WhatsApp'}
+            </button>
           </div>
 
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-            <h4 className="text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-3">Control de Asistencia Biométrico</h4>
-
+          <div className="mb-6">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Control de Asistencia Biométrico</span>
             <button
-              onClick={handleSincronizar}
-              disabled={practicante.hikvisionSync}
-              className={`w-full font-bold py-3.5 rounded-xl text-[14px] flex items-center justify-center gap-2 transition-colors ${practicante.hikvisionSync
-                ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                : 'bg-slate-800 text-white active:bg-slate-900'
-                }`}
+              onClick={handleSincronizarHikvision}
+              disabled={isSyncingHikvision}
+              className="w-full h-12 bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
             >
-              {practicante.hikvisionSync ? <CheckCircle2 size={18} /> : <Wifi size={18} />}
-              {practicante.hikvisionSync ? 'Sincronizado con Hikvision' : 'Sincronizar Hikvision API'}
+              {isSyncingHikvision ? 'Consultando ISAPI...' : '📡 Sincronizar Hikvision API'}
             </button>
+            <p className="text-[10px] text-slate-400 mt-2 leading-tight">
+              El sistema sincroniza automáticamente cada 5 minutos. Usa este botón solo para forzar una extracción manual inmediata.
+            </p>
           </div>
 
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
@@ -870,6 +879,155 @@ function BottomSheetPracticante({
   )
 }
 
+function BottomSheetSupervisor({
+  supervisor,
+  onCerrar,
+}: {
+  supervisor: any
+  onCerrar: () => void
+}) {
+  const practicantes = useAppStore(s => s.practicantes);
+  const asignarMonitor = useAppStore(s => s.asignarMonitor);
+  const removerMonitor = useAppStore(s => s.removerMonitor);
+  const cambiarEstadoSupervisor = useAppStore(s => s.cambiarEstadoSupervisor);
+
+  const [estado, setEstado] = useState(supervisor.estado || 'Activo');
+  const [motivo, setMotivo] = useState(supervisor.motivoSuspension || '');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isAssigning, setIsAssigning] = useState<string | null>(null);
+
+  const practicantesActuales = practicantes.filter(p => p.monitorId === supervisor.id);
+  const practicantesLibres = practicantes.filter(p => !p.monitorId || p.monitorId === null);
+
+  const handleGuardarEstado = async () => {
+    setIsUpdating(true);
+    await new Promise(r => setTimeout(r, 800));
+    cambiarEstadoSupervisor(supervisor.id, estado, motivo);
+    toast.success('Estado del supervisor actualizado');
+    setIsUpdating(false);
+    onCerrar();
+  };
+
+  const handleRemover = async (practicanteId: string) => {
+    setIsAssigning(practicanteId);
+    await new Promise(r => setTimeout(r, 600));
+    removerMonitor(practicanteId);
+    toast.success('Practicante removido del cargo');
+    setIsAssigning(null);
+  };
+
+  const handleAsignar = async (practicanteId: string) => {
+    setIsAssigning(practicanteId);
+    await new Promise(r => setTimeout(r, 600));
+    asignarMonitor(practicanteId, supervisor.id);
+    toast.success('Practicante asignado exitosamente');
+    setIsAssigning(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
+      <div className="absolute inset-0" onClick={onCerrar} />
+      <div className="w-full max-w-[430px] mx-auto bg-white rounded-t-[20px] p-5 h-auto max-h-[85vh] overflow-y-auto relative shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+
+        <div className="flex items-center justify-between mb-5 shrink-0 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="font-bold text-slate-800 text-[18px] leading-tight">{supervisor.nombre}</h3>
+            <span className="text-[12px] text-slate-500 font-medium">{supervisor.area || supervisor.carrera || 'Supervisor'}</span>
+          </div>
+          <button onClick={onCerrar} className="bg-slate-100 p-2 rounded-full text-slate-500 active:scale-95 transition-transform">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* BLOQUE A: ESTADO DEL SUPERVISOR */}
+        <div className="mb-6">
+          <h4 className="text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-3">Estado del Supervisor</h4>
+          <div className="flex gap-3 mb-3">
+            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${estado === 'Activo' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+              <input type="radio" name="estado" value="Activo" checked={estado === 'Activo'} onChange={() => setEstado('Activo')} className="hidden" />
+              <span className={`text-[14px] font-bold ${estado === 'Activo' ? 'text-emerald-700' : 'text-slate-500'}`}>Activo</span>
+            </label>
+            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${estado === 'Suspendido' ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'}`}>
+              <input type="radio" name="estado" value="Suspendido" checked={estado === 'Suspendido'} onChange={() => setEstado('Suspendido')} className="hidden" />
+              <span className={`text-[14px] font-bold ${estado === 'Suspendido' ? 'text-red-700' : 'text-slate-500'}`}>Suspender</span>
+            </label>
+          </div>
+
+          {estado === 'Suspendido' && (
+            <div className="mt-3 mb-4 p-3 bg-red-50 rounded-xl border border-red-100">
+              <label className="text-xs font-bold text-red-700 uppercase mb-1 block">Motivo de Suspensión</label>
+              <textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Ej: Inactividad, fin de contrato..."
+                className="w-full text-sm p-2 rounded border border-red-200 outline-none focus:ring-2 focus:ring-red-400 bg-white"
+                rows={2}
+              />
+            </div>
+          )}
+
+          <button onClick={handleGuardarEstado} disabled={isUpdating} className="w-full bg-slate-800 text-white font-bold h-12 rounded-xl text-[14px] disabled:opacity-70 transition-all flex items-center justify-center mt-2">
+            {isUpdating ? 'Guardando en Base de Datos...' : 'Guardar Estado'}
+          </button>
+        </div>
+
+        {/* BLOQUE B: GESTIÓN DE PRACTICANTES A CARGO */}
+        <div>
+          <h4 className="text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-3">Gestión de Practicantes</h4>
+
+          <div className="mb-4">
+            <h5 className="text-[11px] font-bold text-slate-400 mb-2">Practicantes Actuales ({practicantesActuales.length})</h5>
+            <div className="flex flex-col gap-2">
+              {practicantesActuales.length === 0 && <div className="text-[12px] text-slate-400 italic p-3 text-center border border-dashed border-slate-200 rounded-lg">Sin practicantes a cargo</div>}
+              {practicantesActuales.map(p => (
+                <div key={p.id} className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg shadow-sm">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[12px] font-bold shrink-0">
+                      {p.nombre[0]}{p.apellido?.[0] || ''}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold text-slate-700 truncate">{p.nombre} {p.apellido}</div>
+                      <div className="text-[10px] text-slate-400 truncate">{p.carreraId}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => handleRemover(p.id)} disabled={isAssigning === p.id} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50 shrink-0">
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h5 className="text-[11px] font-bold text-slate-400 mb-2">Asignar Nuevo Practicante (Libres: {practicantesLibres.length})</h5>
+            <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
+              {practicantesLibres.length === 0 && <div className="text-[12px] text-slate-400 italic p-3 text-center border border-dashed border-slate-200 rounded-lg">No hay practicantes libres</div>}
+              {practicantesLibres.map(p => (
+                <div key={p.id} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-lg">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-[12px] font-bold shrink-0">
+                      {p.nombre[0]}{p.apellido?.[0] || ''}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold text-slate-600 truncate">{p.nombre} {p.apellido}</div>
+                      <div className="text-[10px] text-slate-400 truncate">{p.carreraId}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => handleAsignar(p.id)} disabled={isAssigning === p.id} className="bg-blue-100 text-blue-600 text-[11px] font-bold px-3 py-1.5 rounded-md hover:bg-blue-200 transition-colors disabled:opacity-50 shrink-0">
+                    {isAssigning === p.id ? '...' : 'Añadir'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ============================================================
 // ADMIN MÓDULO — Gestión de Personal (solo GERENCIA)
 // ============================================================
@@ -883,6 +1041,7 @@ export default function AdminModuloScreen() {
 
   const [vistaActiva, setVistaActiva] = useState<'postulantes' | 'practicantes' | 'supervisores'>('postulantes')
   const [modalSupervisorOpen, setModalSupervisorOpen] = useState(false)
+  const [supervisorActivo, setSupervisorActivo] = useState<any>(null)
   const [postulanteActivo, setPostulanteActivo] = useState<Postulante | null>(null)
   const [practicanteActivo, setPracticanteActivo] = useState<Practicante | null>(null)
   const [query, setQuery] = useState('')
@@ -1170,9 +1329,16 @@ export default function AdminModuloScreen() {
           ) : (
             <div className="flex flex-col gap-2">
               {filtradosSupervisores.map((sup) => (
-                <TarjetaSupervisor key={sup.id} supervisor={sup} />
+                <TarjetaSupervisor key={sup.id} supervisor={sup} onEditar={(s) => setSupervisorActivo(s)} />
               ))}
             </div>
+          )}
+
+          {supervisorActivo && (
+            <BottomSheetSupervisor
+              supervisor={supervisorActivo}
+              onCerrar={() => setSupervisorActivo(null)}
+            />
           )}
 
           <button

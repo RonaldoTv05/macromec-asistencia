@@ -329,27 +329,69 @@ export const monitoresData = [
   { id: 'sup-omar', nombre: 'Jhonny Omar Chacon Colonio', rol: 'SUPERVISOR', dni: '08172882', celular: '968273238', area: 'Mantenimiento / Electricidad Industrial', correoGmail: 'omar.chacon@gmail.com', password: '123' },
   { id: 'sup-tamy', nombre: 'Tamy Adela Chacon Rojas', rol: 'SUPERVISOR', dni: '73019151', celular: '947042215', area: 'Diseño Grafico', correoGmail: 'tamy.chacon@gmail.com', password: '123' },
   { id: 'sup-juan', nombre: 'Juan Luis Alfonso Alva Cuadros', rol: 'SUPERVISOR', dni: '76143396', celular: '979134594', area: 'Software', correoGmail: 'juan.alva@gmail.com', password: '123' },
-  { id: 'sup-alexander', nombre: 'Alexander Márquez', rol: 'SUPERVISOR', dni: '00000001', celular: '900000001', area: 'Mecatrónica Industrial', correoGmail: 'alexander@gmail.com', password: '123' },
-  { id: 'sup-jheferson', nombre: 'Jheferson Roque', rol: 'SUPERVISOR', dni: '00000002', celular: '900000002', area: 'Electricidad Industrial', correoGmail: 'jheferson@gmail.com', password: '123' },
-  { id: 'sup-david', nombre: 'David Tolentino', rol: 'SUPERVISOR', dni: '00000003', celular: '900000003', area: 'Electricidad Industrial', correoGmail: 'david@gmail.com', password: '123' },
-  { id: 'sup-jeremy', nombre: 'Jeremy Calderón', rol: 'SUPERVISOR', dni: '00000004', celular: '900000004', area: 'Electricidad Industrial', correoGmail: 'jeremy@gmail.com', password: '123' }
+  { id: 'sup-alexander', nombre: 'Alexander Márquez', rol: 'SUPERVISOR', dni: '72402294', celular: '961041473', area: 'Mecatrónica Industrial', correoGmail: 'alexander@gmail.com', password: '123' },
+  { id: 'sup-jheferson', nombre: 'Jheferson Roque', rol: 'SUPERVISOR', dni: '71892880', celular: '968701757', area: 'Electricidad Industrial', correoGmail: 'jheferson@gmail.com', password: '123' },
+  { id: 'sup-david', nombre: 'Davis Tolentino', rol: 'SUPERVISOR', dni: '74634898', celular: '944293154', area: 'Electricidad Industrial', correoGmail: 'david@gmail.com', password: '123' },
+  { id: 'sup-jeremy', nombre: 'Jeremy Calderón', rol: 'SUPERVISOR', dni: '73123591', celular: '941272622', area: 'Electricidad Industrial', correoGmail: 'jeremy@gmail.com', password: '123' }
 ];
 
 export const MOCK_MONITORES: import('../types').Monitor[] = monitoresData as import('../types').Monitor[];
 
 export const MOCK_CARRERAS: Carrera[] = [
-  { id: 'c1', nombre: 'Diseño Gráfico Digital', especialistaNombre: 'Luis Gabriel Quispe' },
-  { id: 'c2', nombre: 'Ing. Ciberseguridad', especialistaNombre: 'Saul Urco Torres' },
-  { id: 'c3', nombre: 'Ing. Software con IA', especialistaNombre: 'Jack C. Hinostroza Calderón' },
-  { id: 'c4', nombre: 'Mecánico de Mantenimiento', especialistaNombre: 'Miguel A. Hidalgo Arcos' },
-  { id: 'c5', nombre: 'Mecatrónica Automotriz', especialistaNombre: 'Jazmín E. Espinoza Huamán' },
-  { id: 'c6', nombre: 'Electricidad Industrial', especialistaNombre: 'Luis Gabriel Quispe' },
-  { id: 'c7', nombre: 'Administración de Empresas', especialistaNombre: 'Saul Urco Torres' },
-  { id: 'c8', nombre: 'Administración Industrial', especialistaNombre: 'Jack C. Hinostroza Calderón' },
-  { id: 'c9', nombre: 'Seguridad Industrial y Prev. de Riesgo', especialistaNombre: 'Miguel A. Hidalgo Arcos' },
-  { id: 'c10', nombre: 'Admin. de Negocios Internacionales', especialistaNombre: 'Jazmín E. Espinoza Huamán' },
-  { id: 'c11', nombre: 'Mecánico Automotriz', especialistaNombre: 'Luis Gabriel Quispe' },
-  { id: 'c12', nombre: 'Campus Virtual', especialistaNombre: 'Saul Urco Torres' }
+  { 
+    id: 'c1', nombre: 'Diseño Gráfico Digital', 
+    asignaciones: [{ id: 'a1', carreraId: 'c1', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c2', nombre: 'Ing. Ciberseguridad', 
+    asignaciones: [{ id: 'a2', carreraId: 'c2', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c3', nombre: 'Ing. Software con IA', 
+    asignaciones: [{ id: 'a3', carreraId: 'c3', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c4', nombre: 'Mecánico de Mantenimiento', 
+    asignaciones: [{ id: 'a4', carreraId: 'c4', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c5', nombre: 'Mecatrónica Automotriz', 
+    asignaciones: [
+      { id: 'a5-1', carreraId: 'c5', especialistaId: 'esp-2', semestres: ['S5'], peaArchivo: null },
+      { id: 'a5-2', carreraId: 'c5', especialistaId: 'esp-3', semestres: ['S4', 'S6'], peaArchivo: null }
+    ]
+  },
+  { 
+    id: 'c6', nombre: 'Electricidad Industrial', 
+    asignaciones: [
+      { id: 'a6-1', carreraId: 'c6', especialistaId: 'esp-4', semestres: ['S4', 'S5'], peaArchivo: null },
+      { id: 'a6-2', carreraId: 'c6', especialistaId: 'esp-2', semestres: ['S6'], peaArchivo: null }
+    ]
+  },
+  { 
+    id: 'c7', nombre: 'Administración de Empresas', 
+    asignaciones: [{ id: 'a7', carreraId: 'c7', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c8', nombre: 'Administración Industrial', 
+    asignaciones: [{ id: 'a8', carreraId: 'c8', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c9', nombre: 'Seguridad Industrial y Prevención de Riesgo', 
+    asignaciones: [{ id: 'a9', carreraId: 'c9', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c10', nombre: 'Administración de Negocios Internacionales', 
+    asignaciones: [{ id: 'a10', carreraId: 'c10', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c11', nombre: 'Mecánico Automotriz', 
+    asignaciones: [{ id: 'a11', carreraId: 'c11', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  },
+  { 
+    id: 'c12', nombre: 'Campus Virtual', 
+    asignaciones: [{ id: 'a12', carreraId: 'c12', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+  }
 ];
 
 export const MOCK_SEMESTRES: Semestre[] = [
@@ -362,17 +404,17 @@ export const MOCK_SEMESTRES: Semestre[] = [
     fechaFinConvenio: '2026-07-17',
     fechaInicioPracticas: '2026-08-17',
     fechaFinPracticas: '2026-12-05',
-    linkPostulacion: 'https://macromec.pe/postula',
+    linkPostulacion: 'https://sistema.macromec.com.pe/#/postula',
     feriados: [],
   }
 ]
 
 export const especialistasData = [
-  { id: 'esp-1', nombres: 'Luis Gabriel', apellidos: 'Quispe', dni: '11111111', celular: '963 352 136', correo: 'lquispe@senati.pe', carrerasCargo: ['Diseño Gráfico Digital', 'Ing. Ciberseguridad', 'Ing. Software con IA', 'Mecánico de Mantenimiento'], semestres: ['S4', 'S5', 'S6'], sede: 'Huancayo' },
-  { id: 'esp-2', nombres: 'Saul', apellidos: 'Urco Torres', dni: '22222222', celular: '980 548 616', correo: 'surco@senati.pe', carrerasCargo: ['Mecatrónica Automotriz', 'Electricidad Industrial'], semestres: ['S5', 'S6'], sede: 'Huancayo' },
-  { id: 'esp-3', nombres: 'Jack C.', apellidos: 'Hinostroza Calderón', dni: '33333333', celular: '980 547 713', correo: 'jhinostroza@senati.pe', carrerasCargo: ['Mecatrónica Automotriz'], semestres: ['S4', 'S6'], sede: 'Huancayo' },
-  { id: 'esp-4', nombres: 'Miguel A.', apellidos: 'Hidalgo Arcos', dni: '44444444', celular: '966 722 643', correo: 'mhidalgo@senati.pe', carrerasCargo: ['Administración de Empresas', 'Administración Industrial', 'Electricidad Industrial'], semestres: ['S4', 'S5', 'S6'], sede: 'Huancayo' },
-  { id: 'esp-5', nombres: 'Jazmín E.', apellidos: 'Espinoza Huamán', dni: '55555555', celular: '963 352 050', correo: 'jespinoza@senati.pe', carrerasCargo: ['Seguridad Industrial y Prevención de Riesgo', 'Administración de Negocios Internacionales', 'Mecánico Automotriz', 'Campus Virtual'], semestres: ['S4', 'S5', 'S6'], sede: 'Huancayo' }
+  { id: 'esp-1', nombres: 'Luis Gabriel', apellidos: 'Quispe', dni: '11111111', celular: '963 352 136', correo: 'lquispe@senati.pe' },
+  { id: 'esp-2', nombres: 'Saul', apellidos: 'Urco Torres', dni: '22222222', celular: '980 548 616', correo: 'surco@senati.pe' },
+  { id: 'esp-3', nombres: 'Jack C.', apellidos: 'Hinostroza Calderón', dni: '33333333', celular: '980 547 713', correo: 'jhinostroza@senati.pe' },
+  { id: 'esp-4', nombres: 'Miguel A.', apellidos: 'Hidalgo Arcos', dni: '44444444', celular: '966 722 643', correo: 'mhidalgo@senati.pe' },
+  { id: 'esp-5', nombres: 'Jazmín E.', apellidos: 'Espinoza Huamán', dni: '55555555', celular: '963 352 050', correo: 'jespinoza@senati.pe' }
 ];
 
 export const MOCK_ESPECIALISTAS: Especialista[] = especialistasData as any as Especialista[];
