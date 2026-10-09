@@ -47,7 +47,7 @@ export default function FormularioPostulacion() {
     setCorreo('')
     setCarreraId('')
     setSemestre('')
-    
+
     setMostrarExito(true)
   }
 
@@ -61,7 +61,7 @@ export default function FormularioPostulacion() {
         <p className="text-slate-500 text-[15px] mb-8">
           Hemos recibido tu información correctamente. Nos contactaremos contigo a la brevedad para los siguientes pasos.
         </p>
-        <button 
+        <button
           onClick={() => setMostrarExito(false)}
           className="bg-slate-800 text-white font-bold py-3.5 px-8 rounded-xl active:bg-slate-700 transition-colors"
         >
@@ -73,7 +73,7 @@ export default function FormularioPostulacion() {
 
   return (
     <div className="w-full max-w-[430px] mx-auto h-[100dvh] overflow-y-auto bg-slate-50 flex flex-col relative animate-in fade-in duration-300">
-      
+
       {/* Header Corporativo */}
       <div className="bg-blue-600 px-5 pt-12 pb-6 text-white shrink-0 shadow-md">
         <div className="flex items-center gap-3 mb-2">
@@ -90,14 +90,14 @@ export default function FormularioPostulacion() {
       </div>
 
       <form onSubmit={handleSubmit} className="p-4 flex-1 flex flex-col gap-4">
-        
+
         {/* Tarjeta 1: Datos Personales */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4">
           <div className="flex items-center gap-2 mb-1">
             <UserCircle size={18} className="text-blue-600" />
             <h2 className="font-bold text-slate-800 text-[15px]">Datos Personales</h2>
           </div>
-          
+
           <div className="flex flex-col gap-3.5">
             <div>
               <label className="text-[11px] font-bold text-slate-500 mb-1.5 block">Nombres</label>
@@ -143,7 +143,7 @@ export default function FormularioPostulacion() {
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                   <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M1.5 1.5L6 6L10.5 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M1.5 1.5L6 6L10.5 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
               </div>
@@ -157,11 +157,10 @@ export default function FormularioPostulacion() {
                     key={sem}
                     type="button"
                     onClick={() => setSemestre(sem)}
-                    className={`flex-1 py-3 rounded-xl text-[14px] font-bold transition-all ${
-                      semestre === sem 
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 scale-100' 
+                    className={`flex-1 py-3 rounded-xl text-[14px] font-bold transition-all ${semestre === sem
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 scale-100'
                         : 'bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 scale-95'
-                    }`}
+                      }`}
                   >
                     {sem}
                   </button>

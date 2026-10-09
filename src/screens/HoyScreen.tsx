@@ -33,6 +33,7 @@ import {
 } from '../data/mockData'
 import { toast } from 'sonner'
 
+
 // ── Sub-componentes comunes ────────────────────────────────────
 
 function Card({
@@ -398,11 +399,10 @@ function DashboardPracticante() {
                     key={sem}
                     type="button"
                     onClick={() => setSemestrePeaTab(sem)}
-                    className={`flex-1 py-1.5 px-1 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                      esActivo
-                        ? 'bg-white text-blue-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
+                    className={`flex-1 py-1.5 px-1 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${esActivo
+                      ? 'bg-white text-blue-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                      }`}
                   >
                     <span>{sem}</span>
                     {esMiCiclo && (
@@ -1067,12 +1067,21 @@ function DashboardGerencia() {
     }
   ).length
 
-  // ── Almuerzos: REGLA — Presencial + (ASISTIO o CAMPO) ──
+  // ── Almuerzos: REGLA ESTRICTA ──
+  // SÓLO incluye a los practicantes con:
+  // 1. horarioAprobado activo
+  // 2. modalidadDiaria === 'Presencial' para HOY
+  // 3. estadoAsistencia === 'ASISTIO' o 'CAMPO'
   const almuerzosHoy = practicantes.filter((p) => {
-    if (p.estadoLaboral !== 'activo') return false
+    if (p.estadoLaboral !== 'activo' || !p.horarioAprobado || p.horarioAprobado.estado !== 'Aprobado') return false
+
+    const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    const nombreDiaHoy = diasNombres[HOY.getDay()]
+    const diaHorario = p.horarioAprobado.dias.find(d => d.dia === nombreDiaHoy)
+    const modalidadHoy = diaHorario ? diaHorario.modalidadDiaria : p.modalidadBase
+
     const estado = getEstadoActivo(p)
-    const modalidad = p.historial.find((d) => d.fecha === FECHA_HOY)?.modalidad ?? p.modalidadBase
-    return modalidad === 'presencial' && (estado === 'ASISTIO' || estado === 'CAMPO')
+    return modalidadHoy === 'Presencial' && (estado === 'ASISTIO' || estado === 'CAMPO')
   })
 
   const handleCopiarWhatsApp = async () => {
@@ -1156,28 +1165,25 @@ function DashboardGerencia() {
           label="Almuerzos Hoy"
           value={almuerzosHoy.length}
           icon={<Users size={14} />}
-          color="linear-gradient(135deg,#92400e,#d97706)"
+          color="linear-gradient(135deg, #10B981, #059669)"
         />
-      </div>
 
-      {/* ── Asistencia de Hoy ── */}
+      </div> {/* <-- Este es el cierre que agregaste, está perfecto */}
+
+      {/* 👇 AGREGA ESTAS DOS LÍNEAS QUE FALTABAN 👇 */}
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12, textTransform: 'capitalize' }}>
-          Asistencia de Hoy ({tituloHoyCapitalized})
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="flex flex-col gap-3">
+          {/* 👆 ===================================== 👆 */}
+
           {practicantes.map((p) => {
             const reg = p.historial.find((h) => h.fecha === FECHA_HOY)
+            // ...
             const estadoHistorial = reg?.estado
             const estadoBorrador = borradorDiario[p.id]
             const estadoActual = estadoBorrador || estadoHistorial || 'PENDIENTE'
 
             const mostrarAlerta = (estadoBorrador && estadoBorrador !== estadoHistorial) ||
               (mostrarAlertasFaltantes && !estadoBorrador && !estadoHistorial)
-
-            // Modalidad activa hoy: si ya hay registro usa esa modalidad, si no usa modalidadBase
-            const modalidadHoy: import('../types').Modalidad = (reg?.modalidad as import('../types').Modalidad) ?? p.modalidadBase
-            const esVirtual = modalidadHoy === 'virtual'
 
             // ── Estado laboral bloqueado ──────────────────────
             if (p.estadoLaboral === 'retirado') {
@@ -1198,13 +1204,39 @@ function DashboardGerencia() {
               )
             }
 
+            // ── Fase 4: Horario no registrado ─────────────────
+            const tieneHorarioAprobado = p.horarioAprobado && p.horarioAprobado.estado === 'Aprobado';
+
+            if (!tieneHorarioAprobado) {
+              return (
+                <div key={p.id} style={{ display: 'flex', flexDirection: 'column', padding: '10px 12px', background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', opacity: 0.6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                      {p.nombre} {p.apellido}
+                    </div>
+                    <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+                      Horario no registrado
+                    </span>
+                  </div>
+                </div>
+              )
+            }
+
+            const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+            const nombreDiaHoy = diasNombres[HOY.getDay()]
+            const diaHorario = p.horarioAprobado!.dias.find(d => d.dia === nombreDiaHoy)
+            const modalidadHoy = diaHorario ? diaHorario.modalidadDiaria : p.modalidadBase
+            const isVirtual = modalidadHoy === 'Virtual'
+            const isLibre = modalidadHoy === 'Libre'
+            const isPresencial = modalidadHoy === 'Presencial'
+
             // ── Practicante ACTIVO ────────────────────────────
             return (
               <div key={p.id} style={{
                 display: 'flex', flexDirection: 'column', padding: '10px 12px',
                 background: 'white', borderRadius: 12, border: '1px solid #e2e8f0',
               }}>
-                {/* Fila nombre + toggle modalidad */}
+                {/* Fila nombre + modalidad diaria */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1217,73 +1249,83 @@ function DashboardGerencia() {
                       </div>
                     )}
                   </div>
-                  {/* Toggle Presencial / Virtual */}
-                  <button
-                    onClick={() => handleToggleModalidad(p.id, modalidadHoy)}
-                    title={`Cambiar a ${esVirtual ? 'Presencial' : 'Virtual'}`}
+                  {/* Badge Modalidad */}
+                  <div
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '5px 10px', borderRadius: 20, border: 'none',
-                      background: esVirtual ? '#ede9fe' : '#dbeafe',
-                      color: esVirtual ? '#6d28d9' : '#1e40af',
-                      fontSize: 10, fontWeight: 800, cursor: 'pointer',
-                      transition: 'all 0.2s',
+                      padding: '3px 8px', borderRadius: 20, border: 'none',
+                      background: isVirtual ? '#ede9fe' : isLibre ? '#f1f5f9' : '#dbeafe',
+                      color: isVirtual ? '#6d28d9' : isLibre ? '#64748b' : '#1e40af',
+                      fontSize: 10, fontWeight: 800,
                     }}
                   >
-                    {esVirtual ? '💻 Virtual' : '🏢 Presencial'}
-                  </button>
+                    {isVirtual ? '💻 Virtual' : isLibre ? '☕ Libre' : '🏢 Presencial'}
+                  </div>
                 </div>
 
-                {/* Botones de estado — condicionados por modalidad */}
+                {/* Botones de estado — condicionados por modalidad (Fase 4) */}
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    onClick={() => handleMarcar(p.id, 'ASISTIO')}
-                    style={{
-                      flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
-                      background: estadoActual === 'ASISTIO' ? '#10b981' : '#f1f5f9',
-                      color: estadoActual === 'ASISTIO' ? 'white' : '#64748b',
-                      fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
-                    }}
-                  >✓ Asistió</button>
-                  <button
-                    onClick={() => handleMarcar(p.id, 'TARDANZA')}
-                    style={{
-                      flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
-                      background: estadoActual === 'TARDANZA' ? '#f59e0b' : '#f1f5f9',
-                      color: estadoActual === 'TARDANZA' ? 'white' : '#64748b',
-                      fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
-                    }}
-                  >T</button>
-                  <button
-                    onClick={() => handleMarcar(p.id, 'FALTA')}
-                    style={{
-                      flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
-                      background: estadoActual === 'FALTA' ? '#ef4444' : '#f1f5f9',
-                      color: estadoActual === 'FALTA' ? 'white' : '#64748b',
-                      fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
-                    }}
-                  >F</button>
-                  {/* Campo: solo en Presencial */}
-                  {!esVirtual && (
+                  {isLibre ? (
                     <button
-                      onClick={() => handleMarcar(p.id, 'CAMPO')}
+                      onClick={() => handleMarcar(p.id, 'LIBRE')}
                       style={{
-                        flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
-                        background: estadoActual === 'CAMPO' ? '#8b5cf6' : '#f1f5f9',
-                        color: estadoActual === 'CAMPO' ? 'white' : '#64748b',
-                        fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                        flex: 1, padding: '10px 4px', borderRadius: 8, border: 'none',
+                        background: estadoActual === 'LIBRE' ? '#475569' : '#f1f5f9',
+                        color: estadoActual === 'LIBRE' ? 'white' : '#64748b',
+                        fontWeight: 700, fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
                       }}
-                    >Campo</button>
+                    >Libre</button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleMarcar(p.id, 'ASISTIO')}
+                        style={{
+                          flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
+                          background: estadoActual === 'ASISTIO' ? '#10b981' : '#f1f5f9',
+                          color: estadoActual === 'ASISTIO' ? 'white' : '#64748b',
+                          fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                        }}
+                      >✓ Asistió</button>
+                      <button
+                        onClick={() => handleMarcar(p.id, 'TARDANZA')}
+                        style={{
+                          flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
+                          background: estadoActual === 'TARDANZA' ? '#f59e0b' : '#f1f5f9',
+                          color: estadoActual === 'TARDANZA' ? 'white' : '#64748b',
+                          fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                        }}
+                      >T</button>
+                      <button
+                        onClick={() => handleMarcar(p.id, 'FALTA')}
+                        style={{
+                          flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
+                          background: estadoActual === 'FALTA' ? '#ef4444' : '#f1f5f9',
+                          color: estadoActual === 'FALTA' ? 'white' : '#64748b',
+                          fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                        }}
+                      >F</button>
+                      {/* Campo: solo en Presencial */}
+                      {isPresencial && (
+                        <button
+                          onClick={() => handleMarcar(p.id, 'CAMPO')}
+                          style={{
+                            flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
+                            background: estadoActual === 'CAMPO' ? '#8b5cf6' : '#f1f5f9',
+                            color: estadoActual === 'CAMPO' ? 'white' : '#64748b',
+                            fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                          }}
+                        >Campo</button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
             )
           })}
         </div>
-      </Card>
-
+      </Card >
       {/* ── Módulo Almuerzos (reactivo, sin datos propios) ── */}
-      <Card>
+      < Card >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>🍽️</span> Módulo Almuerzos
@@ -1304,144 +1346,151 @@ function DashboardGerencia() {
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10, fontWeight: 500 }}>
           Solo Presencial + Asistió/Campo ({almuerzosHoy.length} ración{almuerzosHoy.length !== 1 ? 'es' : ''})
         </div>
-        {almuerzosHoy.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>
-            Sin raciones confirmadas aún
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {almuerzosHoy.map((p) => {
-              const estado = getEstadoActivo(p)
-              const esCampo = estado === 'CAMPO'
-              return (
-                <span
-                  key={p.id}
-                  style={{
-                    background: '#d1fae5', color: '#065f46',
-                    fontSize: 11, fontWeight: 600,
-                    padding: '4px 10px', borderRadius: 12,
-                    border: '1px solid #a7f3d0',
-                  }}
-                >
-                  {p.nombre} {p.apellido?.[0] || ''}. ✓
-                </span>
-              )
-            })}
-          </div>
-        )}
-      </Card>
+        {
+          almuerzosHoy.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>
+              Sin raciones confirmadas aún
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {almuerzosHoy.map((p) => {
+                const estado = getEstadoActivo(p)
+                const esCampo = estado === 'CAMPO'
+                return (
+                  <span
+                    key={p.id}
+                    style={{
+                      background: '#d1fae5', color: '#065f46',
+                      fontSize: 11, fontWeight: 600,
+                      padding: '4px 10px', borderRadius: 12,
+                      border: '1px solid #a7f3d0',
+                    }}
+                  >
+                    {p.nombre} {p.apellido?.[0] || ''}. ✓
+                  </span>
+                )
+              })}
+            </div>
+          )
+        }
+      </Card >
 
       {/* ── Botón Notificar Incidencias (RF-51) ── */}
-      <button
+      < button
         onClick={() => {
           const hayFaltantes = practicantes.some(p => p.estadoLaboral === 'activo' && !borradorDiario[p.id] && !p.historial.find(h => h.fecha === FECHA_HOY)?.estado)
           if (hayFaltantes) {
             setMostrarAlertasFaltantes(true)
           }
           setModalNotificar(true)
-        }}
+        }
+        }
         className="w-full bg-slate-800 text-white font-bold py-3.5 rounded-xl text-[14px] active:bg-slate-900 transition-colors mt-2"
       >
         Notificar asistencia
-      </button>
+      </button >
 
       {/* Modal BottomSheet Notificar Asistencia */}
-      {modalNotificar && (
-        <div className="fixed inset-0 z-[500] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
-          <div className="absolute inset-0" onClick={() => setModalNotificar(false)} />
-          <div className="w-full max-w-[430px] mx-auto bg-slate-50 rounded-t-[24px] p-5 max-h-[90vh] overflow-y-auto relative flex flex-col animate-in slide-in-from-bottom-full duration-300">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="font-bold text-slate-900 text-[18px]">Notificar asistencia</h3>
-                <span className="text-[13px] text-slate-500 capitalize">{tituloHoyCapitalized}</span>
+      {
+        modalNotificar && (
+          <div className="fixed inset-0 z-[500] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
+            <div className="absolute inset-0" onClick={() => setModalNotificar(false)} />
+            <div className="w-full max-w-[430px] mx-auto bg-slate-50 rounded-t-[24px] p-5 max-h-[90vh] overflow-y-auto relative flex flex-col animate-in slide-in-from-bottom-full duration-300">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-[18px]">Notificar asistencia</h3>
+                  <span className="text-[13px] text-slate-500 capitalize">{tituloHoyCapitalized}</span>
+                </div>
+                <button onClick={() => setModalNotificar(false)} className="bg-slate-200 p-2 rounded-full text-slate-600">
+                  <X size={18} />
+                </button>
               </div>
-              <button onClick={() => setModalNotificar(false)} className="bg-slate-200 p-2 rounded-full text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
 
-            <div className="flex flex-col gap-4">
-              {practicantes.filter(p => {
-                const est = getEstadoActivo(p)
-                return est === 'TARDANZA' || est === 'FALTA';
-              }).map(p => {
-                const est = getEstadoActivo(p)
-                return (
-                  <div key={p.id} className="bg-white p-3 rounded-xl border border-slate-200">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-[13px] text-slate-800">{p.nombre} {p.apellido}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${est === 'FALTA' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {est}
-                      </span>
+              <div className="flex flex-col gap-4">
+                {practicantes.filter(p => {
+                  const est = getEstadoActivo(p)
+                  return est === 'TARDANZA' || est === 'FALTA';
+                }).map(p => {
+                  const est = getEstadoActivo(p)
+                  return (
+                    <div key={p.id} className="bg-white p-3 rounded-xl border border-slate-200">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-bold text-[13px] text-slate-800">{p.nombre} {p.apellido}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${est === 'FALTA' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {est}
+                        </span>
+                      </div>
+                      <textarea
+                        placeholder="Observación (ej. Justificación, tardanza...)"
+                        value={observaciones[p.id] || ''}
+                        onChange={e => setObservaciones(prev => ({ ...prev, [p.id]: e.target.value }))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-[12px] resize-none outline-none focus:border-blue-400"
+                        rows={2}
+                      />
                     </div>
-                    <textarea
-                      placeholder="Observación (ej. Justificación, tardanza...)"
-                      value={observaciones[p.id] || ''}
-                      onChange={e => setObservaciones(prev => ({ ...prev, [p.id]: e.target.value }))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-[12px] resize-none outline-none focus:border-blue-400"
-                      rows={2}
-                    />
-                  </div>
-                )
-              })}
+                  )
+                })}
 
-              {practicantes.filter(p => {
-                const est = getEstadoActivo(p)
-                return est === 'TARDANZA' || est === 'FALTA';
-              }).length === 0 && (
-                  <div className="text-center text-slate-500 text-[13px] py-4 bg-white border border-slate-200 rounded-xl">
-                    No hay practicantes con tardanza o falta para hoy.
-                  </div>
-                )}
+                {practicantes.filter(p => {
+                  const est = getEstadoActivo(p)
+                  return est === 'TARDANZA' || est === 'FALTA';
+                }).length === 0 && (
+                    <div className="text-center text-slate-500 text-[13px] py-4 bg-white border border-slate-200 rounded-xl">
+                      No hay practicantes con tardanza o falta para hoy.
+                    </div>
+                  )}
 
-              <button
-                onClick={() => {
-                  const payload = Object.entries(observaciones).map(([id, obs]) => ({
-                    id,
-                    observacion: obs
-                  }))
-                  confirmarLoteDiario(FECHA_HOY, payload)
-                  toast.success('Lote confirmado exitosamente')
-                  setModalNotificar(false)
-                  setObservaciones({})
-                }}
-                className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px]"
-              >
-                Confirmar asistencia
-              </button>
+                <button
+                  onClick={() => {
+                    const payload = Object.entries(observaciones).map(([id, obs]) => ({
+                      id,
+                      observacion: obs
+                    }))
+                    confirmarLoteDiario(FECHA_HOY, payload)
+                    toast.success('Lote confirmado exitosamente')
+                    setModalNotificar(false)
+                    setObservaciones({})
+                  }}
+                  className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px]"
+                >
+                  Confirmar asistencia
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Modal Cumpleaños (RF-49 ampliado) */}
-      {modalCumplesOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-slate-800">Cumpleaños del Año</h3>
-              <button onClick={() => setModalCumplesOpen(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 font-bold">✕</button>
-            </div>
+      {
+        modalCumplesOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+            <div className="bg-white w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg text-slate-800">Cumpleaños del Año</h3>
+                <button onClick={() => setModalCumplesOpen(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 font-bold">✕</button>
+              </div>
 
-            <div className="overflow-y-auto flex-1 flex flex-col gap-3 pr-2">
-              {cumpleañosOrdenados.map((c) => (
-                <div key={c.id} className={`flex items-center justify-between p-3 rounded-xl border ${c.mesIndex === mesActual ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-100'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">
-                      {c.avatar}
+              <div className="overflow-y-auto flex-1 flex flex-col gap-3 pr-2">
+                {cumpleañosOrdenados.map((c) => (
+                  <div key={c.id} className={`flex items-center justify-between p-3 rounded-xl border ${c.mesIndex === mesActual ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-100'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">
+                        {c.avatar}
+                      </div>
+                      <span className="font-bold text-sm text-slate-700">{c.nombreCompleto}</span>
                     </div>
-                    <span className="font-bold text-sm text-slate-700">{c.nombreCompleto}</span>
+                    <div className={`px-3 py-1 rounded-lg text-xs font-bold ${c.mesIndex === mesActual ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-100 text-slate-500'}`}>
+                      {c.dia} {c.mesTexto}
+                    </div>
                   </div>
-                  <div className={`px-3 py-1 rounded-lg text-xs font-bold ${c.mesIndex === mesActual ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-100 text-slate-500'}`}>
-                    {c.dia} {c.mesTexto}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   )
 }
 

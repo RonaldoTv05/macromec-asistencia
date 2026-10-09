@@ -79,8 +79,19 @@ export default function ReportesScreen() {
     const isRevisado = informe.estado !== 'en_revision'
 
     const formateador = new Intl.DateTimeFormat('es-PE', { day: 'numeric', month: 'short' });
-    const iniStr = informe.fechaInicio ? formateador.format(new Date(informe.fechaInicio.split('-').map(Number) as any)) : ''
-    const finStr = informe.fechaFin ? formateador.format(new Date(informe.fechaFin.split('-').map(Number) as any)) : ''
+    const iniStr = informe.fechaInicio
+      ? (() => {
+        const [year, month, day] = informe.fechaInicio.split('-').map(Number);
+        return formateador.format(new Date(year, month - 1, day));
+      })()
+      : '';
+
+    const finStr = informe.fechaFin
+      ? (() => {
+        const [year, month, day] = informe.fechaFin.split('-').map(Number);
+        return formateador.format(new Date(year, month - 1, day));
+      })()
+      : '';
 
     const iniciales = practicante ? `${practicante.nombre?.[0] || ''}${practicante.apellido?.[0] || ''}` : 'PD'
     const nombreCompleto = practicante ? `${practicante.nombre} ${practicante.apellido}` : 'Practicante Desconocido'
@@ -139,14 +150,29 @@ export default function ReportesScreen() {
     (p) => p.horarioPendiente?.estado === 'pendiente_aprobacion',
   )
 
+  const [rechazoModalOpen, setRechazoModalOpen] = useState(false)
+  const [rechazoId, setRechazoId] = useState('')
+  const [rechazoMotivo, setRechazoMotivo] = useState('')
+
   const handleAprobarHorario = (id: string) => {
     aprobarHorario(id)
     toast.success('Horario aprobado exitosamente')
   }
 
   const handleRechazarHorario = (id: string) => {
-    rechazarHorario(id)
+    setRechazoId(id)
+    setRechazoMotivo('')
+    setRechazoModalOpen(true)
+  }
+
+  const confirmarRechazo = () => {
+    if (!rechazoMotivo.trim()) {
+      toast.error('Debe ingresar un motivo')
+      return
+    }
+    rechazarHorario(rechazoId, rechazoMotivo)
     toast.error('Horario rechazado')
+    setRechazoModalOpen(false)
   }
 
   const renderTarjetaGerencia = (p: typeof practicantes[0]) => {
@@ -173,8 +199,10 @@ export default function ReportesScreen() {
         <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-3 flex flex-col gap-1">
           {horario.dias.map((d, i) => (
             <div key={i} className="flex justify-between text-[11px] font-medium">
-              <span className="text-slate-600 capitalize">{d.dia}</span>
-              <span className="text-slate-800">{d.horaInicio} - {d.horaFin}</span>
+              <span className="text-slate-600 capitalize">{d.dia} <span className="font-bold">({d.modalidadDiaria || d.modalidad})</span></span>
+              <span className={d.modalidad === 'libre' ? 'text-slate-400' : 'text-slate-800'}>
+                {d.modalidad === 'libre' || d.modalidadDiaria === 'Libre' ? 'Libre' : `${d.horaInicio} - ${d.horaFin}`}
+              </span>
             </div>
           ))}
         </div>
@@ -330,6 +358,38 @@ export default function ReportesScreen() {
 
         {/* ── Generador de Reportes de Asistencia ── */}
         <GeneradorReportes />
+
+        {/* Modal de Rechazo de Horario (Gerencia) */}
+        {rechazoModalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl relative flex flex-col">
+              <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
+                <h3 className="m-0 text-[18px] font-bold text-slate-900">Motivo del Rechazo</h3>
+                <button
+                  onClick={() => setRechazoModalOpen(false)}
+                  className="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center border-none text-slate-500 cursor-pointer hover:bg-slate-200"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <textarea
+                value={rechazoMotivo}
+                onChange={(e) => setRechazoMotivo(e.target.value)}
+                placeholder="Escribe el motivo detallado para el practicante..."
+                className="w-full h-24 p-3 rounded-xl border border-slate-200 text-[13px] bg-slate-50 outline-none focus:border-blue-500 resize-none"
+                autoFocus
+              />
+              <div className="mt-4 flex gap-3">
+                <button onClick={() => setRechazoModalOpen(false)} className="flex-1 py-3 rounded-xl border-none bg-slate-100 text-slate-700 font-bold cursor-pointer hover:bg-slate-200">
+                  Cancelar
+                </button>
+                <button onClick={confirmarRechazo} className="flex-1 py-3 rounded-xl border-none bg-red-600 text-white font-bold cursor-pointer hover:bg-red-700">
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

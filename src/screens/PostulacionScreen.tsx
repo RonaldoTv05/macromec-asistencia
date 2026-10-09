@@ -19,7 +19,7 @@ export default function PostulacionScreen({
 }) {
   const carreras = useAppStore((s) => s.carreras)
   const addPostulacion = useAppStore((s) => s.addPostulacion)
-  
+
   const [nombres, setNombres] = useState('')
   const [apellidos, setApellidos] = useState('')
   const [dni, setDni] = useState('')

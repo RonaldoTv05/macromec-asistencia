@@ -67,8 +67,20 @@ function getCeldaAsistencia(p: Practicante, fecha: string, feriados: import('../
     case 'FALTA_CUBIERTA': return { label: 'HE', cls: 'bg-sky-100 text-sky-700 border border-sky-200', bloqueado: false }
     case 'SEMINARIO': return { label: 'Se', cls: 'bg-violet-100 text-violet-700 border border-violet-200', bloqueado: false }
     case 'LIBRE': return { label: 'L', cls: 'bg-green-50 text-green-700 border border-green-200', bloqueado: false }
-    default: return { label: '\u00b7', cls: 'bg-slate-50 text-slate-300 border border-slate-100', bloqueado: false }
   }
+
+  if (p.horarioAprobado && p.horarioAprobado.estado === 'Aprobado') {
+    const [y, m, d] = fecha.split('-').map(Number)
+    const fechaObj = new Date(y, m - 1, d)
+    const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    const nombreDia = diasNombres[fechaObj.getDay()]
+    const diaHorario = p.horarioAprobado.dias.find(d => d.dia === nombreDia)
+    if (diaHorario && diaHorario.modalidadDiaria === 'Libre') {
+      return { label: 'L', cls: 'bg-green-50 text-green-700 border border-green-200', bloqueado: false }
+    }
+  }
+
+  return { label: '\u00b7', cls: 'bg-slate-50 text-slate-300 border border-slate-100', bloqueado: false }
 }
 
 
@@ -336,6 +348,7 @@ const LEYENDA_ASISTENCIA = [
   { label: 'F', cls: 'bg-red-100 text-red-700', txt: 'Falta' },
   { label: 'C', cls: 'bg-blue-100 text-blue-700', txt: 'Campo' },
   { label: 'HE', cls: 'bg-sky-100 text-sky-700', txt: 'Comp. HE' },
+  { label: 'L', cls: 'bg-green-50 text-green-700', txt: 'Libre' },
   { label: 'R', cls: 'bg-slate-100 text-slate-400', txt: 'Retirado' },
 ]
 function Leyenda() {

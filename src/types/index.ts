@@ -7,7 +7,9 @@
 export type Rol = 'PRACTICANTE' | 'SUPERVISOR' | 'GERENCIA'
 
 // ── Modalidades de trabajo ───────────────────────────────────
-export type Modalidad = 'presencial' | 'virtual' | 'semipresencial' | 'libre'
+export type ModalidadBase = 'Presencial' | 'Semipresencial' | 'Virtual'
+export type ModalidadDiaria = 'Presencial' | 'Virtual' | 'Libre'
+export type Modalidad = 'presencial' | 'virtual' | 'semipresencial' | 'libre' // Legacy
 
 // ── Estados de asistencia diaria ─────────────────────────────
 export type EstadoAsistencia =
@@ -35,21 +37,27 @@ export type CodigoHoja =
 
 // ── Estado de horario semanal ────────────────────────────────
 export type EstadoHorario =
-  | 'borrador'
-  | 'pendiente_aprobacion'
-  | 'aprobado'
-  | 'rechazado'
+  | 'Pendiente'
+  | 'Aprobado'
+  | 'Rechazado'
+  | 'borrador' // Legacy
+  | 'pendiente_aprobacion' // Legacy
+  | 'aprobado' // Legacy
+  | 'rechazado' // Legacy
 
 // ── Estado laboral del colaborador ───────────────────────────
 export type EstadoLaboral = 'activo' | 'retirado'
 
 // ── Día dentro del horario semanal ───────────────────────────
 export interface DiaHorario {
-  dia: 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
-  modalidad: Modalidad
-  horaInicio: string  // "08:00"
-  horaFin: string     // "17:00"
-  horasCalculadas: number
+  dia: 'Lunes' | 'Martes' | 'Miércoles' | 'Jueves' | 'Viernes' | 'Sábado' | 'Domingo'
+  modalidadDiaria: ModalidadDiaria
+  horas: number
+  // Legacy fields
+  modalidad?: Modalidad
+  horaInicio?: string  // "08:00"
+  horaFin?: string     // "17:00"
+  horasCalculadas?: number
 }
 
 // ── Horario semanal completo ──────────────────────────────────
@@ -157,10 +165,11 @@ export interface Practicante {
   carreraId: string;
   semestre: string
   monitorId: string;
-  modalidadBase: Modalidad
+  modalidadBase: ModalidadBase
   horasSemanalesTarget: number
   historial: RegistroDia[]
-  horarioActual?: HorarioSemanal
+  horarioAprobado?: HorarioSemanal
+  horarioActual?: HorarioSemanal // Legacy
   horarioPendiente?: HorarioSemanal
   semanasHojaFisica: SemanaFisica[]
   registrosDiarios?: Record<string, RegistroDiario>

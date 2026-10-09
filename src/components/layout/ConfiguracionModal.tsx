@@ -213,13 +213,12 @@ function BottomSheetCarrera({
                     key={sem}
                     type="button"
                     onClick={() => setSemestreActivo(sem)}
-                    className={`flex-1 py-2.5 px-2 rounded-xl text-[13px] font-bold transition-all relative flex flex-col items-center justify-center gap-0.5 cursor-pointer active:scale-[0.98] ${
-                      esActivo
+                    className={`flex-1 py-2.5 px-2 rounded-xl text-[13px] font-bold transition-all relative flex flex-col items-center justify-center gap-0.5 cursor-pointer active:scale-[0.98] ${esActivo
                         ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-500/50'
                         : count > 0
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
-                    }`}
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                      }`}
                   >
                     <div className="flex items-center gap-1">
                       <span>{sem}</span>
@@ -302,11 +301,10 @@ function BottomSheetCarrera({
             )}
 
             {/* Dropzone / Upload button: siempre disponible para subir más (sin límites) */}
-            <label className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors group ${
-              archivosDelSemestreActivo.length === 0
+            <label className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors group ${archivosDelSemestreActivo.length === 0
                 ? 'border-slate-300 bg-slate-50 hover:bg-slate-100 py-6'
                 : 'border-blue-200 bg-blue-50/40 hover:bg-blue-50 py-3'
-            }`}>
+              }`}>
               <UploadCloud size={archivosDelSemestreActivo.length === 0 ? 30 : 20} className="text-slate-400 group-hover:text-blue-500 transition-colors mb-1.5" />
               <span className="text-[13px] font-bold text-slate-700 group-hover:text-blue-600">
                 {archivosDelSemestreActivo.length === 0
@@ -351,9 +349,8 @@ function BottomSheetCarrera({
                     <div
                       key={sem}
                       onClick={() => setSemestreActivo(sem)}
-                      className={`flex items-center justify-between text-[11px] p-2 rounded-lg border cursor-pointer transition-colors ${
-                        esEsteActivo ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-100'
-                      }`}
+                      className={`flex items-center justify-between text-[11px] p-2 rounded-lg border cursor-pointer transition-colors ${esEsteActivo ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-100'
+                        }`}
                     >
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <span className="font-bold text-blue-700 shrink-0">{sem}:</span>

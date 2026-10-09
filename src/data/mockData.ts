@@ -83,27 +83,45 @@ function makeHorario(
   semana: number,
   dias: Partial<DiaHorario>[],
 ): HorarioSemanal {
-  const defaultDias: DiaHorario[] = (
-    ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'] as const
-  ).map((dia, i) => ({
-    dia,
-    modalidad: (dias[i]?.modalidad ?? 'presencial') as Modalidad,
-    horaInicio: dias[i]?.horaInicio ?? '08:00',
-    horaFin: dias[i]?.horaFin ?? '17:00',
-    horasCalculadas: calcHoras(
-      dias[i]?.horaInicio ?? '08:00',
-      dias[i]?.horaFin ?? '17:00',
-    ),
-  }))
-  const total = defaultDias.reduce((s, d) => s + d.horasCalculadas, 0)
+  const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] as const;
+
+  const defaultDias: DiaHorario[] = diasSemana.map((dia, i) => {
+    const diaData = dias[i]; // Extrae los datos si se enviaron explícitamente en el mock
+
+    // 1. Si en el mock enviaste datos para este día (ej. Sábado con 6 horas), los RESPETA al 100%
+    if (diaData) {
+      return {
+        dia,
+        modalidadDiaria: diaData.modalidadDiaria ?? (diaData.horas ? 'Presencial' : 'Libre'),
+        horaInicio: diaData.horaInicio ?? '',
+        horaFin: diaData.horaFin ?? '',
+        horas: diaData.horas ?? 0,
+      };
+    }
+
+    // 2. Si NO enviaste datos para este día específico, aplica un comodín seguro 
+    // para que la suma total dé 30h y no rompa la app (L-V 6h, Sáb-Dom Libre 0h)
+    const esFinDeSemanaFallback = dia === 'Sábado' || dia === 'Domingo';
+
+    return {
+      dia,
+      modalidadDiaria: esFinDeSemanaFallback ? 'Libre' : 'Presencial',
+      horaInicio: esFinDeSemanaFallback ? '' : '08:00',
+      horaFin: esFinDeSemanaFallback ? '' : '14:00',
+      horas: esFinDeSemanaFallback ? 0 : 6,
+    };
+  });
+
+  const total = defaultDias.reduce((s, d) => s + (d.horas || 0), 0);
+
   return {
     id: `h-${semana}-${Date.now()}-${Math.random()}`,
     semana,
     anio: 2026,
     dias: defaultDias,
     totalHoras: total,
-    estado: 'aprobado',
-  }
+    estado: 'Aprobado',
+  };
 }
 
 function makeSemanas(): SemanaFisica[] {
@@ -338,16 +356,16 @@ export const monitoresData = [
 export const MOCK_MONITORES: import('../types').Monitor[] = monitoresData as import('../types').Monitor[];
 
 export const MOCK_CARRERAS: Carrera[] = [
-  { 
-    id: 'c1', nombre: 'Diseño Gráfico Digital', 
+  {
+    id: 'c1', nombre: 'Diseño Gráfico Digital',
     asignaciones: [{ id: 'a1', carreraId: 'c1', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c2', nombre: 'Ing. Ciberseguridad', 
+  {
+    id: 'c2', nombre: 'Ing. Ciberseguridad',
     asignaciones: [{ id: 'a2', carreraId: 'c2', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c3', nombre: 'Ing. Software con IA', 
+  {
+    id: 'c3', nombre: 'Ing. Software con IA',
     asignaciones: [{
       id: 'a3',
       carreraId: 'c3',
@@ -366,19 +384,19 @@ export const MOCK_CARRERAS: Carrera[] = [
       S6: []
     }
   },
-  { 
-    id: 'c4', nombre: 'Mecánico de Mantenimiento', 
+  {
+    id: 'c4', nombre: 'Mecánico de Mantenimiento',
     asignaciones: [{ id: 'a4', carreraId: 'c4', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c5', nombre: 'Mecatrónica Automotriz', 
+  {
+    id: 'c5', nombre: 'Mecatrónica Automotriz',
     asignaciones: [
       { id: 'a5-1', carreraId: 'c5', especialistaId: 'esp-2', semestres: ['S5'], peaArchivo: null },
       { id: 'a5-2', carreraId: 'c5', especialistaId: 'esp-3', semestres: ['S4', 'S6'], peaArchivo: null }
     ]
   },
-  { 
-    id: 'c6', nombre: 'Electricidad Industrial', 
+  {
+    id: 'c6', nombre: 'Electricidad Industrial',
     asignaciones: [
       {
         id: 'a6-1',
@@ -411,28 +429,28 @@ export const MOCK_CARRERAS: Carrera[] = [
       S6: ['PEA-Electricidad-Industrial-S6.pdf']
     }
   },
-  { 
-    id: 'c7', nombre: 'Administración de Empresas', 
+  {
+    id: 'c7', nombre: 'Administración de Empresas',
     asignaciones: [{ id: 'a7', carreraId: 'c7', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c8', nombre: 'Administración Industrial', 
+  {
+    id: 'c8', nombre: 'Administración Industrial',
     asignaciones: [{ id: 'a8', carreraId: 'c8', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c9', nombre: 'Seguridad Industrial y Prevención de Riesgo', 
+  {
+    id: 'c9', nombre: 'Seguridad Industrial y Prevención de Riesgo',
     asignaciones: [{ id: 'a9', carreraId: 'c9', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c10', nombre: 'Administración de Negocios Internacionales', 
+  {
+    id: 'c10', nombre: 'Administración de Negocios Internacionales',
     asignaciones: [{ id: 'a10', carreraId: 'c10', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c11', nombre: 'Mecánico Automotriz', 
+  {
+    id: 'c11', nombre: 'Mecánico Automotriz',
     asignaciones: [{ id: 'a11', carreraId: 'c11', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   },
-  { 
-    id: 'c12', nombre: 'Campus Virtual', 
+  {
+    id: 'c12', nombre: 'Campus Virtual',
     asignaciones: [{ id: 'a12', carreraId: 'c12', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
   }
 ];

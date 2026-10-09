@@ -66,9 +66,8 @@ export default function BottomNav() {
             onClick={() => setTabActiva(key)}
             aria-label={`Ir a ${label}`}
             aria-current={isActive ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center gap-[3px] bg-transparent border-none cursor-pointer p-1.5 rounded-xl transition-all duration-150 ${
-              isActive ? 'text-blue-900' : 'text-slate-400'
-            }`}
+            className={`flex-1 flex flex-col items-center gap-[3px] bg-transparent border-none cursor-pointer p-1.5 rounded-xl transition-all duration-150 ${isActive ? 'text-blue-900' : 'text-slate-400'
+              }`}
           >
             <div className="relative">
               <Icon
@@ -81,9 +80,8 @@ export default function BottomNav() {
               )}
             </div>
             <span
-              className={`text-[10px] tracking-[0.3px] transition-all duration-150 ${
-                isActive ? 'font-bold' : 'font-medium'
-              }`}
+              className={`text-[10px] tracking-[0.3px] transition-all duration-150 ${isActive ? 'font-bold' : 'font-medium'
+                }`}
             >
               {label}
             </span>

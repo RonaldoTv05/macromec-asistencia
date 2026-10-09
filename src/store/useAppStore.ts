@@ -98,7 +98,7 @@ interface AppState {
 
   // Aprobar / rechazar horario (supervisor)
   aprobarHorario: (practicanteId: string) => void
-  rechazarHorario: (practicanteId: string) => void
+  rechazarHorario: (practicanteId: string, motivo: string) => void
 
   // ── Asistencia ────────────────────────────────────────────
   // Marcar asistencia virtual (supervisor)
@@ -516,11 +516,16 @@ export const useAppStore = create<AppState>()(
 
       // ── Horario ─────────────────────────────────────────────
       enviarHorario: (practicanteId, dias) => {
-        const totalHoras = dias.reduce((s, d) => s + d.horasCalculadas, 0)
+        const totalHoras = dias.reduce((s, d) => s + (d.horas || d.horasCalculadas || 0), 0)
         const horario: HorarioSemanal = {
           id: `h-${practicanteId}-${Date.now()}`,
-          semana: 38,
-          anio: 2026,
+          semana: (() => {
+            const currentDate = new Date();
+            const startDate = new Date(currentDate.getFullYear(), 0, 1);
+            const days = Math.floor((currentDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+            return Math.ceil(days / 7);
+          })(),
+          anio: new Date().getFullYear(),
           dias,
           totalHoras,
           estado: 'pendiente_aprobacion',
@@ -605,16 +610,34 @@ export const useAppStore = create<AppState>()(
             if (p.id !== practicanteId || !p.horarioPendiente) return p
             return {
               ...p,
-              horarioActual: { ...p.horarioPendiente, estado: 'aprobado' },
+              horarioAprobado: { ...p.horarioPendiente, estado: 'Aprobado' },
+              horarioActual: { ...p.horarioPendiente, estado: 'aprobado' }, // Legacy compatibility
               horarioPendiente: undefined,
             }
           }),
         }))
       },
 
-      rechazarHorario: (practicanteId) => {
-        // Usa la misma lógica de cancelación para revertir y deducir horas extras
-        get().cancelarHorario(practicanteId)
+      rechazarHorario: (practicanteId, motivo) => {
+        set((state) => {
+          const practicante = state.practicantes.find(p => p.id === practicanteId)
+          if (practicante) {
+            console.log(`[API WhatsApp Mock] Enviando a ${practicante.tel || practicante.celular || 'Sin número'}: Hola ${practicante.nombre}, tu solicitud de horario ha sido denegada. Motivo: ${motivo}`)
+          }
+          return {
+            practicantes: state.practicantes.map((p) => {
+              if (p.id !== practicanteId || !p.horarioPendiente) return p
+              return {
+                ...p,
+                horarioPendiente: {
+                  ...p.horarioPendiente,
+                  estado: 'Rechazado',
+                  motivoRechazo: motivo,
+                }
+              }
+            })
+          }
+        })
       },
 
       // ── Asistencia ──────────────────────────────────────────
@@ -638,7 +661,7 @@ export const useAppStore = create<AppState>()(
                 ...p.historial,
                 {
                   fecha,
-                  modalidad: p.modalidadBase,
+                  modalidad: (p.modalidadBase?.toLowerCase() || 'presencial') as import('../types').Modalidad,
                   horaIngreso:
                     estado === 'ASISTIO'
                       ? '08:05'
@@ -705,7 +728,7 @@ export const useAppStore = create<AppState>()(
                 ...p.historial,
                 {
                   fecha,
-                  modalidad: p.modalidadBase,
+                  modalidad: (p.modalidadBase?.toLowerCase() || 'presencial') as import('../types').Modalidad,
                   estado: 'CAMPO' as EstadoAsistencia,
                   codigoHoja: 'C' as const,
                   motivoCampo: motivo,
@@ -1058,7 +1081,7 @@ export const useAppStore = create<AppState>()(
                 ...p.historial,
                 {
                   fecha: fechaISO,
-                  modalidad: p.modalidadBase,
+                  modalidad: (p.modalidadBase?.toLowerCase() || 'presencial') as import('../types').Modalidad,
                   estado: estadoBorrador,
                   codigoHoja: estadoACodigo(estadoBorrador),
                   ...(datoObs ? { observacion: datoObs.observacion } : {}),

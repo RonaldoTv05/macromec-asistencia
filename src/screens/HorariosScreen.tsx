@@ -60,14 +60,14 @@ function estadoColor(estado: string): string {
 // ── Constantes ────────────────────────────────────────────────
 
 const DIAS_SEMANA: { key: DiaHorario['dia']; label: string }[] = [
-  { key: 'lunes', label: 'Lunes' },
-  { key: 'martes', label: 'Martes' },
-  { key: 'miercoles', label: 'Miércoles' },
-  { key: 'jueves', label: 'Jueves' },
-  { key: 'viernes', label: 'Viernes' },
-  { key: 'sabado', label: 'Sábado' },
-  { key: 'domingo', label: 'Domingo' },
-]
+  { key: 'Lunes', label: 'Lunes' },
+  { key: 'Martes', label: 'Martes' },
+  { key: 'Miércoles', label: 'Miércoles' },
+  { key: 'Jueves', label: 'Jueves' },
+  { key: 'Viernes', label: 'Viernes' },
+  { key: 'Sábado', label: 'Sábado' },
+  { key: 'Domingo', label: 'Domingo' },
+];
 
 const MODALIDAD_LABELS: Record<Modalidad, string> = {
   presencial: 'Presencial',
@@ -107,7 +107,7 @@ function PracticanteHorarios() {
   const acumularHorasExtras = useAppStore((s) => s.acumularHorasExtras)
   const enviarInformeQuincenal = useAppStore((s) => s.enviarInformeQuincenal)
   const informesQuincenales = useAppStore((s) => s.informesQuincenales)
-  const p = practicantes[0]
+  const p = practicantes.find(pr => pr.id === usuarioActual?.id) || practicantes[0]
   const misInformes = informesQuincenales.filter(i => i.practicanteId === (usuarioActual?.id || p.id))
 
   // States for new Informe Quincenal modal
@@ -154,13 +154,25 @@ function PracticanteHorarios() {
   }
 
   const [diasForm, setDiasForm] = useState<DiaForm[]>(
-    DIAS_SEMANA.map((d, i) => ({
+    DIAS_SEMANA.map((d) => ({
       dia: d.key,
-      modalidad: p.horarioActual?.dias[i]?.modalidad ?? 'presencial',
-      horaInicio: p.horarioActual?.dias[i]?.horaInicio ?? '08:00',
-      horaFin: p.horarioActual?.dias[i]?.horaFin ?? '14:00',
+      modalidad: 'libre',
+      horaInicio: '',
+      horaFin: '',
     })),
   )
+
+  const handleResetForm = () => {
+    setDiasForm(
+      DIAS_SEMANA.map((d) => ({
+        dia: d.key,
+        modalidad: 'libre',
+        horaInicio: '',
+        horaFin: '',
+      })),
+    )
+    setIsEditing(false)
+  }
 
   // Acordeón Inteligente (Single-Open)
   const [diaAbierto, setDiaAbierto] = useState<string | null>(null)
@@ -173,8 +185,7 @@ function PracticanteHorarios() {
   }, 0)
 
   // Validación estricta
-  const esValido = totalHoras >= 30
-  const excedente = Math.max(0, totalHoras - 30)
+  const esValido = totalHoras === 30
 
   const toggleDia = (dia: string) => {
     if (!isEditing) return
@@ -193,22 +204,27 @@ function PracticanteHorarios() {
 
   const procesarEnvio = async () => {
     if (!esValido) return
+    // Aseguramos que haya un usuario logueado antes de enviar
+    if (!usuarioActual) {
+      toast.error('Sesión no encontrada');
+      return;
+    }
+
     setEnviando(true)
     await new Promise((r) => setTimeout(r, 800))
     const diasFinales: DiaHorario[] = diasForm.map((d) => ({
       dia: d.dia,
+      modalidadDiaria: d.modalidad === 'presencial' ? 'Presencial' : d.modalidad === 'virtual' ? 'Virtual' : 'Libre',
+      horas: d.modalidad === 'libre' ? 0 : calcHoras(d.horaInicio, d.horaFin),
       modalidad: d.modalidad,
       horaInicio: d.horaInicio,
       horaFin: d.horaFin,
       horasCalculadas: d.modalidad === 'libre' ? 0 : calcHoras(d.horaInicio, d.horaFin),
     }))
 
-    // Si hay excedente, acumular HE
-    if (excedente > 0) {
-      acumularHorasExtras(p.id, excedente, `Excedente declarado Sem. 38`)
-    }
+    // AHORA SÍ: Usamos el ID del usuario real logueado, no la variable p
+    enviarHorario(usuarioActual.id, diasFinales)
 
-    enviarHorario(p.id, diasFinales)
     setEnviando(false)
     setIsEditing(false)
     toast.success('✅ Horario enviado — PENDIENTE DE APROBACIÓN POR SUPERVISOR')
@@ -216,6 +232,7 @@ function PracticanteHorarios() {
 
   const handleCancelarEnvio = () => {
     cancelarHorario(p.id)
+    handleResetForm()
     toast.info('Envío cancelado, puedes editar tu horario nuevamente.')
   }
 
@@ -225,20 +242,26 @@ function PracticanteHorarios() {
     <div className="flex flex-col gap-3">
       {/* Banner estado horario */}
       {pendienteActual && (
-        <div className="bg-gradient-to-br from-blue-900 to-blue-600 rounded-[14px] px-4 py-3 flex items-center gap-2.5">
-          <Clock size={18} className="text-white shrink-0" />
+        <div className={`rounded-[14px] px-4 py-3 flex items-center gap-2.5 ${pendienteActual.estado === 'Rechazado' ? 'bg-red-50 border border-red-200' : 'bg-gradient-to-br from-blue-900 to-blue-600'}`}>
+          <Clock size={18} className={`shrink-0 ${pendienteActual.estado === 'Rechazado' ? 'text-red-600' : 'text-white'}`} />
           <div className="flex-1">
-            <div className="text-[12px] font-bold text-white">
-              Horario enviado — En revisión
+            <div className={`text-[12px] font-bold ${pendienteActual.estado === 'Rechazado' ? 'text-red-700' : 'text-white'}`}>
+              {pendienteActual.estado === 'Rechazado' ? 'Solicitud denegada' : 'Horario enviado — En revisión'}
             </div>
-            <div className="text-[11px] text-white/70">
-              Semana {pendienteActual.semana} ·{' '}
-              {pendienteActual.totalHoras}h declaradas
-            </div>
+            {pendienteActual.estado !== 'Rechazado' && (
+              <div className="text-[11px] text-white/70">
+                Semana {pendienteActual.semana} · {pendienteActual.totalHoras}h declaradas
+              </div>
+            )}
+            {pendienteActual.estado === 'Rechazado' && (
+              <div className="text-[11px] text-red-600 font-medium mt-0.5">
+                {pendienteActual.motivoRechazo}. Por favor, enviar nueva solicitud
+              </div>
+            )}
           </div>
           <button
             onClick={handleCancelarEnvio}
-            className="bg-white/20 text-white border-none rounded-lg p-1.5 flex items-center justify-center cursor-pointer"
+            className={`border-none rounded-lg p-1.5 flex items-center justify-center cursor-pointer ${pendienteActual.estado === 'Rechazado' ? 'bg-red-100 text-red-700' : 'bg-white/20 text-white'}`}
             aria-label="Eliminar envío"
           >
             <Trash2 size={16} />
@@ -249,18 +272,25 @@ function PracticanteHorarios() {
       {/* Formulario declaración */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4">
         <div className="flex justify-between items-center mb-1">
-          <div className="font-bold text-[14px] text-slate-900">
+          <div className="font-bold text-[14px] text-slate-900 flex items-center gap-2">
             📋 Solicitud de cambio de horario
+            <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">{p.modalidadBase}</span>
           </div>
-          {!pendienteActual && (
+          {(!pendienteActual || pendienteActual.estado === 'Rechazado') && (
             <button
-              onClick={() => setIsEditing(!isEditing)}
+              onClick={() => {
+                if (isEditing) {
+                  handleResetForm()
+                } else {
+                  setIsEditing(true)
+                }
+              }}
               className={`px-3 py-1 text-[11px] font-bold rounded-full transition-colors cursor-pointer border-none ${isEditing
                 ? 'bg-blue-100 text-blue-700'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
-              {isEditing ? 'Cancel Edición' : 'Habilitar'}
+              {isEditing ? 'Cancelar Edición' : 'Habilitar'}
             </button>
           )}
         </div>
@@ -319,11 +349,16 @@ function PracticanteHorarios() {
                     {/* Selector modalidad */}
                     <div className="flex gap-1.5">
                       {(
-                        ['presencial', 'virtual', 'libre'] as Modalidad[]
+                        (p.modalidadBase?.toLowerCase() === 'semipresencial' || !p.modalidadBase)
+                          ? (['presencial', 'virtual', 'libre'] as Modalidad[])
+                          : p.modalidadBase?.toLowerCase() === 'presencial'
+                            ? (['presencial', 'libre'] as Modalidad[])
+                            : (['virtual', 'libre'] as Modalidad[])
                       ).map((m) => (
                         <button
                           key={m}
                           id={`modal-${d.key}-${m}`}
+                          // ¡Mira esto! Cero "any" y cero "as Modalidad" aquí. Es 100% estricto nativamente.
                           onClick={() => updateDia(d.key, { modalidad: m })}
                           className={`flex-1 rounded-lg py-1.5 px-1 text-[11px] font-semibold cursor-pointer ${form.modalidad === m
                             ? 'border-2 border-blue-600 bg-blue-50 text-blue-800'
@@ -400,14 +435,14 @@ function PracticanteHorarios() {
               className={`text-[16px] font-extrabold flex items-center gap-1.5 ${esValido ? 'text-emerald-600' : 'text-red-600'
                 }`}
             >
-              {totalHoras.toFixed(1)}h / 30h{' '}
-              {excedente > 0 && (
-                <span className="text-[10px] bg-emerald-700 text-white px-1.5 py-0.5 rounded-md">
-                  +{excedente}h extras
-                </span>
-              )}
+              {totalHoras.toFixed(1)}h / 30h
             </span>
           </div>
+          {!esValido && (
+            <div className="text-red-600 text-[12px] font-bold mt-2 text-center">
+              ⚠️ Error: El horario debe sumar exactamente 30 horas semanales. Actual: {totalHoras.toFixed(1)}h
+            </div>
+          )}
 
           <button
             id="btn-enviar-horario"
@@ -582,10 +617,13 @@ function SupervisorHorarios() {
   const aprobarHorario = useAppStore((s) => s.aprobarHorario)
   const rechazarHorario = useAppStore((s) => s.rechazarHorario)
 
+  const [rechazandoId, setRechazandoId] = useState<string | null>(null)
+  const [motivoRechazo, setMotivoRechazo] = useState('')
+
   const pendientes = practicantes.filter(
     (p) =>
       p.horarioPendiente &&
-      p.horarioPendiente.estado === 'pendiente_aprobacion',
+      (p.horarioPendiente.estado === 'Pendiente' || p.horarioPendiente.estado === 'pendiente_aprobacion'),
   )
 
   const handleAprobar = (id: string, nombre: string) => {
@@ -593,9 +631,16 @@ function SupervisorHorarios() {
     toast.success(`✅ Horario de ${nombre} aprobado`)
   }
 
-  const handleRechazar = (id: string, nombre: string) => {
-    rechazarHorario(id)
-    toast.warning(`❌ Horario de ${nombre} devuelto a estado editable (restando horas extras)`)
+  const handleRechazarConfirmar = (id: string, nombre: string, tel?: string) => {
+    if (!motivoRechazo.trim()) {
+      toast.error('Debe ingresar un motivo')
+      return
+    }
+    rechazarHorario(id, motivoRechazo)
+    console.log(`[API WhatsApp Mock] Enviando a ${tel || 'Sin número'}: Hola ${nombre}, tu horario ha sido rechazado. Motivo: ${motivoRechazo}`)
+    toast.warning(`❌ Horario de ${nombre} rechazado`)
+    setRechazandoId(null)
+    setMotivoRechazo('')
   }
 
   return (
@@ -643,6 +688,7 @@ function SupervisorHorarios() {
           pendientes.map((p) => {
             const horasSemanales = p.horarioPendiente?.totalHoras || 0;
             const extra = Math.max(0, horasSemanales - 30);
+            const isRechazando = rechazandoId === p.id;
 
             return (
               <div
@@ -767,56 +813,83 @@ function SupervisorHorarios() {
                   ))}
                 </div>
 
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    id={`btn-aprobar-${p.id}`}
-                    onClick={() =>
-                      handleAprobar(
-                        p.id,
-                        `${p.nombre} ${p.apellido}`,
-                      )
-                    }
-                    style={{
-                      flex: 1,
-                      padding: '10px 0',
-                      borderRadius: 10,
-                      border: 'none',
-                      background:
-                        'linear-gradient(135deg,#065f46,#059669)',
-                      color: 'white',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <CheckCircle2 size={15} /> Aprobar
-                  </button>
-                  <button
-                    id={`btn-rechazar-${p.id}`}
-                    onClick={() => handleRechazar(p.id, `${p.nombre} ${p.apellido}`)}
-                    style={{
-                      flex: 1,
-                      padding: '10px 0',
-                      borderRadius: 10,
-                      border: 'none',
-                      background: '#fee2e2',
-                      color: '#dc2626',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <X size={15} /> Rechazar
-                  </button>
-                </div>
+                {isRechazando ? (
+                  <div className="flex flex-col gap-2 mt-3">
+                    <input
+                      type="text"
+                      placeholder="Motivo del rechazo..."
+                      value={motivoRechazo}
+                      onChange={(e) => setMotivoRechazo(e.target.value)}
+                      className="border border-red-200 rounded-lg p-2 text-[13px] outline-none focus:border-red-400"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setRechazandoId(null)}
+                        className="flex-1 bg-slate-100 text-slate-600 rounded-lg py-2 text-[12px] font-bold border-none"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => handleRechazarConfirmar(p.id, p.nombre, p.tel)}
+                        className="flex-1 bg-red-600 text-white rounded-lg py-2 text-[12px] font-bold border-none"
+                      >
+                        Confirmar Rechazo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      id={`btn-aprobar-${p.id}`}
+                      onClick={() =>
+                        handleAprobar(
+                          p.id,
+                          `${p.nombre} ${p.apellido}`,
+                        )
+                      }
+                      style={{
+                        flex: 1,
+                        padding: '10px 0',
+                        borderRadius: 10,
+                        border: 'none',
+                        background:
+                          'linear-gradient(135deg,#065f46,#059669)',
+                        color: 'white',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <CheckCircle2 size={15} /> Aprobar
+                    </button>
+                    <button
+                      id={`btn-rechazar-${p.id}`}
+                      onClick={() => setRechazandoId(p.id)}
+                      style={{
+                        flex: 1,
+                        padding: '10px 0',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <X size={15} /> Rechazar
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })
