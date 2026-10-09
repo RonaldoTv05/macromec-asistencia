@@ -805,7 +805,7 @@ function SupervisorHorarios() {
                           marginTop: 1,
                         }}
                       >
-                        {d.horasCalculadas > 0
+                        {(d.horasCalculadas ?? 0) > 0
                           ? `${d.horasCalculadas}h`
                           : '—'}
                       </div>
