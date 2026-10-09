@@ -105,7 +105,69 @@ function DashboardPracticante() {
   const supervisorAsignado = monitores.find(m => m.id === practicanteCompleto?.monitorId);
   const nombreSupervisor = supervisorAsignado ? supervisorAsignado.nombre : 'Supervisor no asignado';
 
-  const [expedienteOpen, setExpedienteOpen] = useState(false)
+  // Normalización de semestre (ej. "VI Semestre" -> "S6")
+  const normalizeSemestre = (s: string) => {
+    if (!s) return 'S4';
+    const upper = s.toUpperCase().trim();
+    if (upper.includes('IV') || upper === 'S4') return 'S4';
+    if (upper.includes('VI') || upper === 'S6') return 'S6';
+    if (upper.includes('V') || upper === 'S5') return 'S5';
+    return upper;
+  };
+  const cicloEstudiante = normalizeSemestre(practicanteCompleto.semestre);
+
+  const carreraPracticante = carreras.find(c =>
+    c.id === practicanteCompleto.carreraId ||
+    c.nombre === practicanteCompleto.carrera ||
+    c.nombre === usuario?.carrera ||
+    c.id === usuario?.carrera
+  );
+
+  // Mapear los PEAs disponibles para toda la carrera agrupados por S4, S5 y S6
+  const peasPorSemestreCarrera = useMemo(() => {
+    const mapa: Record<string, string[]> = { S4: [], S5: [], S6: [] };
+    if (!carreraPracticante) return mapa;
+
+    // 1. A nivel de carrera
+    if (carreraPracticante.peasPorSemestre) {
+      Object.entries(carreraPracticante.peasPorSemestre).forEach(([sem, val]) => {
+        const sNorm = normalizeSemestre(sem);
+        const arr = Array.isArray(val) ? val.filter(Boolean) as string[] : (val ? [val as string] : []);
+        if (mapa[sNorm]) mapa[sNorm].push(...arr);
+      });
+    }
+
+    // 2. A nivel de asignaciones
+    if (carreraPracticante.asignaciones) {
+      carreraPracticante.asignaciones.forEach(asig => {
+        if (asig.peasPorSemestre) {
+          Object.entries(asig.peasPorSemestre).forEach(([sem, val]) => {
+            const sNorm = normalizeSemestre(sem);
+            const arr = Array.isArray(val) ? val.filter(Boolean) as string[] : (val ? [val as string] : []);
+            if (mapa[sNorm]) mapa[sNorm].push(...arr);
+          });
+        }
+        if (asig.peaArchivo) {
+          const lower = asig.peaArchivo.toLowerCase();
+          const target = lower.includes('s5') ? 'S5' : lower.includes('s6') ? 'S6' : 'S4';
+          if (mapa[target] && !mapa[target].includes(asig.peaArchivo)) {
+            mapa[target].push(asig.peaArchivo);
+          }
+        }
+      });
+    }
+
+    // Desduplicar
+    Object.keys(mapa).forEach(k => {
+      mapa[k] = Array.from(new Set(mapa[k]));
+    });
+
+    return mapa;
+  }, [carreraPracticante]);
+
+  // Semestre seleccionado en la pestaña de la tarjeta PEA (inicia en su ciclo actual)
+  const [semestrePeaTab, setSemestrePeaTab] = useState<string>(cicloEstudiante);
+  const [expedienteOpen, setExpedienteOpen] = useState(false);
 
   const p = practicanteCompleto;
   const balance = extraHoursBalances[0]
@@ -292,6 +354,115 @@ function DashboardPracticante() {
           ))
         )}
       </div>
+
+      {/* ── Tarjeta Plan de Aprendizaje (PEA) — Según carrera del practicante ── */}
+      {(() => {
+        const archivosActivos = peasPorSemestreCarrera[semestrePeaTab] || [];
+        const totalPeas = Object.values(peasPorSemestreCarrera).flat().length;
+
+        const handleDescargarArchivo = (nombreArchivo: string) => {
+          toast.success(`Descargando ${nombreArchivo}...`);
+        };
+
+        return (
+          <Card className="mt-3">
+            {/* Cabecera */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-[14px] text-slate-900 leading-tight">
+                    Plan de Aprendizaje (PEA)
+                  </h4>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    {carreraPracticante?.nombre || practicanteCompleto.carrera || 'Carrera SENATI'}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                {totalPeas} PDF{totalPeas === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            {/* Pestañas de Semestres S4, S5, S6 */}
+            <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl">
+              {(['S4', 'S5', 'S6'] as const).map((sem) => {
+                const esMiCiclo = cicloEstudiante === sem;
+                const tieneArchivos = (peasPorSemestreCarrera[sem] || []).length > 0;
+                const esActivo = semestrePeaTab === sem;
+
+                return (
+                  <button
+                    key={sem}
+                    type="button"
+                    onClick={() => setSemestrePeaTab(sem)}
+                    className={`flex-1 py-1.5 px-1 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                      esActivo
+                        ? 'bg-white text-blue-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <span>{sem}</span>
+                    {esMiCiclo && (
+                      <span className="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded font-semibold leading-tight">
+                        Tu ciclo
+                      </span>
+                    )}
+                    {tieneArchivos && (
+                      <span className="text-[10px] text-emerald-600 font-bold">✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Documentos del ciclo seleccionado */}
+            <div className="flex flex-col gap-2 mt-1">
+              {archivosActivos.length > 0 ? (
+                archivosActivos.map((archivo, idx) => (
+                  <div
+                    key={`${archivo}-${idx}`}
+                    className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-xl hover:bg-slate-100/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        <FileText size={15} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[12px] font-bold text-slate-800 truncate" title={archivo}>
+                          {archivo}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 font-medium">
+                          PEA oficial · Semestre {semestrePeaTab}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDescargarArchivo(archivo)}
+                      className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shrink-0 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Download size={13} />
+                      Descargar
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 px-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-1">
+                  <span className="text-[12px] font-medium text-slate-500">
+                    Sin PEA cargado para el semestre {semestrePeaTab}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Tu especialista de seguimiento aún no ha adjuntado el documento para este ciclo.
+                  </span>
+                </div>
+              )}
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* ── Expediente Documentario (RF-28 a RF-37) ── */}
       {(() => {

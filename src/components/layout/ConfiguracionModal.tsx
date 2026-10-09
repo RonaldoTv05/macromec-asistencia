@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone } from 'lucide-react'
+import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone, Download, Check } from 'lucide-react'
 import type { Especialista } from '../../types'
 import { useAppStore, enviarCredencialesWhatsApp } from '../../store/useAppStore'
 import { toast } from 'sonner'
-import type { Carrera, AsignacionCarreraEspecialista } from '../../types'
+import type { Carrera, AsignacionCarreraEspecialista, PeasPorSemestre } from '../../types'
 
 // ============================================================
 // BOTTOM SHEET (RF-03, RF-04)
@@ -21,43 +21,131 @@ function BottomSheetCarrera({
   const updateCarrera = useAppStore(s => s.updateCarrera)
   const especialistas = useAppStore(s => s.especialistas)
 
-  // Estados locales con null safety (Fase 3)
+  // Configuración inicial de la carrera
   const configInicial = carrera.asignaciones?.[0]
   const [especialistaId, setEspecialistaId] = useState(configInicial?.especialistaId || '')
-  const [semestres, setSemestres] = useState<string[]>(configInicial?.semestres || [])
-  const [peaArchivo, setPeaArchivo] = useState<string | null>(configInicial?.peaArchivo || null)
 
-  const toggleSemestre = (sem: string) => {
-    setSemestres(prev =>
-      prev.includes(sem) ? prev.filter(s => s !== sem) : [...prev, sem]
-    )
+  // Semestres fijos: exactamente S4, S5 y S6
+  const SEMESTRES = ['S4', 'S5', 'S6'] as const
+
+  // Semestres asignados al especialista
+  const [semestresAsignados, setSemestresAsignados] = useState<string[]>(() => {
+    return configInicial?.semestres && configInicial.semestres.length > 0
+      ? configInicial.semestres
+      : ['S4', 'S5', 'S6']
+  })
+
+  // Semestre activo seleccionado para subir/ver su PEA (por defecto S4)
+  const [semestreActivo, setSemestreActivo] = useState<string>('S4')
+
+  // Mapeo de archivos PEA por cada semestre: { S4: ['PEA-S4.pdf'], S5: ['PEA-S5.pdf'], S6: [] }
+  const [peaArchivosPorSemestre, setPeaArchivosPorSemestre] = useState<Record<string, string[]>>(() => {
+    const mapa: Record<string, string[]> = { S4: [], S5: [], S6: [] }
+
+    // 1. Cargar desde peasPorSemestre si ya existe
+    const fuentesPeas = configInicial?.peasPorSemestre || carrera.peasPorSemestre
+    if (fuentesPeas) {
+      Object.entries(fuentesPeas).forEach(([sem, val]) => {
+        if (Array.isArray(val)) {
+          mapa[sem] = val.filter(Boolean) as string[]
+        } else if (typeof val === 'string' && val.trim()) {
+          mapa[sem] = [val.trim()]
+        }
+      })
+    }
+
+    // 2. Fallback de migración: Si existía peaArchivo en la configuración previa
+    if (configInicial?.peaArchivo) {
+      const archivoExistente = configInicial.peaArchivo.trim()
+      const lower = archivoExistente.toLowerCase()
+      // Detectar si pertenece a S5 o S6, o por defecto a S4
+      const targetSem = lower.includes('s5') ? 'S5' : lower.includes('s6') ? 'S6' : 'S4'
+      if (!mapa[targetSem] || mapa[targetSem].length === 0) {
+        mapa[targetSem] = [archivoExistente]
+      }
+    }
+
+    return mapa
+  })
+
+  const handleUploadFiles = (sem: string, files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const nuevosNombres = Array.from(files).map(f => f.name)
+
+    setPeaArchivosPorSemestre(prev => {
+      const actuales = prev[sem] || []
+      const combinados = [...actuales]
+      nuevosNombres.forEach(n => {
+        if (!combinados.includes(n)) {
+          combinados.push(n)
+        }
+      })
+      return {
+        ...prev,
+        [sem]: combinados
+      }
+    })
+
+    if (!semestresAsignados.includes(sem)) {
+      setSemestresAsignados(prev => [...prev, sem])
+    }
+
+    toast.success(`${nuevosNombres.length === 1 ? nuevosNombres[0] : `${nuevosNombres.length} archivos`} subido(s) para ${sem}`)
+  }
+
+  const handleRemoveFile = (sem: string, fileName: string) => {
+    setPeaArchivosPorSemestre(prev => ({
+      ...prev,
+      [sem]: (prev[sem] || []).filter(n => n !== fileName)
+    }))
+    toast.info(`Archivo removido de ${sem}`)
+  }
+
+  const handleDescargar = (fileName: string) => {
+    toast.success(`Descargando ${fileName}...`)
   }
 
   const handleGuardar = () => {
-    if (!especialistaId || semestres.length === 0) {
-      toast.error('Debe seleccionar un especialista y al menos un semestre')
+    if (!especialistaId) {
+      toast.error('Debe seleccionar un especialista de gestión')
       return
     }
+
+    if (semestresAsignados.length === 0) {
+      toast.error('Debe tener al menos un semestre asignado')
+      return
+    }
+
+    // Archivo de compatibilidad legacy (primer archivo encontrado)
+    const primerArchivo =
+      peaArchivosPorSemestre['S4']?.[0] ||
+      peaArchivosPorSemestre['S5']?.[0] ||
+      peaArchivosPorSemestre['S6']?.[0] ||
+      Object.values(peaArchivosPorSemestre).flat()[0] ||
+      null
 
     const nuevaConfig: AsignacionCarreraEspecialista = {
       id: configInicial?.id || `asign-${Date.now()}`,
       carreraId: carrera.id,
       especialistaId,
-      semestres,
-      peaArchivo
+      semestres: semestresAsignados,
+      peaArchivo: primerArchivo,
+      peasPorSemestre: peaArchivosPorSemestre,
     }
-    updateCarrera(carrera.id, { asignaciones: [nuevaConfig] })
-    toast.success('Configuración guardada')
+
+    updateCarrera(carrera.id, {
+      asignaciones: [nuevaConfig],
+      peasPorSemestre: peaArchivosPorSemestre,
+    })
+
+    const totalArchivos = Object.values(peaArchivosPorSemestre).flat().length
+    toast.success(`Configuración guardada exitosamente (${totalArchivos} PEA${totalArchivos === 1 ? '' : 's'} en total)`)
     onCerrar()
   }
 
-  const handleFakeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setPeaArchivo(e.target.files[0].name)
-    }
-  }
-
   const especialistaSeleccionado = especialistas.find(e => e.id === especialistaId)
+  const archivosDelSemestreActivo = peaArchivosPorSemestre[semestreActivo] || []
+  const totalPeasEnCarrera = Object.values(peaArchivosPorSemestre).flat().length
 
   return (
     <div className="fixed inset-0 z-[300] bg-black/60 flex items-end justify-center animate-in fade-in duration-200">
@@ -65,11 +153,11 @@ function BottomSheetCarrera({
 
       <div className="w-full max-w-[430px] mx-auto bg-white rounded-t-[20px] p-5 h-[85vh] overflow-y-auto relative shadow-[0_-10px_40px_rgba(0,0,0,0.2)] flex flex-col animate-in slide-in-from-bottom-full duration-300">
 
-        {/* Cabecera sin tabs */}
+        {/* Cabecera */}
         <div className="flex items-center justify-between mb-5 shrink-0">
           <div>
             <h3 className="font-bold text-slate-800 text-[16px] leading-tight">{carrera.nombre}</h3>
-            <span className="text-[12px] text-slate-500">Configuración de Vinculación</span>
+            <span className="text-[12px] text-slate-500">Configuración de Vinculación y PEA</span>
           </div>
           <button onClick={onCerrar} className="bg-slate-100 p-2 rounded-full text-slate-500 active:scale-95 transition-transform">
             <X size={18} />
@@ -106,57 +194,188 @@ function BottomSheetCarrera({
             )}
           </div>
 
-          {/* Selección Múltiple de Semestres */}
+          {/* Semestres a Cargo y Selector Interactivo de PEA */}
           <div className="flex flex-col gap-2">
-            <h4 className="font-bold text-slate-800 text-[14px]">Semestres a Cargo</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-slate-800 text-[14px]">Semestres a Cargo</h4>
+              <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-md">
+                Toca un semestre para cargar su PEA
+              </span>
+            </div>
+
             <div className="flex gap-2">
-              {['S4', 'S5', 'S6'].map(sem => (
-                <button
-                  key={sem}
-                  onClick={() => toggleSemestre(sem)}
-                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-colors ${semestres.includes(sem)
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              {SEMESTRES.map(sem => {
+                const count = (peaArchivosPorSemestre[sem] || []).length
+                const esActivo = semestreActivo === sem
+
+                return (
+                  <button
+                    key={sem}
+                    type="button"
+                    onClick={() => setSemestreActivo(sem)}
+                    className={`flex-1 py-2.5 px-2 rounded-xl text-[13px] font-bold transition-all relative flex flex-col items-center justify-center gap-0.5 cursor-pointer active:scale-[0.98] ${
+                      esActivo
+                        ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-500/50'
+                        : count > 0
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
                     }`}
-                >
-                  {sem}
-                </button>
-              ))}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>{sem}</span>
+                      {count > 0 && (
+                        <Check size={13} className={esActivo ? 'text-white' : 'text-emerald-600'} />
+                      )}
+                    </div>
+                    <span className={`text-[9px] font-semibold leading-none ${esActivo ? 'text-blue-100' : count > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {count === 0 ? 'Sin PEA' : `${count} PDF${count > 1 ? 's' : ''}`}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
-          {/* Formulario RF-04 (PEA) */}
+          {/* Formulario RF-04 (PEA por semestre activo) */}
           <div className="flex flex-col gap-3">
-            <h4 className="font-bold text-slate-800 text-[14px]">Plan de Aprendizaje (PEA)</h4>
-
-            {peaArchivo ? (
-              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 shrink-0">
-                    <FileText size={18} />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[13px] font-bold text-emerald-800 truncate">{peaArchivo}</span>
-                    <span className="text-[10px] text-emerald-600">Documento cargado con éxito</span>
-                  </div>
-                </div>
-                <button onClick={() => setPeaArchivo(null)} className="text-emerald-600 bg-white shadow-sm border border-emerald-100 hover:bg-emerald-100 p-2 rounded-lg transition-colors shrink-0">
-                  <Trash2 size={16} />
-                </button>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-slate-800 text-[14px] flex items-center gap-1.5">
+                  Plan de Aprendizaje (PEA)
+                  <span className="text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md text-[12px]">
+                    {semestreActivo}
+                  </span>
+                </h4>
+                <span className="text-[11px] text-slate-500">
+                  {archivosDelSemestreActivo.length > 0
+                    ? `Archivos vinculados al semestre ${semestreActivo}`
+                    : `Sube el PEA correspondiente al semestre ${semestreActivo}`}
+                </span>
               </div>
-            ) : (
-              <label className="border-2 border-dashed border-slate-300 bg-slate-50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-100 transition-colors group">
-                <UploadCloud size={28} className="text-slate-400 group-hover:text-blue-500 transition-colors mb-2" />
-                <span className="text-[13px] font-bold text-slate-700">Subir PEA (PDF)</span>
-                <input type="file" accept=".pdf" onChange={handleFakeUpload} className="hidden" />
-              </label>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                {archivosDelSemestreActivo.length} archivo(s)
+              </span>
+            </div>
+
+            {/* Lista de archivos ya cargados para este semestre */}
+            {archivosDelSemestreActivo.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {archivosDelSemestreActivo.map((archivo, idx) => (
+                  <div
+                    key={`${archivo}-${idx}`}
+                    className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl shadow-xs"
+                  >
+                    <div className="flex items-center gap-2.5 overflow-hidden flex-1 min-w-0">
+                      <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 shrink-0">
+                        <FileText size={18} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[13px] font-bold text-emerald-800 truncate" title={archivo}>
+                          {archivo}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 font-medium">
+                          Documento cargado con éxito ({semestreActivo})
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDescargar(archivo)}
+                        title="Descargar archivo"
+                        className="text-emerald-700 bg-white hover:bg-emerald-100 p-2 rounded-lg border border-emerald-200 transition-colors cursor-pointer"
+                      >
+                        <Download size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(semestreActivo, archivo)}
+                        title="Eliminar archivo"
+                        className="text-red-500 bg-white hover:bg-red-50 p-2 rounded-lg border border-red-200 transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
+
+            {/* Dropzone / Upload button: siempre disponible para subir más (sin límites) */}
+            <label className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors group ${
+              archivosDelSemestreActivo.length === 0
+                ? 'border-slate-300 bg-slate-50 hover:bg-slate-100 py-6'
+                : 'border-blue-200 bg-blue-50/40 hover:bg-blue-50 py-3'
+            }`}>
+              <UploadCloud size={archivosDelSemestreActivo.length === 0 ? 30 : 20} className="text-slate-400 group-hover:text-blue-500 transition-colors mb-1.5" />
+              <span className="text-[13px] font-bold text-slate-700 group-hover:text-blue-600">
+                {archivosDelSemestreActivo.length === 0
+                  ? `Subir PEA para ${semestreActivo} (PDF)`
+                  : `+ Subir otro PDF para ${semestreActivo}`}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {archivosDelSemestreActivo.length === 0
+                  ? 'Formatos aceptados: .pdf (sin límite de archivos)'
+                  : 'Puedes adjuntar múltiples documentos sin límite'}
+              </span>
+              <input
+                type="file"
+                accept=".pdf"
+                multiple
+                onChange={(e) => {
+                  handleUploadFiles(semestreActivo, e.target.files)
+                  e.target.value = ''
+                }}
+                className="hidden"
+              />
+            </label>
           </div>
+
+          {/* Resumen general de todos los PEAs cargados en la carrera */}
+          {totalPeasEnCarrera > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                  Resumen de PEAs en esta carrera
+                </span>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                  {totalPeasEnCarrera} total
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {SEMESTRES.map(sem => {
+                  const files = peaArchivosPorSemestre[sem] || []
+                  if (files.length === 0) return null
+                  const esEsteActivo = semestreActivo === sem
+                  return (
+                    <div
+                      key={sem}
+                      onClick={() => setSemestreActivo(sem)}
+                      className={`flex items-center justify-between text-[11px] p-2 rounded-lg border cursor-pointer transition-colors ${
+                        esEsteActivo ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="font-bold text-blue-700 shrink-0">{sem}:</span>
+                        <span className="text-slate-600 truncate font-medium" title={files.join(', ')}>
+                          {files.join(', ')}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-600 shrink-0 ml-2">
+                        {esEsteActivo ? 'Activo' : 'Ver'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Botón anclado */}
         <div className="mt-auto pt-2 shrink-0">
-          <button onClick={handleGuardar} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-sm active:bg-blue-700 transition-colors text-[14px]">
+          <button onClick={handleGuardar} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-sm active:bg-blue-700 transition-colors text-[14px] cursor-pointer">
             <Save size={18} /> Guardar Configuración
           </button>
         </div>
@@ -457,16 +676,38 @@ function SeccionCarreras() {
           <div className="flex flex-col gap-2.5">
             {carreras.map(c => (
               <div key={c.id} className="bg-white rounded-xl p-3 border border-slate-200 flex justify-between items-center shadow-sm">
-                <div className="flex flex-col pr-2">
-                  <span className="text-[13px] font-bold text-slate-800">{c.nombre}</span>
+                <div className="flex flex-col pr-2 min-w-0">
+                  <span className="text-[13px] font-bold text-slate-800 truncate">{c.nombre}</span>
                   <div className="flex flex-col mt-0.5 gap-0.5">
                     {c.asignaciones && c.asignaciones.length > 0 ? (
                       c.asignaciones.map((conf: AsignacionCarreraEspecialista, idx: number) => {
                         const esp = especialistas.find(e => e.id === conf.especialistaId)
+                        const fuentePeas = conf.peasPorSemestre || c.peasPorSemestre
+                        let peasList: { sem: string; count: number }[] = []
+                        if (fuentePeas) {
+                          Object.entries(fuentePeas).forEach(([sem, val]) => {
+                            const arr = Array.isArray(val) ? val : (val ? [val] : [])
+                            if (arr.length > 0) peasList.push({ sem, count: arr.length })
+                          })
+                        } else if (conf.peaArchivo) {
+                          peasList.push({ sem: 'S4', count: 1 })
+                        }
+                        const totalPeas = peasList.reduce((acc, p) => acc + p.count, 0)
+
                         return (
-                          <span key={idx} className="text-[11px] text-emerald-600 font-medium leading-tight">
-                            {esp ? `${esp.nombres} ${esp.apellidos}` : 'Desconocido'} ({conf.semestres.join(', ')})
-                          </span>
+                          <div key={idx} className="flex flex-col gap-0.5">
+                            <span className="text-[11px] text-emerald-600 font-medium leading-tight">
+                              {esp ? `${esp.nombres} ${esp.apellidos}` : 'Desconocido'} ({conf.semestres.join(', ')})
+                            </span>
+                            {totalPeas > 0 ? (
+                              <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-1">
+                                <FileText size={11} className="shrink-0" />
+                                {totalPeas} PEA{totalPeas > 1 ? 's' : ''} ({peasList.map(p => `${p.sem}: ${p.count}`).join(' · ')})
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400">Sin PEA cargado</span>
+                            )}
+                          </div>
                         )
                       })
                     ) : (

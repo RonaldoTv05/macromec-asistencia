@@ -348,7 +348,23 @@ export const MOCK_CARRERAS: Carrera[] = [
   },
   { 
     id: 'c3', nombre: 'Ing. Software con IA', 
-    asignaciones: [{ id: 'a3', carreraId: 'c3', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    asignaciones: [{
+      id: 'a3',
+      carreraId: 'c3',
+      especialistaId: 'esp-1',
+      semestres: ['S4', 'S5', 'S6'],
+      peaArchivo: 'PEA-PIAD-202310 - S4 (1).pdf',
+      peasPorSemestre: {
+        S4: ['PEA-PIAD-202310 - S4 (1).pdf'],
+        S5: [],
+        S6: []
+      }
+    }],
+    peasPorSemestre: {
+      S4: ['PEA-PIAD-202310 - S4 (1).pdf'],
+      S5: [],
+      S6: []
+    }
   },
   { 
     id: 'c4', nombre: 'Mecánico de Mantenimiento', 
@@ -364,9 +380,36 @@ export const MOCK_CARRERAS: Carrera[] = [
   { 
     id: 'c6', nombre: 'Electricidad Industrial', 
     asignaciones: [
-      { id: 'a6-1', carreraId: 'c6', especialistaId: 'esp-4', semestres: ['S4', 'S5'], peaArchivo: null },
-      { id: 'a6-2', carreraId: 'c6', especialistaId: 'esp-2', semestres: ['S6'], peaArchivo: null }
-    ]
+      {
+        id: 'a6-1',
+        carreraId: 'c6',
+        especialistaId: 'esp-4',
+        semestres: ['S4', 'S5'],
+        peaArchivo: 'PEA-Electricidad-Industrial-S4.pdf',
+        peasPorSemestre: {
+          S4: ['PEA-Electricidad-Industrial-S4.pdf'],
+          S5: ['PEA-Electricidad-Industrial-S5.pdf'],
+          S6: []
+        }
+      },
+      {
+        id: 'a6-2',
+        carreraId: 'c6',
+        especialistaId: 'esp-2',
+        semestres: ['S6'],
+        peaArchivo: 'PEA-Electricidad-Industrial-S6.pdf',
+        peasPorSemestre: {
+          S4: [],
+          S5: [],
+          S6: ['PEA-Electricidad-Industrial-S6.pdf']
+        }
+      }
+    ],
+    peasPorSemestre: {
+      S4: ['PEA-Electricidad-Industrial-S4.pdf'],
+      S5: ['PEA-Electricidad-Industrial-S5.pdf'],
+      S6: ['PEA-Electricidad-Industrial-S6.pdf']
+    }
   },
   { 
     id: 'c7', nombre: 'Administración de Empresas', 

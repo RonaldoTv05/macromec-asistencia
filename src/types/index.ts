@@ -93,8 +93,6 @@ export interface RetiroData {
   fechaInicio: string
 }
 
-
-
 // ── Movimiento en el historial de Horas Extras ───────────────
 export interface MovimientoHE {
   id: string
@@ -180,6 +178,8 @@ export interface Practicante {
     cartaAceptacionFirmada: string | null
     convenioFirmado: string | null
     registroVinculacion: string | null
+    peaArchivo?: string | null                    // PEA correspondiente al semestre del practicante
+    peaArchivos?: string[]                        // Documentos PEA descargables sin límite
   }
 }
 
@@ -240,11 +240,25 @@ export interface MacromecConfig {
   fotoMapaBase64: string
 }
 
+// ── Archivo del Plan Específico de Aprendizaje (PEA) ──────────
+export interface ArchivoPea {
+  id?: string;
+  nombre: string;
+  url?: string;
+  fechaSubida?: string;
+}
+
+// Mapeo flexible de archivos PEA por cada semestre (sin límites de cantidad de archivos)
+// Soporta tanto 1 archivo por semestre, como múltiples archivos PDF por semestre o sin límites.
+// Ejemplo: { 'S4': ['pea_s4_1.pdf', 'pea_s4_2.pdf'], 'S5': ['pea_s5.pdf'], 'S6': [] }
+export type PeasPorSemestre = Record<string, string | string[] | ArchivoPea[] | null | undefined>;
+
 export interface SemestreConfig {
   idConfig: string
   especialistaId: string
   semestres: string[]
-  peaArchivo: string | null
+  peaArchivo?: string | null            // Archivo legacy / compatibilidad
+  peasPorSemestre?: PeasPorSemestre     // Mapeo independiente de PEAs por semestre
 }
 
 // Relación Carrera - Especialista - Semestre (Many-to-Many o One-to-Many con pivote)
@@ -252,14 +266,17 @@ export interface AsignacionCarreraEspecialista {
   id: string;
   carreraId: string;
   especialistaId: string;
-  semestres: string[]; // ej: ['S4', 'S5', 'S6']
-  peaArchivo: string | null; // Configuración del Plan de Aprendizaje
+  semestres: string[];                  // ej: ['S4', 'S5', 'S6']
+  peaArchivo?: string | null;           // Legacy / Compatibilidad retroactiva
+  peasPorSemestre?: PeasPorSemestre;    // Guardado independiente de PEA por semestre (ej: { S4: ['...'], S5: ['...'] })
 }
 
 export interface Carrera {
   id: string;
   nombre: string;
   asignaciones?: AsignacionCarreraEspecialista[]; // Relación TypeORM
+  peasPorSemestre?: PeasPorSemestre;              // PEAs por semestre a nivel de carrera
+  peaArchivos?: string[];                         // Lista general de PEAs sin límite
 }
 
 export interface Monitor {
