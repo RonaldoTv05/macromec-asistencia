@@ -171,14 +171,92 @@ function DashboardPracticante() {
   const [expedienteOpen, setExpedienteOpen] = useState(false);
 
   const p = practicanteCompleto;
-  const balance = extraHoursBalances[0]
-  const horasExtra = balance?.horasDisponibles ?? 0
+  const idActual = p.id;
+  const saldoHE = useAppStore(state => {
+    const pActual = state.practicantes.find(pr => pr.id === idActual);
+    if (pActual?.saldoHorasExtras !== undefined) return pActual.saldoHorasExtras;
+    const b = state.extraHoursBalances.find(b => b.practicanteId === idActual);
+    return b?.horasDisponibles || 0;
+  });
 
   const [fechaRegistroModal, setFechaRegistroModal] = useState<string | null>(null)
 
   const pct = Math.round((HORAS_SEMANA_ACTUAL / 30) * 100)
 
   if (!p || !usuario) return null
+
+  // ── Cálculo de los 7 días de la semana actual (Lunes a Domingo) ──
+  const bloquesSemana = useMemo(() => {
+    const d = new Date()
+    const diaSemanaNum = d.getDay() === 0 ? 7 : d.getDay() // Lunes=1, ..., Domingo=7
+    const lunes = new Date(d)
+    lunes.setDate(d.getDate() - (diaSemanaNum - 1))
+    lunes.setHours(0, 0, 0, 0)
+
+    const DIAS_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+    const DIAS_FULL = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+    let sumaHoras = 0
+
+    const dias = Array.from({ length: 7 }, (_, idx) => {
+      const fechaObj = new Date(lunes)
+      fechaObj.setDate(lunes.getDate() + idx)
+      const yyyy = fechaObj.getFullYear()
+      const mm = String(fechaObj.getMonth() + 1).padStart(2, '0')
+      const dd = String(fechaObj.getDate()).padStart(2, '0')
+      const fStr = `${yyyy}-${mm}-${dd}`
+
+      const fHoyStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const esHoy = fStr === fHoyStr
+
+      const reg = p.historial.find((h) => h.fecha === fStr)
+      const asist = p.asistencia?.[fStr]
+
+      const diaConfig = (p.horarioVigente || p.horarioAprobado || p.horarioActual)?.dias?.find(
+        (x) => x.dia.toLowerCase() === DIAS_FULL[idx].toLowerCase()
+      )
+      let modDiaria = diaConfig?.modalidadDiaria || (diaConfig?.modalidad === 'libre' ? 'Libre' : diaConfig?.modalidad === 'virtual' ? 'Virtual' : 'Presencial')
+      if (!diaConfig) {
+        modDiaria = (idx === 5 || idx === 6) ? 'Libre' : 'Presencial'
+      }
+
+      const est = (reg?.estado || asist?.estado?.toUpperCase()) as string | undefined
+      const faltaCubierta = asist?.faltaCubierta === true || reg?.estado === 'COMPENSADO' || reg?.estado === 'FALTA_CUBIERTA' || reg?.horasExtrasAplicadas === true
+
+      let tipoBloque: 'check-verde' | 'check-rojo' | 'x-roja' | 'libre' | 'pendiente' = 'pendiente'
+      let horasBloque = 0
+
+      if (faltaCubierta) {
+        tipoBloque = 'check-rojo' // Comodín (HE): Check Rojo (6h cumplidas)
+        horasBloque = 6
+      } else if (est === 'ASISTIO' || est === 'TARDANZA' || est === 'CAMPO') {
+        tipoBloque = 'check-verde' // Asistencia cumplida: Check Verde (6h)
+        horasBloque = 6
+      } else if (est === 'FALTA') {
+        tipoBloque = 'x-roja' // Falta: 'X' Roja (0h)
+        horasBloque = 0
+      } else if (est === 'LIBRE' || (modDiaria === 'Libre' && !est)) {
+        tipoBloque = 'libre'
+        horasBloque = 0
+      } else {
+        tipoBloque = 'pendiente' // Pendiente laborable: '?' gris
+        horasBloque = 0
+      }
+
+      sumaHoras += horasBloque
+
+      return {
+        diaShort: DIAS_SHORT[idx],
+        numeroDia: dd,
+        fechaStr: fStr,
+        esHoy,
+        tipoBloque,
+        horasBloque,
+      }
+    })
+
+    return { dias, sumaHoras }
+  }, [p.historial, p.asistencia, p.horarioVigente, p.horarioAprobado, p.horarioActual])
 
   // FASE 1: LÓGICA DE REVELACIÓN PROGRESIVA DE DÍAS (TIEMPO REAL)
   const hoy = new Date();
@@ -197,7 +275,46 @@ function DashboardPracticante() {
     diasAMostrar.push(d);
   }
 
-  // FASE 2: CONEXIÓN CON EL STORE
+  // FASE 2: CONEXIÓN CON EL HORARIO Y REGISTROS DEL STORE
+  const horarioActivo = (p.horarioVigente && (p.horarioVigente.estado === 'Aprobado' || p.horarioVigente.estado === 'aprobado'))
+    ? p.horarioVigente
+    : (p.horarioAprobado && (p.horarioAprobado.estado === 'Aprobado' || p.horarioAprobado.estado === 'aprobado'))
+      ? p.horarioAprobado
+      : (p.horarioActual && (p.horarioActual.estado === 'Aprobado' || p.horarioActual.estado === 'aprobado'))
+        ? p.horarioActual
+        : undefined;
+
+  const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const nombreDiaHoy = diasNombres[hoy.getDay()];
+  const diaConfigHoy = horarioActivo?.dias?.find(d => d.dia.toLowerCase() === nombreDiaHoy.toLowerCase());
+
+  let modalidadDiaHorarioHoy: 'Presencial' | 'Virtual' | 'Libre' = 'Presencial';
+  if (diaConfigHoy) {
+    if (diaConfigHoy.modalidadDiaria) modalidadDiaHorarioHoy = diaConfigHoy.modalidadDiaria;
+    else if (diaConfigHoy.modalidad) {
+      const m = diaConfigHoy.modalidad.toLowerCase();
+      modalidadDiaHorarioHoy = m === 'virtual' ? 'Virtual' : m === 'libre' ? 'Libre' : 'Presencial';
+    }
+  } else {
+    modalidadDiaHorarioHoy = (hoy.getDay() === 0 || hoy.getDay() === 6) ? 'Libre' : 'Presencial';
+  }
+
+  const regHoy = p.historial.find(r => r.fecha === fechaHoy);
+  const asistenciaHoy = p.asistencia?.[fechaHoy];
+  const estadoGerenciaHoy = regHoy?.estado || (asistenciaHoy?.estado ? (
+    asistenciaHoy.estado === 'Asistió' ? 'ASISTIO' :
+      asistenciaHoy.estado === 'Tardanza' ? 'TARDANZA' :
+        asistenciaHoy.estado === 'Falta' ? 'FALTA' :
+          asistenciaHoy.estado === 'Campo' ? 'CAMPO' :
+            asistenciaHoy.estado === 'Libre' ? 'LIBRE' : 'PENDIENTE'
+  ) : undefined);
+
+  // ¿Es día libre efectivo hoy?
+  // Si Gerencia asignó estado explícito (ASISTIO/TARDANZA/FALTA/CAMPO), el día libre queda anulado y habilitado para registrar.
+  // Si Gerencia asignó LIBRE o si por horario semanal es Libre sin cambio de Gerencia, se mantiene como descanso.
+  const esDiaLibreHoy = estadoGerenciaHoy
+    ? estadoGerenciaHoy === 'LIBRE'
+    : (modalidadDiaHorarioHoy === 'Libre');
 
   const SEMANA_ACTUAL = diasAMostrar.map(d => {
     const yyyy = d.getFullYear()
@@ -206,12 +323,42 @@ function DashboardPracticante() {
     const fechaStr = `${yyyy}-${mm}-${dd}`
 
     const registro = p.historial.find(r => r.fecha === fechaStr)
-    return registro || {
+    const asistencia = p.asistencia?.[fechaStr]
+
+    const nombreDiaD = diasNombres[d.getDay()]
+    const diaConfigD = horarioActivo?.dias?.find(x => x.dia.toLowerCase() === nombreDiaD.toLowerCase())
+    let modHorarioD: 'Presencial' | 'Virtual' | 'Libre' = 'Presencial'
+    if (diaConfigD?.modalidadDiaria) modHorarioD = diaConfigD.modalidadDiaria
+    else if (diaConfigD?.modalidad) {
+      const m = diaConfigD.modalidad.toLowerCase()
+      modHorarioD = m === 'virtual' ? 'Virtual' : m === 'libre' ? 'Libre' : 'Presencial'
+    } else {
+      modHorarioD = (d.getDay() === 0 || d.getDay() === 6) ? 'Libre' : 'Presencial'
+    }
+
+    const estadoGerenciaD = registro?.estado || (asistencia?.estado ? (
+      asistencia.estado === 'Asistió' ? 'ASISTIO' :
+        asistencia.estado === 'Tardanza' ? 'TARDANZA' :
+          asistencia.estado === 'Falta' ? 'FALTA' :
+            asistencia.estado === 'Campo' ? 'CAMPO' :
+              asistencia.estado === 'Libre' ? 'LIBRE' : 'PENDIENTE'
+    ) : undefined)
+
+    const esLibreD = estadoGerenciaD ? estadoGerenciaD === 'LIBRE' : (modHorarioD === 'Libre')
+
+    if (registro) {
+      return {
+        ...registro,
+        esLibre: esLibreD,
+      }
+    }
+    return {
       fecha: fechaStr,
-      estado: 'PENDIENTE',
-      codigoHoja: '-',
+      estado: esLibreD ? ('LIBRE' as const) : ('PENDIENTE' as const),
+      codigoHoja: esLibreD ? ('L' as const) : ('-' as const),
       horaIngreso: '',
-      fuente: 'TERMINAL'
+      fuente: 'TERMINAL' as const,
+      esLibre: esLibreD,
     }
   })
 
@@ -239,8 +386,13 @@ function DashboardPracticante() {
             {usuario.avatarIniciales}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-bold text-[15px] text-slate-900 mb-0.5">
-              {usuario.nombre}
+            <div className="font-bold text-[15px] text-slate-900 mb-0.5 flex items-center justify-between">
+              <span className="truncate">{usuario.nombre}</span>
+              {saldoHE > 0 && (
+                <span className="bg-gradient-to-r from-blue-700 to-blue-600 text-white font-extrabold text-[11px] px-2.5 py-0.5 rounded-full shadow-xs shrink-0 ml-2">
+                  HE: {saldoHE}h
+                </span>
+              )}
             </div>
             <div className="text-[12px] text-slate-500">
               {usuario.carrera || p.carrera || 'Sin carrera'} ·{' '}
@@ -273,12 +425,19 @@ function DashboardPracticante() {
         <div className="flex gap-2 flex-wrap">
           {/* Estado de hoy */}
           {(() => {
+            if (esDiaLibreHoy) {
+              return (
+                <span className="bg-slate-100 text-slate-600 rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1.5">
+                  ☕ Día de descanso
+                </span>
+              )
+            }
             const hoyActual = SEMANA_ACTUAL.find((d) => d.fecha === fechaHoy)
             if (hoyActual?.estado === 'ASISTIO') {
               return (
                 <span className="bg-emerald-100 text-emerald-800 rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1">
                   <CheckCircle2 size={13} />
-                  ASISTIÓ — {hoyActual.horaIngreso}
+                  ASISTIÓ — {hoyActual.horaIngreso || '08:05'}
                 </span>
               )
             }
@@ -290,8 +449,8 @@ function DashboardPracticante() {
               )
             }
             return (
-              <span className="bg-amber-100 text-amber-800 rounded-full px-3 py-1 text-[12px] font-bold">
-                ⏳ Sin registro hoy
+              <span className="bg-amber-100 text-amber-800 rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1">
+                <span className="animate-pulse">!</span> Sin registro hoy
               </span>
             )
           })()}
@@ -304,14 +463,76 @@ function DashboardPracticante() {
           )}
 
           {/* Badge horas extras */}
-          {horasExtra > 0 && (
+          {saldoHE > 0 && (
             <span className="bg-gradient-to-br from-blue-900 to-blue-600 text-white rounded-full px-3 py-1 text-[12px] font-bold flex items-center gap-1">
               <Zap size={12} />
-              +{horasExtra}h extras disponibles
+              +{saldoHE}h extras disponibles
             </span>
           )}
         </div>
       </Card>
+
+
+      {/* ── Barra de Progreso Semanal Horizontal (7 segmentos) ── */}
+      <Card className="p-4 gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={16} className="text-blue-700" />
+            <span className="font-bold text-[13px] text-slate-900">Progreso Semanal</span>
+          </div>
+          <div className="text-[12px] font-extrabold text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
+            = {bloquesSemana.sumaHoras}/{p.horasSemanalesTarget || horarioActivo?.totalHoras || 30}h
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1.5">
+          {bloquesSemana.dias.map((d) => (
+            <div
+              key={d.fechaStr}
+              className={`flex flex-col items-center justify-between py-2 rounded-xl border transition-all ${d.esHoy ? 'ring-2 ring-blue-500 ring-offset-1 font-bold' : ''
+                } ${d.tipoBloque === 'check-verde'
+                  ? 'bg-emerald-50/80 border-emerald-300'
+                  : d.tipoBloque === 'check-rojo'
+                    ? 'bg-red-50/80 border-red-300'
+                    : d.tipoBloque === 'x-roja'
+                      ? 'bg-red-50/60 border-red-200'
+                      : d.tipoBloque === 'libre'
+                        ? 'bg-slate-100/70 border-slate-200 text-slate-400'
+                        : 'bg-slate-50 border-slate-200 text-slate-400'
+                }`}
+            >
+              <span className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${d.esHoy ? 'text-blue-700' : 'text-slate-500'
+                }`}>
+                {d.diaShort}
+              </span>
+
+              <div className="h-6 flex items-center justify-center my-0.5">
+                {d.tipoBloque === 'check-verde' && (
+                  <Check size={18} className="text-emerald-600 stroke-[3]" />
+                )}
+                {d.tipoBloque === 'check-rojo' && (
+                  <Check size={18} className="text-red-600 stroke-[3]" />
+                )}
+                {d.tipoBloque === 'x-roja' && (
+                  <X size={17} className="text-red-500 stroke-[2.5]" />
+                )}
+                {d.tipoBloque === 'libre' && (
+                  <span className="font-extrabold text-[12px] text-slate-400">L</span>
+                )}
+                {d.tipoBloque === 'pendiente' && (
+                  <span className="font-bold text-[14px] text-slate-400">?</span>
+                )}
+              </div>
+
+              <span className={`text-[10px] font-semibold mt-1 ${d.esHoy ? 'text-blue-800 font-extrabold' : 'text-slate-400'
+                }`}>
+                {d.numeroDia}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
 
 
       {/* ── Historial Reciente ── */}
@@ -323,36 +544,67 @@ function DashboardPracticante() {
         {SEMANA_ACTUAL.length === 0 ? (
           <div className="text-[13px] text-slate-400 italic text-center py-4">No hay historial esta semana.</div>
         ) : (
-          SEMANA_ACTUAL.map((d) => (
-            <button
-              key={d.fecha}
-              onClick={() => setFechaRegistroModal(d.fecha)}
-              className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3 w-full text-left active:bg-slate-50 transition-colors"
-            >
-              <div
-                className={`w-10 h-10 rounded-[10px] shrink-0 flex items-center justify-center text-[12px] font-extrabold ${getBadgeClass(d.estado)}`}
-              >
-                {d.codigoHoja}
-              </div>
-              <div className="flex-1">
-                <div className="text-[13px] font-semibold text-slate-800">
-                  {formatFecha(d.fecha)}
+          SEMANA_ACTUAL.map((d) => {
+            const isLibre = d.esLibre || d.estado === 'LIBRE'
+            if (isLibre) {
+              return (
+                <div
+                  key={d.fecha}
+                  className="bg-slate-50/80 rounded-xl border border-slate-200/60 p-3 flex items-center gap-3 w-full opacity-70 select-none cursor-default"
+                >
+                  <div
+                    className="w-10 h-10 rounded-[10px] shrink-0 flex items-center justify-center text-[12px] font-extrabold bg-slate-100 text-slate-500"
+                  >
+                    L
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-[13px] font-semibold text-slate-700">
+                      {formatFecha(d.fecha)}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Día de descanso
+                    </div>
+                  </div>
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[11px] font-bold bg-slate-100 text-slate-500"
+                  >
+                    Libre
+                  </span>
                 </div>
-                <div className="text-[11px] text-slate-400">
-                  {d.horaIngreso
-                    ? `Ingreso: ${d.horaIngreso}`
-                    : 'Sin registro de ingreso'}
-                </div>
-              </div>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getBadgeClass(d.estado)}`}
+              )
+            }
+
+            return (
+              <button
+                key={d.fecha}
+                onClick={() => setFechaRegistroModal(d.fecha)}
+                className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3 w-full text-left active:bg-slate-50 transition-colors cursor-pointer"
               >
-                {d.estado === 'ASISTIO'
-                  ? 'ASISTIÓ'
-                  : d.estado.replace(/_/g, ' ')}
-              </span>
-            </button>
-          ))
+                <div
+                  className={`w-10 h-10 rounded-[10px] shrink-0 flex items-center justify-center text-[12px] font-extrabold ${getBadgeClass(d.estado)}`}
+                >
+                  {d.codigoHoja}
+                </div>
+                <div className="flex-1">
+                  <div className="text-[13px] font-semibold text-slate-800">
+                    {formatFecha(d.fecha)}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {d.horaIngreso
+                      ? `Ingreso: ${d.horaIngreso}`
+                      : 'Sin registro de ingreso'}
+                  </div>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getBadgeClass(d.estado)}`}
+                >
+                  {d.estado === 'ASISTIO'
+                    ? 'ASISTIÓ'
+                    : d.estado.replace(/_/g, ' ')}
+                </span>
+              </button>
+            )
+          })
         )}
       </div>
 
@@ -541,21 +793,45 @@ export function BottomSheetRegistroDiario({
   const guardarRegistroDiario = useAppStore(s => s.guardarRegistroDiario)
 
   const registroActual = practicante.registrosDiarios?.[fecha]
+  const heInicial = registroActual?.horasExtras ?? practicante.asistencia?.[fecha]?.horasExtraSupervisor ?? 0
+  const [horasExtrasDelDia, setHorasExtrasDelDia] = useState<number>(heInicial)
+  const [showHeModal, setShowHeModal] = useState(false)
+  const [heSeleccionado, setHeSeleccionado] = useState<number>(horasExtrasDelDia > 0 ? horasExtrasDelDia : 1)
+  const [isEditingHe, setIsEditingHe] = useState(false)
+
   const [actividadesLocales, setActividadesLocales] = useState<import('../types').ActividadDiaria[]>(
     registroActual?.actividades || []
   )
   const [vistaAuditoria, setVistaAuditoria] = useState(vistaAuditoriaInicial)
 
-  const handleGuardar = () => {
-    guardarRegistroDiario(practicante.id, fecha, actividadesLocales, usuarioActual.nombre)
+  const handleGuardarClick = () => {
+    if (usuarioActual.rol === 'SUPERVISOR') {
+      setShowHeModal(true)
+      setIsEditingHe(false)
+      return
+    }
+    // Practicante guarda directamente sin declarar HE
+    guardarRegistroDiario(practicante.id, fecha, actividadesLocales, usuarioActual.nombre, 0)
     toast.success('Registro diario guardado')
+    onClose()
+  }
+
+  const handleConfirmarHe = (heFinal: number) => {
+    setHorasExtrasDelDia(heFinal)
+    guardarRegistroDiario(practicante.id, fecha, actividadesLocales, usuarioActual.nombre, heFinal)
+    if (heFinal > 0) {
+      toast.success(`Registro guardado con ${heFinal}h extras (Pendiente de validación de Gerencia)`)
+    } else {
+      toast.success('Registro diario guardado')
+    }
+    setShowHeModal(false)
     onClose()
   }
 
   const handleAddActividad = () => {
     setActividadesLocales([
       ...actividadesLocales,
-      { id: Date.now().toString(), descripcion: '', tipo: 'Macromec', horas: 1 }
+      { id: Date.now().toString(), descripcion: '', tipo: 'Macromec' }
     ])
   }
 
@@ -575,9 +851,16 @@ export function BottomSheetRegistroDiario({
         {/* Header */}
         <div className="flex items-center justify-between mb-5 shrink-0">
           <div>
-            <h3 className="font-bold text-slate-900 text-[18px]">
-              {vistaAuditoria ? 'Auditoría de Registro' : 'Registro de Actividades'}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 text-[18px]">
+                {vistaAuditoria ? 'Auditoría de Registro' : 'Registro de Actividades'}
+              </h3>
+              {usuarioActual.rol === 'SUPERVISOR' && (
+                <span className="bg-blue-100 text-blue-700 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full border border-blue-200 shadow-xs">
+                  HE: {horasExtrasDelDia}
+                </span>
+              )}
+            </div>
             <span className="text-[13px] text-slate-500">{formatFecha(fecha)} — {practicante.nombre}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -652,22 +935,11 @@ export function BottomSheetRegistroDiario({
                       <select
                         value={act.tipo}
                         onChange={(e) => handleChange(act.id, 'tipo', e.target.value as 'Macromec' | 'SENATI')}
-                        className="bg-slate-100 text-slate-700 text-[12px] font-semibold px-2 py-1.5 rounded-lg border-none outline-none"
+                        className="bg-slate-100 text-slate-700 text-[12px] font-semibold px-2.5 py-1.5 rounded-lg border-none outline-none"
                       >
                         <option value="Macromec">Macromec</option>
                         <option value="SENATI">SENATI</option>
                       </select>
-                      <div className="flex items-center gap-1 bg-slate-100 px-2 py-1.5 rounded-lg">
-                        <input
-                          type="number"
-                          min="0.5"
-                          step="0.5"
-                          value={act.horas}
-                          onChange={(e) => handleChange(act.id, 'horas', parseFloat(e.target.value) || 0)}
-                          className="bg-transparent text-[12px] font-semibold text-slate-700 w-10 text-center outline-none border-none"
-                        />
-                        <span className="text-[12px] font-semibold text-slate-500">hrs</span>
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -683,12 +955,118 @@ export function BottomSheetRegistroDiario({
             </button>
 
             <button
-              onClick={handleGuardar}
+              onClick={handleGuardarClick}
               className="w-full mt-2 bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px] flex items-center justify-center gap-2 active:bg-blue-700 transition-transform active:scale-[0.98]"
             >
               <CheckCircle2 size={18} />
               Guardar Registro
             </button>
+
+            {/* Modal dinámico interceptor de Horas Extras para Supervisor */}
+            {showHeModal && (
+              <div className="fixed inset-0 z-[600] bg-black/60 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="bg-blue-100 text-blue-800 font-extrabold text-[11px] px-2.5 py-1 rounded-full">
+                      Control de Horas Extras
+                    </span>
+                    <button onClick={() => setShowHeModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {!isEditingHe ? (
+                    <>
+                      <h4 className="font-bold text-slate-900 text-base leading-snug">
+                        {heInicial > 0
+                          ? '¿Desea actualizar las Horas Extras (HE) del estudiante?'
+                          : `¿El practicante ${practicante.nombre} hizo horas extras hoy?`}
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        {heInicial > 0
+                          ? `Actualmente tiene registrado ${heInicial}h extras para el día ${formatFecha(fecha)}.`
+                          : 'Las horas extras ingresadas serán notificadas al panel de Gerencia para su oficialización.'}
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmarHe(0)}
+                          className="py-3 px-4 rounded-xl border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+                        >
+                          No (0h)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingHe(true)}
+                          className="py-3 px-4 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-xs"
+                        >
+                          Sí
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-base leading-snug">
+                          Horas Extras del Día
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Selecciona las horas extras realizadas hoy por {practicante.nombre}:
+                        </p>
+                      </div>
+
+                      {/* Selector de valores válidos: 1, 1.5, 2, 2.5, 3... */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {[1, 1.5, 2, 2.5, 3, 3.5, 4, 5].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setHeSeleccionado(val)}
+                            className={`py-2 rounded-xl text-xs font-extrabold border transition-all ${heSeleccionado === val
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
+                          >
+                            +{val}h
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-xs text-slate-500 font-bold">Otro valor:</span>
+                        <input
+                          type="number"
+                          min="0.5"
+                          step="0.5"
+                          value={heSeleccionado}
+                          onChange={(e) => setHeSeleccionado(parseFloat(e.target.value) || 0)}
+                          className="w-16 bg-white border border-slate-200 rounded-lg px-2 py-1 text-center font-bold text-sm text-slate-800 outline-none focus:border-blue-500"
+                        />
+                        <span className="text-xs font-bold text-slate-500">horas extras</span>
+                      </div>
+
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingHe(false)}
+                          className="py-3 px-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50"
+                        >
+                          Atrás
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmarHe(heSeleccionado)}
+                          className="flex-1 py-3 px-4 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 shadow-sm"
+                        >
+                          Confirmar HE y Guardar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -875,65 +1253,240 @@ function DashboardSupervisor() {
     ? todosPracticantes.filter((p) => p.monitorId === usuarioActual.id)
     : todosPracticantes
 
-  const [fechaActual, setFechaActual] = useState(new Date(2026, 8, 22))
+  // Requerimiento 1: Estado dinámico con new Date() (sin fechas estáticas hardcodeadas)
+  const [fechaActualView, setFechaActualView] = useState<Date>(() => new Date())
   const [practicanteControlModal, setPracticanteControlModal] = useState<string | null>(null)
+  const [practicanteRetiradoModal, setPracticanteRetiradoModal] = useState<import('../types').Practicante | null>(null)
 
   const handlePrevDay = () => {
-    const prev = new Date(fechaActual)
-    prev.setDate(prev.getDate() - 1)
-    setFechaActual(prev)
+    setFechaActualView((prev) => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() - 1)
+      return d
+    })
   }
 
   const handleNextDay = () => {
-    const next = new Date(fechaActual)
-    next.setDate(next.getDate() + 1)
-    setFechaActual(next)
+    setFechaActualView((prev) => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() + 1)
+      return d
+    })
   }
 
-  const formatFechaTitle = (date: Date) => {
-    const dia = date.getDate()
-    const mes = date.toLocaleString('es-ES', { month: 'long' })
-    const esHoy = date.getTime() === new Date(2026, 8, 22).getTime()
-    return `${esHoy ? 'Hoy (' : ''}${dia} de ${mes}${esHoy ? ')' : ''}`
+  const esHoy = (date: Date): boolean => {
+    const hoy = new Date()
+    return (
+      date.getFullYear() === hoy.getFullYear() &&
+      date.getMonth() === hoy.getMonth() &&
+      date.getDate() === hoy.getDate()
+    )
+  }
+
+  // Formato usando Intl.DateTimeFormat nativo ('es-ES')
+  const formatFechaTitle = (date: Date): string => {
+    const formatter = new Intl.DateTimeFormat('es-ES', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    })
+    const formatted = formatter.format(date).replace(',', '')
+    return esHoy(date) ? `Hoy (${formatted})` : formatted
   }
 
   // Ajustar la fecha a YYYY-MM-DD local
-  const yyyy = fechaActual.getFullYear()
-  const mm = String(fechaActual.getMonth() + 1).padStart(2, '0')
-  const dd = String(fechaActual.getDate()).padStart(2, '0')
+  const yyyy = fechaActualView.getFullYear()
+  const mm = String(fechaActualView.getMonth() + 1).padStart(2, '0')
+  const dd = String(fechaActualView.getDate()).padStart(2, '0')
   const fechaStr = `${yyyy}-${mm}-${dd}`
 
-  const renderBadge = (modalidad: string, estado: string) => {
-    if (estado === 'FALTA') {
-      return <span className="bg-red-100 text-red-700 font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap">Faltó</span>
-    }
-    const isVirtual = modalidad === 'virtual'
-    const modLabel = isVirtual ? 'Virtual' : 'Presencial'
-    const modColor = isVirtual ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+  const DIAS_SEMANA_MAP = [
+    'Domingo',
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+  ] as const
 
-    let estLabel = ''
-    let estColor = ''
-    if (estado === 'ASISTIO') {
+  const nombreDiaActual = DIAS_SEMANA_MAP[fechaActualView.getDay()]
+
+  const getInfoPracticanteDia = (p: import('../types').Practicante) => {
+    // ── Lógica Temporal del Estado "Retirado" ──
+    const esAlumnoRetirado = p.estado === 'retirado' || p.estadoLaboral === 'retirado'
+    let esRetiradoEfectivo = false
+
+    if (esAlumnoRetirado) {
+      const fechaRetiroVal = p.fechaRetiro || p.retiro?.fechaInicio
+      if (fechaRetiroVal) {
+        // Normalización exacta a medianoche (00:00:00) para fechaActualView y fechaRetiro
+        const dView = new Date(fechaActualView)
+        dView.setHours(0, 0, 0, 0)
+
+        let dRetiro: Date
+        if (typeof fechaRetiroVal === 'string' && fechaRetiroVal.includes('-')) {
+          const [ry, rm, rd] = fechaRetiroVal.split('T')[0].split('-').map(Number)
+          dRetiro = new Date(ry, rm - 1, rd)
+        } else {
+          dRetiro = new Date(fechaRetiroVal)
+        }
+        dRetiro.setHours(0, 0, 0, 0)
+
+        // Condición A: fechaActualView >= fechaRetiro -> Retirado (día de retiro y días posteriores)
+        // Condición B: fechaActualView < fechaRetiro -> NO retirado (días anteriores al retiro)
+        if (dView.getTime() >= dRetiro.getTime()) {
+          esRetiradoEfectivo = true
+        }
+      } else {
+        // Fallback preventivo
+        esRetiradoEfectivo = true
+      }
+    }
+
+    if (esRetiradoEfectivo) {
+      return {
+        tieneHorarioAprobado: false,
+        esLibreEfectivo: false,
+        esRetirado: true,
+        modalidad: 'Presencial' as const,
+        estado: 'PENDIENTE' as const,
+      }
+    }
+
+    const horario = (p.horarioVigente && (p.horarioVigente.estado === 'Aprobado' || p.horarioVigente.estado === 'aprobado'))
+      ? p.horarioVigente
+      : (p.horarioAprobado && (p.horarioAprobado.estado === 'Aprobado' || p.horarioAprobado.estado === 'aprobado'))
+        ? p.horarioAprobado
+        : (p.horarioActual && (p.horarioActual.estado === 'Aprobado' || p.horarioActual.estado === 'aprobado'))
+          ? p.horarioActual
+          : undefined
+
+    const tieneHorarioAprobado = !!horario
+    if (!tieneHorarioAprobado) {
+      return { tieneHorarioAprobado: false, esLibreEfectivo: false, esRetirado: false, modalidad: 'Presencial' as const, estado: 'PENDIENTE' as const }
+    }
+
+    const diaConfig = horario.dias?.find(
+      (d) => d.dia.toLowerCase() === nombreDiaActual.toLowerCase()
+    )
+
+    let modalidadDiaHorario: 'Presencial' | 'Virtual' | 'Libre' = 'Presencial'
+    if (diaConfig) {
+      if (diaConfig.modalidadDiaria) {
+        modalidadDiaHorario = diaConfig.modalidadDiaria
+      } else if (diaConfig.modalidad) {
+        const m = diaConfig.modalidad.toLowerCase()
+        modalidadDiaHorario = m === 'virtual' ? 'Virtual' : m === 'libre' ? 'Libre' : 'Presencial'
+      }
+    } else {
+      const dayOfWeek = fechaActualView.getDay()
+      modalidadDiaHorario = (dayOfWeek === 0 || dayOfWeek === 6) ? 'Libre' : 'Presencial'
+    }
+
+    const regHoy = p.historial?.find((h) => h.fecha === fechaStr)
+    const asistenciaHoy = p.asistencia?.[fechaStr]
+
+    let estadoGerencia: import('../types').EstadoAsistencia | undefined = regHoy?.estado
+    if (!estadoGerencia && asistenciaHoy?.estado) {
+      const est = asistenciaHoy.estado.toUpperCase()
+      if (est === 'ASISTIÓ' || est === 'ASISTIO') estadoGerencia = 'ASISTIO'
+      else if (est === 'TARDANZA') estadoGerencia = 'TARDANZA'
+      else if (est === 'FALTA') estadoGerencia = 'FALTA'
+      else if (est === 'CAMPO') estadoGerencia = 'CAMPO'
+      else if (est === 'LIBRE') estadoGerencia = 'LIBRE'
+      else if (est === 'PENDIENTE') estadoGerencia = 'PENDIENTE'
+    }
+
+    // Sincronización en Cascada:
+    // Si Gerencia asignó estado explícito (ej. ASISTIO, TARDANZA, FALTA, CAMPO), el día libre queda anulado.
+    // Si asignó LIBRE, prevalece. Si no hay registro explícito, rige el horario aprobado.
+    const esLibreEfectivo = estadoGerencia
+      ? estadoGerencia === 'LIBRE'
+      : (modalidadDiaHorario === 'Libre')
+
+    let modalidadEfectiva: 'Presencial' | 'Virtual' = 'Presencial'
+    if (regHoy?.modalidad && regHoy.modalidad !== 'libre') {
+      modalidadEfectiva = regHoy.modalidad === 'virtual' ? 'Virtual' : 'Presencial'
+    } else if (modalidadDiaHorario === 'Virtual' || p.modalidadBase === 'Virtual') {
+      modalidadEfectiva = 'Virtual'
+    }
+
+    return {
+      tieneHorarioAprobado: true,
+      esLibreEfectivo,
+      esRetirado: false,
+      modalidad: modalidadEfectiva,
+      estado: estadoGerencia || 'PENDIENTE',
+    }
+  }
+
+  const renderBadges = (p: import('../types').Practicante) => {
+    const info = getInfoPracticanteDia(p)
+
+    // Condición Retirado
+    if ((info as any).esRetirado) {
+      return (
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          <span className="bg-red-50 text-red-600 border border-red-200/80 font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap">
+            Retirado
+          </span>
+        </div>
+      )
+    }
+
+    // Condición 1: Sin Horario Aprobado -> mostrar "Horario por activar", ocultando asistencia y modalidades
+    if (!info.tieneHorarioAprobado) {
+      return (
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          <span className="bg-amber-50 text-amber-700 border border-amber-200/70 font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap">
+            Horario por activar
+          </span>
+        </div>
+      )
+    }
+
+    // Condición: Día Libre efectivo -> renderiza badge "Libre" estático (sin "Pendiente")
+    if (info.esLibreEfectivo) {
+      return (
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          <span className="bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap">
+            Libre
+          </span>
+        </div>
+      )
+    }
+
+    // Condición: Día Laborable o Reacción al Cambio de Gerencia
+    const isVirtual = info.modalidad === 'Virtual'
+    const modLabel = isVirtual ? 'Virtual' : 'Presencial'
+    const modColor = isVirtual ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+
+    let estLabel = 'Pendiente'
+    let estColor = 'bg-slate-100 text-slate-500'
+
+    if (info.estado === 'ASISTIO') {
       estLabel = 'Asistió'
       estColor = 'bg-emerald-100 text-emerald-700'
-    } else if (estado === 'TARDANZA') {
+    } else if (info.estado === 'TARDANZA') {
       estLabel = 'Tardanza'
       estColor = 'bg-amber-100 text-amber-700'
-    } else if (estado === 'CAMPO' && !isVirtual) {
+    } else if (info.estado === 'FALTA') {
+      estLabel = 'Faltó'
+      estColor = 'bg-red-100 text-red-700'
+    } else if (info.estado === 'CAMPO') {
       estLabel = 'Campo'
       estColor = 'bg-purple-100 text-purple-700'
-    } else if (estado === 'PENDIENTE') {
-      estLabel = 'Pendiente'
-      estColor = 'bg-slate-100 text-slate-500'
-    } else {
-      estLabel = estado
-      estColor = 'bg-slate-100 text-slate-500'
     }
 
     return (
       <div className="flex flex-wrap gap-1.5 mt-1">
-        <span className={`${modColor} font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap`}>{modLabel}</span>
-        <span className={`${estColor} font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap`}>{estLabel}</span>
+        <span className={`${modColor} font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap`}>
+          {modLabel}
+        </span>
+        <span className={`${estColor} font-bold px-2 py-1 rounded-md text-[10px] whitespace-nowrap`}>
+          {estLabel}
+        </span>
       </div>
     )
   }
@@ -946,43 +1499,125 @@ function DashboardSupervisor() {
 
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
         <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-          <button onClick={handlePrevDay} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors border-none cursor-pointer">
+          <button
+            onClick={handlePrevDay}
+            className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors border-none cursor-pointer"
+            aria-label="Día anterior"
+          >
             <ChevronLeft size={18} />
           </button>
-          <div className="font-bold text-[14px] text-slate-800">
-            📅 {formatFechaTitle(fechaActual)}
+          <div className="font-bold text-[14px] text-slate-800 capitalize select-none">
+            📅 {formatFechaTitle(fechaActualView)}
           </div>
-          <button onClick={handleNextDay} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors border-none cursor-pointer">
+          <button
+            onClick={handleNextDay}
+            className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors border-none cursor-pointer"
+            aria-label="Día siguiente"
+          >
             <ChevronRight size={18} />
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          {practicantes.map(p => {
-            const regHoy = p.historial.find(h => h.fecha === fechaStr)
-            const modalidad = regHoy?.modalidad || p.modalidadBase
-            const estado = regHoy?.estado || 'PENDIENTE'
+        {practicantes.length === 0 ? (
+          <div className="text-center py-8 text-slate-400 text-[13px] italic">
+            No tienes practicantes asignados actualmente
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {practicantes.map((p) => {
+              const info = getInfoPracticanteDia(p)
+              const isRetirado = (info as any).esRetirado
 
-            return (
-              <button
-                key={p.id}
-                onClick={() => setPracticanteControlModal(p.id)}
-                className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex flex-col justify-between text-left hover:bg-slate-100 active:bg-slate-200 transition-colors"
-              >
-                <div className="font-bold text-[11px] text-slate-900 leading-tight mb-1">
-                  {p.nombre} {p.apellido ? p.apellido.split(' ')[0] : ''}
-                </div>
-                {renderBadge(modalidad, estado)}
-              </button>
-            )
-          })}
-        </div>
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    if (isRetirado) {
+                      setPracticanteRetiradoModal(p)
+                      return
+                    }
+                    if (!info.tieneHorarioAprobado) {
+                      toast.info(`El practicante ${p.nombre} aún no tiene un horario aprobado por Gerencia`)
+                      return
+                    }
+                    if (info.esLibreEfectivo) {
+                      return
+                    }
+                    setPracticanteControlModal(p.id)
+                  }}
+                  className={`border rounded-xl p-2.5 flex flex-col justify-between text-left transition-colors ${isRetirado
+                    ? 'bg-red-50/40 border-red-200/60 opacity-80 cursor-pointer'
+                    : !info.tieneHorarioAprobado
+                      ? 'bg-slate-50 border-slate-100 opacity-85 hover:bg-slate-100 cursor-pointer'
+                      : info.esLibreEfectivo
+                        ? 'bg-slate-50/70 border-slate-100 opacity-75 cursor-default select-none'
+                        : 'bg-slate-50 border-slate-100 hover:bg-slate-100 active:bg-slate-200 cursor-pointer'
+                    }`}
+                >
+                  <div className="font-bold text-[11px] text-slate-900 leading-tight mb-1 truncate w-full">
+                    {p.nombre} {p.apellido ? p.apellido.split(' ')[0] : ''}
+                  </div>
+                  {renderBadges(p)}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Modal de solo lectura para practicante retirado (Supervisor) */}
+      {practicanteRetiradoModal && (
+        <div className="fixed inset-0 z-[500] bg-black/60 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Practicante Retirado</h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  {practicanteRetiradoModal.nombre} {practicanteRetiradoModal.apellido}
+                </p>
+              </div>
+              <span className="bg-red-100 text-red-700 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
+                Retirado
+              </span>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block">Fecha de Retiro</span>
+                <span className="text-[13px] font-semibold text-slate-800">
+                  {practicanteRetiradoModal.fechaRetiro
+                    ? (typeof practicanteRetiradoModal.fechaRetiro === 'string'
+                      ? practicanteRetiradoModal.fechaRetiro.split('T')[0]
+                      : new Date(practicanteRetiradoModal.fechaRetiro).toISOString().split('T')[0])
+                    : (practicanteRetiradoModal.retiro?.fechaInicio || 'Fecha no registrada')}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block">Motivo de Retiro</span>
+                <span className="text-[12px] font-medium text-slate-700 block mt-0.5">
+                  {practicanteRetiradoModal.motivoRetiro || practicanteRetiradoModal.retiro?.motivo || 'Sin motivo registrado'}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 text-[11px] text-amber-800 font-medium text-center">
+              ⚠️ El alumno está retirado. El registro de actividades se encuentra bloqueado.
+            </div>
+
+            <button
+              onClick={() => setPracticanteRetiradoModal(null)}
+              className="w-full bg-slate-800 hover:bg-slate-900 active:scale-[0.98] text-white font-bold py-2.5 rounded-xl text-sm transition-all cursor-pointer"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
 
       {practicanteControlModal && usuarioActual && (
         <BottomSheetRegistroDiario
           fecha={fechaStr}
-          practicante={practicantes.find(p => p.id === practicanteControlModal)!}
+          practicante={practicantes.find((p) => p.id === practicanteControlModal)!}
           usuarioActual={usuarioActual}
           onClose={() => setPracticanteControlModal(null)}
           vistaAuditoriaInicial={false}
@@ -992,10 +1627,6 @@ function DashboardSupervisor() {
   )
 }
 
-// ============================================================
-// DASHBOARD GERENCIA (Antiguo Dashboard Supervisor)
-// ============================================================
-// DASHBOARD GERENCIA (Antiguo Dashboard Supervisor)
 // ============================================================
 function DashboardGerencia() {
   // PASO 4: GERENCIA ve todos los practicantes sin filtro
@@ -1073,11 +1704,12 @@ function DashboardGerencia() {
   // 2. modalidadDiaria === 'Presencial' para HOY
   // 3. estadoAsistencia === 'ASISTIO' o 'CAMPO'
   const almuerzosHoy = practicantes.filter((p) => {
-    if (p.estadoLaboral !== 'activo' || !p.horarioAprobado || p.horarioAprobado.estado !== 'Aprobado') return false
+    const hActivo = p.horarioVigente || p.horarioAprobado;
+    if (p.estadoLaboral !== 'activo' || !hActivo || (hActivo.estado !== 'Aprobado' && hActivo.estado !== 'aprobado')) return false
 
     const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
     const nombreDiaHoy = diasNombres[HOY.getDay()]
-    const diaHorario = p.horarioAprobado.dias.find(d => d.dia === nombreDiaHoy)
+    const diaHorario = hActivo.dias.find(d => d.dia === nombreDiaHoy)
     const modalidadHoy = diaHorario ? diaHorario.modalidadDiaria : p.modalidadBase
 
     const estado = getEstadoActivo(p)
@@ -1182,7 +1814,8 @@ function DashboardGerencia() {
             const estadoBorrador = borradorDiario[p.id]
             const estadoActual = estadoBorrador || estadoHistorial || 'PENDIENTE'
 
-            const mostrarAlerta = (estadoBorrador && estadoBorrador !== estadoHistorial) ||
+            const tieneHEPendiente = p.hePendienteValidacion || Object.values(p.asistencia || {}).some(a => a.hePendienteValidacion === true);
+            const mostrarAlerta = tieneHEPendiente || (estadoBorrador && estadoBorrador !== estadoHistorial) ||
               (mostrarAlertasFaltantes && !estadoBorrador && !estadoHistorial)
 
             // ── Estado laboral bloqueado ──────────────────────
@@ -1205,7 +1838,8 @@ function DashboardGerencia() {
             }
 
             // ── Fase 4: Horario no registrado ─────────────────
-            const tieneHorarioAprobado = p.horarioAprobado && p.horarioAprobado.estado === 'Aprobado';
+            const hActivo = p.horarioVigente || p.horarioAprobado;
+            const tieneHorarioAprobado = hActivo && (hActivo.estado === 'Aprobado' || hActivo.estado === 'aprobado');
 
             if (!tieneHorarioAprobado) {
               return (
@@ -1224,11 +1858,14 @@ function DashboardGerencia() {
 
             const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
             const nombreDiaHoy = diasNombres[HOY.getDay()]
-            const diaHorario = p.horarioAprobado!.dias.find(d => d.dia === nombreDiaHoy)
-            const modalidadHoy = diaHorario ? diaHorario.modalidadDiaria : p.modalidadBase
-            const isVirtual = modalidadHoy === 'Virtual'
-            const isLibre = modalidadHoy === 'Libre'
-            const isPresencial = modalidadHoy === 'Presencial'
+            const diaHorario = hActivo!.dias.find(d => d.dia === nombreDiaHoy)
+            const modalidadHorarioHoy = diaHorario ? diaHorario.modalidadDiaria : p.modalidadBase
+
+            // Sincronización Inmediata del Estado "Libre":
+            // Si el estado de asistencia es LIBRE (asignado por Gerencia) o si no hay registro (PENDIENTE) y el horario es Libre
+            const esLibreEfectivo = estadoActual === 'LIBRE' || (estadoActual === 'PENDIENTE' && modalidadHorarioHoy === 'Libre')
+            const esVirtual = !esLibreEfectivo && ((reg?.modalidad === 'virtual') || (modalidadHorarioHoy === 'Virtual'))
+            const isPresencial = !esLibreEfectivo && !esVirtual
 
             // ── Practicante ACTIVO ────────────────────────────
             return (
@@ -1241,7 +1878,12 @@ function DashboardGerencia() {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {p.nombre} {p.apellido}
-                      {mostrarAlerta && <span className="text-red-500 font-extrabold text-lg animate-pulse">!</span>}
+                      {tieneHEPendiente && (
+                        <span className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-extrabold text-[12px] animate-pulse" title="Horas Extras enviadas por supervisor pendientes de validación">
+                          !
+                        </span>
+                      )}
+                      {mostrarAlerta && !tieneHEPendiente && <span className="text-red-500 font-extrabold text-lg animate-pulse">!</span>}
                     </div>
                     {almuerzosHoy.some((a) => a.id === p.id) && (
                       <div style={{ fontSize: 10, color: '#059669', fontWeight: 700, marginTop: 2 }}>
@@ -1254,25 +1896,25 @@ function DashboardGerencia() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5,
                       padding: '3px 8px', borderRadius: 20, border: 'none',
-                      background: isVirtual ? '#ede9fe' : isLibre ? '#f1f5f9' : '#dbeafe',
-                      color: isVirtual ? '#6d28d9' : isLibre ? '#64748b' : '#1e40af',
+                      background: esLibreEfectivo ? '#f1f5f9' : esVirtual ? '#ede9fe' : '#dbeafe',
+                      color: esLibreEfectivo ? '#64748b' : esVirtual ? '#6d28d9' : '#1e40af',
                       fontSize: 10, fontWeight: 800,
                     }}
                   >
-                    {isVirtual ? '💻 Virtual' : isLibre ? '☕ Libre' : '🏢 Presencial'}
+                    {esLibreEfectivo ? '☕ Libre' : esVirtual ? '💻 Virtual' : '🏢 Presencial'}
                   </div>
                 </div>
 
-                {/* Botones de estado — condicionados por modalidad (Fase 4) */}
+                {/* Botones de estado — condicionados por modalidad */}
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {isLibre ? (
+                  {esLibreEfectivo ? (
                     <button
-                      onClick={() => handleMarcar(p.id, 'LIBRE')}
+                      disabled
                       style={{
                         flex: 1, padding: '10px 4px', borderRadius: 8, border: 'none',
-                        background: estadoActual === 'LIBRE' ? '#475569' : '#f1f5f9',
-                        color: estadoActual === 'LIBRE' ? 'white' : '#64748b',
-                        fontWeight: 700, fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
+                        background: '#f1f5f9',
+                        color: '#64748b',
+                        fontWeight: 700, fontSize: 12, cursor: 'not-allowed', width: '100%',
                       }}
                     >Libre</button>
                   ) : (

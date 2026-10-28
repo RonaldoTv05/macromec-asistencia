@@ -93,9 +93,11 @@ function makeHorario(
       return {
         dia,
         modalidadDiaria: diaData.modalidadDiaria ?? (diaData.horas ? 'Presencial' : 'Libre'),
+        modalidad: diaData.modalidad ?? ((diaData.modalidadDiaria ?? (diaData.horas ? 'Presencial' : 'Libre')).toLowerCase() as Modalidad),
         horaInicio: diaData.horaInicio ?? '',
         horaFin: diaData.horaFin ?? '',
         horas: diaData.horas ?? 0,
+        horasCalculadas: diaData.horasCalculadas ?? diaData.horas ?? 0,
       };
     }
 
@@ -106,9 +108,11 @@ function makeHorario(
     return {
       dia,
       modalidadDiaria: esFinDeSemanaFallback ? 'Libre' : 'Presencial',
+      modalidad: esFinDeSemanaFallback ? 'libre' : 'presencial',
       horaInicio: esFinDeSemanaFallback ? '' : '08:00',
       horaFin: esFinDeSemanaFallback ? '' : '14:00',
       horas: esFinDeSemanaFallback ? 0 : 6,
+      horasCalculadas: esFinDeSemanaFallback ? 0 : 6,
     };
   });
 
@@ -120,6 +124,52 @@ function makeHorario(
     anio: 2026,
     dias: defaultDias,
     totalHoras: total,
+    estado: 'Aprobado',
+  };
+}
+
+function makeHorarioSemipresencial(semana: number): HorarioSemanal {
+  const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] as const;
+  const dias: DiaHorario[] = diasSemana.map((dia) => {
+    if (dia === 'Sábado' || dia === 'Domingo') {
+      return {
+        dia,
+        modalidadDiaria: 'Libre',
+        modalidad: 'libre',
+        horaInicio: '',
+        horaFin: '',
+        horas: 0,
+        horasCalculadas: 0,
+      };
+    }
+    if (dia === 'Miércoles' || dia === 'Viernes') {
+      return {
+        dia,
+        modalidadDiaria: 'Virtual',
+        modalidad: 'virtual',
+        horaInicio: '08:00',
+        horaFin: '14:00',
+        horas: 6,
+        horasCalculadas: 6,
+      };
+    }
+    return {
+      dia,
+      modalidadDiaria: 'Presencial',
+      modalidad: 'presencial',
+      horaInicio: '08:00',
+      horaFin: '14:00',
+      horas: 6,
+      horasCalculadas: 6,
+    };
+  });
+
+  return {
+    id: `h-semi-${semana}-${Date.now()}`,
+    semana,
+    anio: 2026,
+    dias,
+    totalHoras: 30,
     estado: 'Aprobado',
   };
 }
@@ -240,47 +290,40 @@ export const practicantesData: any[] = [
   { id: 'prac-22', nombre: 'Estefany', apellido: 'Vilchez Gutierrez', dni: '70720431', celular: '925132541', carrera: 'Ingeniería de Software', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2007-07-31' }
 ];
 
-export const MOCK_PRACTICANTES: Practicante[] = practicantesData.map(p => ({
-  ...p,
-  email: `${p.nombre.toLowerCase().split(' ')[0]}@macromec.pe`,
-  tel: p.celular,
-  carreraId: p.carrera, // Mock relation mapping
-  horasSemanalesTarget: 30,
-  historial: [], // empty for new data
-  semanasHojaFisica: [],
-  almuerzosConfirmados: [],
-  estadoLaboral: p.estado || 'activo',
-  entregaHojaFisica: false,
-  modalidadBase: (p.modalidadBase.toLowerCase()) as Modalidad,
-})) as Practicante[];
+export const MOCK_PRACTICANTES: Practicante[] = practicantesData.map((p) => {
+  const tieneHorario = p.id !== 'prac-5';
+  const horarioInicial = tieneHorario ? (p.id === 'prac-3' ? makeHorarioSemipresencial(38) : makeHorario(38, [])) : undefined;
+  return {
+    ...p,
+    email: `${p.nombre.toLowerCase().split(' ')[0]}@macromec.pe`,
+    tel: p.celular,
+    carreraId: p.carrera, // Mock relation mapping
+    horasSemanalesTarget: 30,
+    horarioAprobado: horarioInicial,
+    horarioVigente: horarioInicial,
+    horarioActual: horarioInicial,
+    historial: [], // empty for new data
+    semanasHojaFisica: [],
+    almuerzosConfirmados: [],
+    saldoHorasExtras: 0,
+    estadoLaboral: (p.estado?.toLowerCase() === 'retirado' ? 'retirado' : 'activo'),
+    estado: (p.estado?.toLowerCase() === 'retirado' ? 'retirado' : 'activo') as 'activo' | 'retirado',
+    motivoRetiro: p.motivoRetiro,
+    fechaRetiro: p.fechaRetiro || p.retiro?.fechaInicio,
+    entregaHojaFisica: false,
+    modalidadBase: (p.modalidadBase.toLowerCase()) as Modalidad,
+  };
+}) as Practicante[];
 
 export const PRACTICANTE_PRINCIPAL = MOCK_PRACTICANTES[0]
 
-// ── Horas extra iniciales por practicante ────────────────────
+// ── Horas extra iniciales por practicante (Inicia en 0 para todos) ──
 export const EXTRA_HOURS_BALANCES: ExtraHoursBalance[] = MOCK_PRACTICANTES.map(
-  (p, idx) => {
-    const inicial = idx % 4 === 0 ? 0 : idx % 3 === 0 ? 6 : 12
-    return {
-      practicanteId: p.id,
-      horasDisponibles: inicial,
-      historial:
-        inicial > 0
-          ? [
-            {
-              id: `he-${p.id}-0`,
-              tipo: 'acumulo',
-              horas: inicial,
-              fecha: '2026-09-05',
-              descripcion:
-                inicial === 12
-                  ? 'Horas extra — semana de cierre agosto'
-                  : 'Trabajo feriado — apoyo especial',
-              balanceResultante: inicial,
-            },
-          ]
-          : [],
-    }
-  },
+  (p) => ({
+    practicanteId: p.id,
+    horasDisponibles: 0,
+    historial: [],
+  }),
 )
 
 // ── KPIs almuerzos del día ────────────────────────────────────

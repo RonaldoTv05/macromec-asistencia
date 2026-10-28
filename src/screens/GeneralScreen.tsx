@@ -69,12 +69,13 @@ function getCeldaAsistencia(p: Practicante, fecha: string, feriados: import('../
     case 'LIBRE': return { label: 'L', cls: 'bg-green-50 text-green-700 border border-green-200', bloqueado: false }
   }
 
-  if (p.horarioAprobado && p.horarioAprobado.estado === 'Aprobado') {
+  const horarioActivo = p.horarioVigente || p.horarioAprobado;
+  if (horarioActivo && (horarioActivo.estado === 'Aprobado' || horarioActivo.estado === 'aprobado')) {
     const [y, m, d] = fecha.split('-').map(Number)
     const fechaObj = new Date(y, m - 1, d)
     const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
     const nombreDia = diasNombres[fechaObj.getDay()]
-    const diaHorario = p.horarioAprobado.dias.find(d => d.dia === nombreDia)
+    const diaHorario = horarioActivo.dias.find(d => d.dia === nombreDia)
     if (diaHorario && diaHorario.modalidadDiaria === 'Libre') {
       return { label: 'L', cls: 'bg-green-50 text-green-700 border border-green-200', bloqueado: false }
     }
@@ -170,19 +171,30 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
   const registrarIncidencia = useAppStore((s) => s.registrarIncidencia)
   const cubrirFaltaConComodin = useAppStore((s) => s.cubrirFaltaConComodin)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
+  const practicantes = useAppStore((s) => s.practicantes)
 
   const saldoLive = useMemo(() => {
     if (!sheet.practicante) return 0
-    return extraHoursBalances.find((b) => b.practicanteId === sheet.practicante!.id)?.horasDisponibles ?? 0
-  }, [extraHoursBalances, sheet.practicante])
+    const pId = sheet.practicante.id
+    const pStore = practicantes.find((p) => p.id === pId)
+    if (pStore?.saldoHorasExtras !== undefined) return pStore.saldoHorasExtras
+    return extraHoursBalances.find((b) => b.practicanteId === pId)?.horasDisponibles ?? 0
+  }, [extraHoursBalances, sheet.practicante, practicantes])
 
   const [estadoSel, setEstadoSel] = useState<EstadoAsistencia>(sheet.estadoActual ?? 'PENDIENTE')
   const [modalidadLocal, setModalidadLocal] = useState<'presencial' | 'virtual'>(sheet.modalidadDia)
 
   const asistenciaActual = sheet.practicante?.asistencia?.[sheet.fecha]
   const regHistorial = sheet.practicante?.historial.find(h => h.fecha === sheet.fecha)
+  const regDiario = sheet.practicante?.registrosDiarios?.[sheet.fecha]
   const [observacion, setObservacion] = useState(regHistorial?.observacion || '')
-  const [heManuales, setHeManuales] = useState<number>(asistenciaActual?.horasExtraManuales || 0)
+
+  const heSupervisor = asistenciaActual?.horasExtraSupervisor ?? regDiario?.horasExtras ?? 0
+  const [heManuales, setHeManuales] = useState<number>(
+    (asistenciaActual?.horasExtraManuales !== undefined && asistenciaActual.horasExtraManuales > 0)
+      ? asistenciaActual.horasExtraManuales
+      : heSupervisor
+  )
   const [usarComodin, setUsarComodin] = useState(false)
 
   const esVirtual = modalidadLocal === 'virtual'
@@ -195,30 +207,36 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
     if (nueva === 'virtual' && estadoSel === 'CAMPO') setEstadoSel('PENDIENTE')
   }
 
-  type BtnDef = { estado: EstadoAsistencia; label: string; activeClass: string }
+  type BtnDef = { estado: EstadoAsistencia; label: string; activeClass: string; colSpan?: string }
   const BTNS_PRESENCIAL: BtnDef[] = [
-    { estado: 'ASISTIO', label: 'Asistio', activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
+    { estado: 'ASISTIO', label: 'Asistió', activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
     { estado: 'TARDANZA', label: 'Tardanza', activeClass: 'bg-amber-500 border-amber-500 text-white' },
     { estado: 'FALTA', label: 'Falta', activeClass: 'bg-red-500 border-red-500 text-white' },
     { estado: 'CAMPO', label: 'Campo', activeClass: 'bg-blue-500 border-blue-500 text-white' },
+    { estado: 'LIBRE', label: 'Libre', activeClass: 'bg-slate-700 border-slate-700 text-white', colSpan: 'col-span-2' },
   ]
   const BTNS_VIRTUAL: BtnDef[] = [
-    { estado: 'ASISTIO', label: 'Asistio', activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
+    { estado: 'ASISTIO', label: 'Asistió', activeClass: 'bg-emerald-500 border-emerald-500 text-white' },
     { estado: 'TARDANZA', label: 'Tardanza', activeClass: 'bg-amber-500 border-amber-500 text-white' },
     { estado: 'FALTA', label: 'Falta', activeClass: 'bg-red-500 border-red-500 text-white' },
+    { estado: 'LIBRE', label: 'Libre', activeClass: 'bg-slate-700 border-slate-700 text-white' },
   ]
   const btns = esVirtual ? BTNS_VIRTUAL : BTNS_PRESENCIAL
 
   const handleGuardar = () => {
     if (!sheet.practicante) return
-    actualizarConModalidad(sheet.practicante.id, sheet.fecha, estadoSel, modalidadLocal as Modalidad)
-    registrarIncidencia(sheet.practicante.id, sheet.fecha, { observacion, horasExtraManuales: heManuales })
+    const mod = estadoSel === 'LIBRE' ? 'libre' : modalidadLocal
+    actualizarConModalidad(sheet.practicante.id, sheet.fecha, estadoSel, mod as Modalidad)
+    registrarIncidencia(sheet.practicante.id, sheet.fecha, {
+      observacion: estadoSel === 'LIBRE' ? '' : observacion,
+      horasExtraManuales: estadoSel === 'LIBRE' ? 0 : heManuales
+    })
 
     if (estadoSel === 'FALTA' && usarComodin) {
       cubrirFaltaConComodin(sheet.practicante.id, sheet.fecha)
       toast.success('Incidencia guardada y falta cubierta con comodín')
     } else {
-      toast.success(`Guardado: ${sheet.practicante.nombre} - ${estadoSel} (${modalidadLocal})`)
+      toast.success(`Guardado: ${sheet.practicante.nombre} - ${estadoSel} (${mod})`)
     }
     onClose()
   }
@@ -270,14 +288,14 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
         </p>
 
         {/* Botones de estado */}
-        <div className={`grid gap-2 mb-5 ${esVirtual ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          {btns.map(({ estado, label, activeClass }) => {
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          {btns.map(({ estado, label, activeClass, colSpan }) => {
             const isActive = estadoSel === estado
             return (
               <button
                 key={estado}
                 onClick={() => setEstadoSel(estado)}
-                className={`py-3 rounded-xl text-[12px] font-bold cursor-pointer border-2 transition-all ${isActive ? activeClass : 'bg-slate-50 border-slate-200 text-slate-600'
+                className={`py-3 rounded-xl text-[12px] font-bold cursor-pointer border-2 transition-all ${colSpan || ''} ${isActive ? activeClass : 'bg-slate-50 border-slate-200 text-slate-600'
                   }`}
               >
                 {label}
@@ -286,29 +304,38 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
           })}
         </div>
 
-        {/* Incidencias (RF-48 y RF-53) */}
-        <div className="flex flex-col gap-3 mb-5">
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 mb-1 block">Observaciones (Ej. Descanso médico, permiso)</label>
-            <textarea
-              value={observacion}
-              onChange={(e) => setObservacion(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 min-h-[70px] resize-none"
-              placeholder="Escribe la observación..."
-            />
+        {/* Incidencias (RF-48 y RF-53): solo visibles para estados de asistencia laborables */}
+        {['ASISTIO', 'TARDANZA', 'FALTA', 'CAMPO'].includes(estadoSel) && (
+          <div className="flex flex-col gap-3 mb-5">
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Observaciones (Ej. Descanso médico, permiso)</label>
+              <textarea
+                value={observacion}
+                onChange={(e) => setObservacion(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 min-h-[70px] resize-none"
+                placeholder="Escribe la observación..."
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-slate-600 block">Modificar Horas Extras Manuales</label>
+                {heSupervisor > 0 && (
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                    Supervisor propuso: {heSupervisor}h
+                  </span>
+                )}
+              </div>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={heManuales}
+                onChange={(e) => setHeManuales(parseFloat(e.target.value) || 0)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
           </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 mb-1 block">Modificar Horas Extras Manuales</label>
-            <input
-              type="number"
-              min="0"
-              step="0.5"
-              value={heManuales}
-              onChange={(e) => setHeManuales(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-        </div>
+        )}
 
         {/* RF-54: Cubrir Falta con Comodín */}
         {estadoSel === 'FALTA' && (
@@ -423,7 +450,7 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feri
         </thead>
         <tbody>
           {practicantes.map((p, ri) => {
-            const saldo = extraHoursBalances.find((b) => b.practicanteId === p.id)?.horasDisponibles ?? 0
+            const saldo = p.saldoHorasExtras ?? extraHoursBalances.find((b) => b.practicanteId === p.id)?.horasDisponibles ?? 0
             const rowBg = ri % 2 === 0 ? '#fafafa' : 'white'
             return (
               <tr key={p.id} style={{ background: rowBg }}>
@@ -519,13 +546,41 @@ export default function GeneralScreen() {
     }
     // Edición de asistencia
     const reg = p.historial.find((h) => h.fecha === fecha)
+    let estadoActual = reg?.estado
+    if (!estadoActual) {
+      const feriados = useAppStore.getState().semestres[0]?.feriados || []
+      const info = getCeldaAsistencia(p, fecha, feriados)
+      if (info.label === 'L') {
+        estadoActual = 'LIBRE'
+      }
+    }
+
+    let modalidadDia: 'presencial' | 'virtual' = 'presencial'
+    if (reg?.modalidad && reg.modalidad !== 'libre') {
+      modalidadDia = reg.modalidad === 'virtual' ? 'virtual' : 'presencial'
+    } else {
+      const horarioActivo = p.horarioVigente || p.horarioAprobado || p.horarioActual
+      if (horarioActivo) {
+        const [y, m, d] = fecha.split('-').map(Number)
+        const fechaObj = new Date(y, m - 1, d)
+        const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+        const nombreDia = diasNombres[fechaObj.getDay()]
+        const diaHorario = horarioActivo.dias?.find(d => d.dia === nombreDia)
+        if (diaHorario?.modalidadDiaria === 'Virtual' || diaHorario?.modalidad === 'virtual') {
+          modalidadDia = 'virtual'
+        }
+      } else if (p.modalidadBase === 'Virtual') {
+        modalidadDia = 'virtual'
+      }
+    }
+
     setSheet({
       open: true,
       practicante: p,
       fecha,
       fechaLegible,
-      estadoActual: reg?.estado,
-      modalidadDia: reg?.modalidad === 'virtual' ? 'virtual' : 'presencial',
+      estadoActual,
+      modalidadDia,
     })
   }
 
