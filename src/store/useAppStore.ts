@@ -186,7 +186,7 @@ interface AppState {
   removePostulacion: (id: string) => void
 
   // ── Registro Diario de Actividades ────────────────────────────────
-  guardarRegistroDiario: (practicanteId: string, fecha: string, actividades: ActividadDiaria[], nombreAutor: string) => void
+  guardarRegistroDiario: (practicanteId: string, fecha: string, actividades: ActividadDiaria[], nombreAutor: string, horasExtras?: number) => void
 
   // ── Módulo de Asistencia, Incidencias y Hikvision ─────────────────
   borradorDiario: Record<string, import('../types').EstadoAsistencia>
@@ -574,7 +574,7 @@ export const useAppStore = create<AppState>()(
             extraHoursBalances: nuevasHorasExtras,
             practicantes: state.practicantes.map((p) =>
               p.id === practicanteId
-                ? { ...p, horarioPendiente: undefined }
+                ? { ...p, horarioPendiente: undefined, saldoHorasExtras: Math.max(0, (p.saldoHorasExtras ?? 0) - excedente) }
                 : p,
             ),
           }
@@ -600,7 +600,12 @@ export const useAppStore = create<AppState>()(
               historial: [...b.historial, mov],
             }
           })
-          return { extraHoursBalances: balances }
+          const practicantes = state.practicantes.map((p) =>
+            p.id === practicanteId
+              ? { ...p, saldoHorasExtras: (p.saldoHorasExtras ?? 0) + horas }
+              : p
+          )
+          return { extraHoursBalances: balances, practicantes }
         })
       },
 
@@ -611,6 +616,7 @@ export const useAppStore = create<AppState>()(
             return {
               ...p,
               horarioAprobado: { ...p.horarioPendiente, estado: 'Aprobado' },
+              horarioVigente: { ...p.horarioPendiente, estado: 'Aprobado' },
               horarioActual: { ...p.horarioPendiente, estado: 'aprobado' }, // Legacy compatibility
               horarioPendiente: undefined,
             }
@@ -673,7 +679,30 @@ export const useAppStore = create<AppState>()(
                   fuente: 'SUPERVISOR' as const,
                 },
               ]
-            return { ...p, historial: hist }
+            const estadoMap: Record<import('../types').EstadoAsistencia, 'Asistió' | 'Tardanza' | 'Falta' | 'Campo' | 'Pendiente' | 'Libre'> = {
+              ASISTIO: 'Asistió',
+              TARDANZA: 'Tardanza',
+              FALTA: 'Falta',
+              FALTA_CUBIERTA: 'Falta',
+              COMPENSADO: 'Asistió',
+              SEMINARIO: 'Asistió',
+              CAMPO: 'Campo',
+              LIBRE: 'Libre',
+              PENDIENTE: 'Pendiente',
+            }
+            const asistenciaActual = p.asistencia || {}
+            const regAsist = asistenciaActual[fecha] || { horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false }
+            return {
+              ...p,
+              historial: hist,
+              asistencia: {
+                ...asistenciaActual,
+                [fecha]: {
+                  ...regAsist,
+                  estado: estadoMap[estado] || 'Pendiente'
+                }
+              }
+            }
           }),
         }))
       },
@@ -782,6 +811,7 @@ export const useAppStore = create<AppState>()(
             if (p.id !== practicanteId) return p
             return {
               ...p,
+              saldoHorasExtras: nuevoBalance,
               historial: p.historial.map((d) =>
                 d.fecha === fecha && d.estado === 'FALTA'
                   ? {
@@ -838,8 +868,35 @@ export const useAppStore = create<AppState>()(
                   fuente: 'SUPERVISOR' as const,
                 },
               ]
-            return { ...p, historial: hist }
+            const estadoMap: Record<import('../types').EstadoAsistencia, 'Asistió' | 'Tardanza' | 'Falta' | 'Campo' | 'Pendiente' | 'Libre'> = {
+              ASISTIO: 'Asistió',
+              TARDANZA: 'Tardanza',
+              FALTA: 'Falta',
+              FALTA_CUBIERTA: 'Falta',
+              COMPENSADO: 'Asistió',
+              SEMINARIO: 'Asistió',
+              CAMPO: 'Campo',
+              LIBRE: 'Libre',
+              PENDIENTE: 'Pendiente',
+            }
+            const asistenciaActual = p.asistencia || {}
+            const regAsist = asistenciaActual[fecha] || { horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false }
+            return {
+              ...p,
+              historial: hist,
+              asistencia: {
+                ...asistenciaActual,
+                [fecha]: {
+                  ...regAsist,
+                  estado: estadoMap[nuevoEstado] || 'Pendiente'
+                }
+              }
+            }
           }),
+          borradorDiario: {
+            ...state.borradorDiario,
+            [practicanteId]: nuevoEstado,
+          }
         }))
       },
 
@@ -899,6 +956,9 @@ export const useAppStore = create<AppState>()(
             return {
               ...p,
               estadoLaboral: estado,
+              estado: estado,
+              motivoRetiro: estado === 'retirado' ? (datos?.retiro?.motivo || p.motivoRetiro || 'Retiro sin motivo especificado') : undefined,
+              fechaRetiro: estado === 'retirado' ? (datos?.retiro?.fechaInicio || new Date().toISOString().split('T')[0]) : undefined,
               retiro: estado === 'retirado' ? datos?.retiro : undefined,
             }
           }),
@@ -1006,7 +1066,7 @@ export const useAppStore = create<AppState>()(
       },
 
       // ── Registro Diario de Actividades ────────────────────────────────
-      guardarRegistroDiario: (practicanteId, fecha, actividades, nombreAutor) => {
+      guardarRegistroDiario: (practicanteId, fecha, actividades, nombreAutor, horasExtras) => {
         set((state) => ({
           practicantes: state.practicantes.map(p => {
             if (p.id !== practicanteId) return p;
@@ -1025,14 +1085,32 @@ export const useAppStore = create<AppState>()(
               ? [...(registros[fecha].historialVersiones || []), nuevaVersion]
               : [nuevaVersion];
 
+            const heFinal = horasExtras !== undefined ? horasExtras : (registros[fecha]?.horasExtras ?? 0);
+            const tieneHE = heFinal > 0;
+
+            const asistenciaActual = p.asistencia || {};
+            const regAsist = asistenciaActual[fecha] || { estado: 'Pendiente', horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false };
+
             return {
               ...p,
+              hePendienteValidacion: tieneHE,
               registrosDiarios: {
                 ...registros,
                 [fecha]: {
                   fecha,
                   actividades,
-                  historialVersiones
+                  historialVersiones,
+                  horasExtras: heFinal,
+                  heSupervisor: heFinal,
+                  hePendienteValidacion: tieneHE
+                }
+              },
+              asistencia: {
+                ...asistenciaActual,
+                [fecha]: {
+                  ...regAsist,
+                  horasExtraSupervisor: heFinal,
+                  hePendienteValidacion: tieneHE
                 }
               }
             };
@@ -1090,7 +1168,31 @@ export const useAppStore = create<AppState>()(
               ]
             }
 
-            return { ...p, historial: nuevoHistorial }
+            const asistenciaActual = p.asistencia || {}
+            let nuevaAsistencia = asistenciaActual
+            if (estadoBorrador) {
+              const regAsist = asistenciaActual[fechaISO] || { horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false }
+              const estadoMap: Record<import('../types').EstadoAsistencia, 'Asistió' | 'Tardanza' | 'Falta' | 'Campo' | 'Pendiente' | 'Libre'> = {
+                ASISTIO: 'Asistió',
+                TARDANZA: 'Tardanza',
+                FALTA: 'Falta',
+                FALTA_CUBIERTA: 'Falta',
+                COMPENSADO: 'Asistió',
+                SEMINARIO: 'Asistió',
+                CAMPO: 'Campo',
+                LIBRE: 'Libre',
+                PENDIENTE: 'Pendiente',
+              }
+              nuevaAsistencia = {
+                ...asistenciaActual,
+                [fechaISO]: {
+                  ...regAsist,
+                  estado: estadoMap[estadoBorrador] || 'Pendiente',
+                  ...(datoObs ? { observacion: datoObs.observacion } : {})
+                }
+              }
+            }
+            return { ...p, historial: nuevoHistorial, asistencia: nuevaAsistencia }
           })
 
           return {
@@ -1101,28 +1203,74 @@ export const useAppStore = create<AppState>()(
         })
       },
       registrarIncidencia: (practicanteId, fecha, datos) => {
-        set((state) => ({
-          practicantes: state.practicantes.map((p) => {
-            if (p.id !== practicanteId) return p
-            const asistencia = p.asistencia || {}
-            const actual = asistencia[fecha] || { estado: 'Pendiente', horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false }
+        set((state) => {
+          let nuevasHorasBalances = state.extraHoursBalances;
+          const saldoPrevio = state.practicantes.find(p => p.id === practicanteId)?.asistencia?.[fecha]?.horasExtraManuales || 0;
+          const nuevoSaldoHE = datos.horasExtraManuales;
+
+          if (nuevoSaldoHE !== undefined && nuevoSaldoHE !== saldoPrevio) {
+            const diferencia = nuevoSaldoHE - saldoPrevio;
+            if (diferencia !== 0) {
+              nuevasHorasBalances = state.extraHoursBalances.map((b) => {
+                if (b.practicanteId !== practicanteId) return b;
+                const nuevo = Math.max(0, b.horasDisponibles + diferencia);
+                const mov = {
+                  id: `he-oficial-${Date.now()}`,
+                  tipo: (diferencia > 0 ? 'acumulo' : 'deduccion') as 'acumulo' | 'deduccion',
+                  horas: Math.abs(diferencia),
+                  fecha: new Date().toISOString().split('T')[0],
+                  fechaAsistencia: fecha,
+                  descripcion: `HE validadas por Gerencia (${fecha})`,
+                  balanceResultante: nuevo,
+                };
+                return {
+                  ...b,
+                  horasDisponibles: nuevo,
+                  historial: [...b.historial, mov],
+                };
+              });
+            }
+          }
+
+          const nuevosPracticantes = state.practicantes.map((p) => {
+            if (p.id !== practicanteId) return p;
+            const asistencia = p.asistencia || {};
+            const actual = asistencia[fecha] || { estado: 'Pendiente', horasExtraManuales: 0, horasExtraHikvision: 0, faltaCubierta: false };
 
             const nuevoHistorial = p.historial.map(h =>
               h.fecha === fecha && datos.observacion !== undefined
                 ? { ...h, observacion: datos.observacion }
                 : h
-            )
+            );
 
+            const nuevaAsistenciaFecha = {
+              ...actual,
+              ...datos,
+              hePendienteValidacion: false,
+            };
+
+            const nuevaAsistencia = {
+              ...asistencia,
+              [fecha]: nuevaAsistenciaFecha,
+            };
+
+            const aunTienePendiente = Object.values(nuevaAsistencia).some(a => a.hePendienteValidacion === true);
+
+            const balancePracticante = nuevasHorasBalances.find(b => b.practicanteId === practicanteId);
             return {
               ...p,
+              saldoHorasExtras: balancePracticante ? balancePracticante.horasDisponibles : p.saldoHorasExtras,
+              hePendienteValidacion: aunTienePendiente,
               historial: nuevoHistorial,
-              asistencia: {
-                ...asistencia,
-                [fecha]: { ...actual, ...datos }
-              }
-            }
-          })
-        }))
+              asistencia: nuevaAsistencia,
+            };
+          });
+
+          return {
+            practicantes: nuevosPracticantes,
+            extraHoursBalances: nuevasHorasBalances,
+          };
+        });
       },
       cubrirFaltaConComodin: (practicanteId, fecha) => {
         set((state) => {
@@ -1156,16 +1304,18 @@ export const useAppStore = create<AppState>()(
               if (p.id !== practicanteId) return p
               const asistencia = p.asistencia || {}
               const actual = asistencia[fecha]
+              const nuevoSaldo = Math.max(0, (p.saldoHorasExtras ?? horasExtraTotales) - 6)
               if (actual && actual.estado === 'Falta') {
                 return {
                   ...p,
+                  saldoHorasExtras: nuevoSaldo,
                   asistencia: {
                     ...asistencia,
                     [fecha]: { ...actual, faltaCubierta: true }
                   }
                 }
               }
-              return p
+              return { ...p, saldoHorasExtras: nuevoSaldo }
             })
           }
         })
@@ -1283,6 +1433,32 @@ export const useAppStore = create<AppState>()(
           if (first.feriados && typeof first.feriados[0] === 'string') {
             persistedState.semestres = MOCK_SEMESTRES;
           }
+        }
+        // Limpiar horas extras ficticias heredadas del mock inicial
+        if (persistedState?.extraHoursBalances) {
+          const tieneFicticias = persistedState.extraHoursBalances.some((b: any) =>
+            b.historial?.some((h: any) =>
+              h.descripcion?.includes('semana de cierre agosto') ||
+              h.descripcion?.includes('apoyo especial')
+            )
+          );
+          if (tieneFicticias) {
+            persistedState.extraHoursBalances = EXTRA_HOURS_BALANCES;
+          }
+        }
+
+        // Asegurar sincronización de horarioVigente y reseteo de HE ficticias en practicantes persistidos
+        if (persistedState?.practicantes) {
+          const resetearHE = !persistedState?.extraHoursBalances || persistedState.extraHoursBalances.every((b: any) => (b.horasDisponibles || 0) === 0 && (!b.historial || b.historial.length === 0));
+          persistedState.practicantes = persistedState.practicantes.map((p: any) => {
+            const horario = p.horarioVigente || p.horarioAprobado || p.horarioActual;
+            return {
+              ...p,
+              saldoHorasExtras: resetearHE ? 0 : (p.saldoHorasExtras ?? 0),
+              horarioVigente: p.horarioVigente || (horario ? { ...horario, estado: horario.estado || 'Aprobado' } : undefined),
+              horarioAprobado: p.horarioAprobado || (horario ? { ...horario, estado: horario.estado || 'Aprobado' } : undefined),
+            };
+          });
         }
         return { ...currentState, ...persistedState }
       },

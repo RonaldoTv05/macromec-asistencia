@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { CheckCircle2, ChevronDown, ChevronUp, Clock, Send, Trash2, X, FileText, Download, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
-import type { DiaHorario, Modalidad, RegistroDia } from '../types'
+import type { DiaHorario, HorarioSemanal, Modalidad, Practicante, RegistroDia } from '../types'
 
 // ── Utilidades ─────────────────────────────────────────────────
 
@@ -91,6 +91,82 @@ type DiaForm = {
   modalidad: Modalidad
   horaInicio: string
   horaFin: string
+  horas: number
+  horasCalculadas: number
+}
+
+function getHorarioVigente(p?: Practicante): HorarioSemanal | undefined {
+  if (!p) return undefined
+  if (p.horarioVigente && (p.horarioVigente.estado === 'Aprobado' || p.horarioVigente.estado === 'aprobado')) {
+    return p.horarioVigente
+  }
+  if (p.horarioAprobado && (p.horarioAprobado.estado === 'Aprobado' || p.horarioAprobado.estado === 'aprobado')) {
+    return p.horarioAprobado
+  }
+  if (p.horarioActual && (p.horarioActual.estado === 'Aprobado' || p.horarioActual.estado === 'aprobado')) {
+    return p.horarioActual
+  }
+  return p.horarioVigente || p.horarioAprobado
+}
+
+function mapHorarioToDiasForm(horario?: HorarioSemanal): DiaForm[] {
+  if (!horario || !horario.dias || horario.dias.length === 0) {
+    return DIAS_SEMANA.map((d) => ({
+      dia: d.key,
+      modalidad: 'libre',
+      horaInicio: '',
+      horaFin: '',
+      horas: 0,
+      horasCalculadas: 0,
+    }))
+  }
+
+  return DIAS_SEMANA.map((d) => {
+    const diaEncontrado = horario.dias.find(
+      (hd) => hd.dia.toLowerCase() === d.key.toLowerCase(),
+    )
+
+    if (!diaEncontrado) {
+      return {
+        dia: d.key,
+        modalidad: 'libre',
+        horaInicio: '',
+        horaFin: '',
+        horas: 0,
+        horasCalculadas: 0,
+      }
+    }
+
+    let mod: Modalidad = 'libre'
+    if (diaEncontrado.modalidad) {
+      mod = diaEncontrado.modalidad.toLowerCase() as Modalidad
+    } else if (diaEncontrado.modalidadDiaria) {
+      mod = diaEncontrado.modalidadDiaria.toLowerCase() as Modalidad
+    }
+
+    const horaInicio = diaEncontrado.horaInicio || ''
+    const horaFin = diaEncontrado.horaFin || ''
+
+    let horas = 0
+    if (mod !== 'libre') {
+      if (diaEncontrado.horas !== undefined && diaEncontrado.horas > 0) {
+        horas = diaEncontrado.horas
+      } else if (diaEncontrado.horasCalculadas !== undefined && diaEncontrado.horasCalculadas > 0) {
+        horas = diaEncontrado.horasCalculadas
+      } else if (horaInicio && horaFin) {
+        horas = calcHoras(horaInicio, horaFin)
+      }
+    }
+
+    return {
+      dia: d.key,
+      modalidad: mod,
+      horaInicio,
+      horaFin,
+      horas,
+      horasCalculadas: horas,
+    }
+  })
 }
 
 // ============================================================
@@ -153,42 +229,82 @@ function PracticanteHorarios() {
     toast.success('Informe enviado al supervisor')
   }
 
-  const [diasForm, setDiasForm] = useState<DiaForm[]>(
-    DIAS_SEMANA.map((d) => ({
+  // Horario aprobado / vigente de la entidad relacional Practicante
+  const horarioVigente = getHorarioVigente(p)
+  const tieneHorarioAprobado = !!horarioVigente
+  const pendienteActual = p?.horarioPendiente
+
+  // Requerimiento 1 & 2: isEditing se inicializa en false si existe un horario aprobado cargado
+  const [isEditing, setIsEditing] = useState<boolean>(() => {
+    if (tieneHorarioAprobado) return false
+    if (pendienteActual && pendienteActual.estado !== 'Rechazado') return false
+    return true
+  })
+
+  // Requerimiento 1: Si existe horario aprobado, mapear obligatoriamente sus datos reales; sino plantilla en blanco
+  const [diasForm, setDiasForm] = useState<DiaForm[]>(() => {
+    if (tieneHorarioAprobado) {
+      return mapHorarioToDiasForm(horarioVigente)
+    }
+    return DIAS_SEMANA.map((d) => ({
       dia: d.key,
       modalidad: 'libre',
       horaInicio: '',
       horaFin: '',
-    })),
-  )
+      horas: 0,
+      horasCalculadas: 0,
+    }))
+  })
+
+  // Sincronización cuando el practicante o su horario vigente en el store cambia (ej. al ser aprobado por Gerencia)
+  useEffect(() => {
+    if (!isEditing) {
+      if (tieneHorarioAprobado) {
+        setDiasForm(mapHorarioToDiasForm(horarioVigente))
+      } else {
+        setDiasForm(
+          DIAS_SEMANA.map((d) => ({
+            dia: d.key,
+            modalidad: 'libre',
+            horaInicio: '',
+            horaFin: '',
+            horas: 0,
+            horasCalculadas: 0,
+          }))
+        )
+      }
+    }
+  }, [p?.id, horarioVigente, tieneHorarioAprobado, isEditing])
 
   const handleResetForm = () => {
-    setDiasForm(
-      DIAS_SEMANA.map((d) => ({
-        dia: d.key,
-        modalidad: 'libre',
-        horaInicio: '',
-        horaFin: '',
-      })),
-    )
+    if (tieneHorarioAprobado) {
+      setDiasForm(mapHorarioToDiasForm(horarioVigente))
+    } else {
+      setDiasForm(
+        DIAS_SEMANA.map((d) => ({
+          dia: d.key,
+          modalidad: 'libre',
+          horaInicio: '',
+          horaFin: '',
+          horas: 0,
+          horasCalculadas: 0,
+        }))
+      )
+    }
     setIsEditing(false)
   }
 
   // Acordeón Inteligente (Single-Open)
   const [diaAbierto, setDiaAbierto] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
 
-  const totalHoras = diasForm.reduce((s, d) => {
-    if (d.modalidad === 'libre') return s
-    return s + calcHoras(d.horaInicio, d.horaFin)
-  }, 0)
+  // Requerimiento 3: Aplicación estricta de la fórmula de tipado requerida
+  const totalHoras = diasForm.reduce((s, d) => s + (d.horas || d.horasCalculadas || 0), 0)
 
-  // Validación estricta
+  // Validación estricta del convenio (exactamente 30h)
   const esValido = totalHoras === 30
 
   const toggleDia = (dia: string) => {
-    if (!isEditing) return
     setDiaAbierto((prev) => (prev === dia ? null : dia))
   }
 
@@ -198,31 +314,41 @@ function PracticanteHorarios() {
   ) => {
     if (!isEditing) return
     setDiasForm((prev) =>
-      prev.map((d) => (d.dia === dia ? { ...d, ...campo } : d)),
+      prev.map((d) => {
+        if (d.dia !== dia) return d
+        const updated = { ...d, ...campo }
+        const h = updated.modalidad === 'libre' ? 0 : calcHoras(updated.horaInicio, updated.horaFin)
+        return {
+          ...updated,
+          horas: h,
+          horasCalculadas: h,
+        }
+      }),
     )
   }
 
   const procesarEnvio = async () => {
     if (!esValido) return
-    // Aseguramos que haya un usuario logueado antes de enviar
     if (!usuarioActual) {
-      toast.error('Sesión no encontrada');
-      return;
+      toast.error('Sesión no encontrada')
+      return
     }
 
     setEnviando(true)
-    await new Promise((r) => setTimeout(r, 800))
-    const diasFinales: DiaHorario[] = diasForm.map((d) => ({
-      dia: d.dia,
-      modalidadDiaria: d.modalidad === 'presencial' ? 'Presencial' : d.modalidad === 'virtual' ? 'Virtual' : 'Libre',
-      horas: d.modalidad === 'libre' ? 0 : calcHoras(d.horaInicio, d.horaFin),
-      modalidad: d.modalidad,
-      horaInicio: d.horaInicio,
-      horaFin: d.horaFin,
-      horasCalculadas: d.modalidad === 'libre' ? 0 : calcHoras(d.horaInicio, d.horaFin),
-    }))
+    await new Promise((r) => setTimeout(r, 600))
+    const diasFinales: DiaHorario[] = diasForm.map((d) => {
+      const h = d.modalidad === 'libre' ? 0 : calcHoras(d.horaInicio, d.horaFin)
+      return {
+        dia: d.dia,
+        modalidadDiaria: d.modalidad === 'presencial' ? 'Presencial' : d.modalidad === 'virtual' ? 'Virtual' : 'Libre',
+        horas: h,
+        modalidad: d.modalidad,
+        horaInicio: d.horaInicio,
+        horaFin: d.horaFin,
+        horasCalculadas: h,
+      }
+    })
 
-    // AHORA SÍ: Usamos el ID del usuario real logueado, no la variable p
     enviarHorario(usuarioActual.id, diasFinales)
 
     setEnviando(false)
@@ -231,12 +357,10 @@ function PracticanteHorarios() {
   }
 
   const handleCancelarEnvio = () => {
-    cancelarHorario(p.id)
+    cancelarHorario(usuarioActual?.id || p.id)
     handleResetForm()
     toast.info('Envío cancelado, puedes editar tu horario nuevamente.')
   }
-
-  const pendienteActual = p.horarioPendiente
 
   return (
     <div className="flex flex-col gap-3">
@@ -273,11 +397,16 @@ function PracticanteHorarios() {
       <div className="bg-white rounded-2xl border border-slate-200 p-4">
         <div className="flex justify-between items-center mb-1">
           <div className="font-bold text-[14px] text-slate-900 flex items-center gap-2">
-            📋 Solicitud de cambio de horario
+            📋 {isEditing ? 'Declaración de Horario Semanal' : 'Horario Semanal Vigente'}
             <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">{p.modalidadBase}</span>
+            {tieneHorarioAprobado && !isEditing && (
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">Aprobado</span>
+            )}
           </div>
           {(!pendienteActual || pendienteActual.estado === 'Rechazado') && (
             <button
+              id="btn-habilitar-edicion"
+              type="button"
               onClick={() => {
                 if (isEditing) {
                   handleResetForm()
@@ -286,8 +415,8 @@ function PracticanteHorarios() {
                 }
               }}
               className={`px-3 py-1 text-[11px] font-bold rounded-full transition-colors cursor-pointer border-none ${isEditing
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                 }`}
             >
               {isEditing ? 'Cancelar Edición' : 'Habilitar'}
@@ -295,18 +424,17 @@ function PracticanteHorarios() {
           )}
         </div>
         <div className="text-[11px] text-slate-400 mb-3">
-          Declara tu horario para la próxima semana
+          {isEditing
+            ? 'Modifica tu horario y envíalo a revisión (convenio: 30h semanales exactas)'
+            : tieneHorarioAprobado
+              ? 'Horario oficial vigente de 30 horas semanales'
+              : 'Declara tu horario para la próxima semana'}
         </div>
 
-        <div className={`transition-all duration-300 ${isEditing ? '' : 'opacity-60 pointer-events-none grayscale-[30%]'}`}>
+        <div className="transition-all duration-300">
           {DIAS_SEMANA.map((d) => {
             const form = diasForm.find((f) => f.dia === d.key)!
-
-            let horas = 0
-            if (form.modalidad !== 'libre') {
-              horas = calcHoras(form.horaInicio, form.horaFin)
-            }
-
+            const horas = form.horas || form.horasCalculadas || 0
             const isOpen = diaAbierto === d.key
 
             return (
@@ -317,8 +445,8 @@ function PracticanteHorarios() {
                 <div className="flex items-center py-2.5 gap-2">
                   <button
                     id={`dia-toggle-${d.key}`}
+                    type="button"
                     onClick={() => toggleDia(d.key)}
-                    disabled={!isEditing}
                     className="flex-1 bg-transparent border-none flex items-center gap-2 p-0 cursor-pointer"
                   >
                     <span className="font-semibold text-[13px] w-[65px] text-left text-slate-800">
@@ -358,12 +486,13 @@ function PracticanteHorarios() {
                         <button
                           key={m}
                           id={`modal-${d.key}-${m}`}
-                          // ¡Mira esto! Cero "any" y cero "as Modalidad" aquí. Es 100% estricto nativamente.
+                          type="button"
+                          disabled={!isEditing}
                           onClick={() => updateDia(d.key, { modalidad: m })}
-                          className={`flex-1 rounded-lg py-1.5 px-1 text-[11px] font-semibold cursor-pointer ${form.modalidad === m
-                            ? 'border-2 border-blue-600 bg-blue-50 text-blue-800'
+                          className={`flex-1 rounded-lg py-1.5 px-1 text-[11px] font-semibold transition-all ${form.modalidad === m
+                            ? 'border-2 border-blue-600 bg-blue-50 text-blue-800 font-bold'
                             : 'border-[1.5px] border-slate-200 bg-white text-slate-500'
-                            }`}
+                            } ${!isEditing ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
                           {MODALIDAD_LABELS[m]}
                         </button>
@@ -383,13 +512,18 @@ function PracticanteHorarios() {
                           <input
                             id={`hora-inicio-${d.key}`}
                             type="time"
+                            disabled={!isEditing}
+                            readOnly={!isEditing}
                             value={form.horaInicio}
                             onChange={(e) =>
                               updateDia(d.key, {
                                 horaInicio: e.target.value,
                               })
                             }
-                            className="w-full px-2.5 py-2 rounded-lg border-[1.5px] border-slate-200 text-[13px] text-slate-800 outline-none bg-white box-border"
+                            className={`w-full px-2.5 py-2 rounded-lg border-[1.5px] text-[13px] outline-none box-border ${!isEditing
+                              ? 'border-slate-200 bg-slate-50 text-slate-600 cursor-not-allowed'
+                              : 'border-slate-200 bg-white text-slate-800 focus:border-blue-500'
+                              }`}
                           />
                         </div>
                         <div className="text-slate-400 text-[16px] mt-4">
@@ -405,11 +539,16 @@ function PracticanteHorarios() {
                           <input
                             id={`hora-fin-${d.key}`}
                             type="time"
+                            disabled={!isEditing}
+                            readOnly={!isEditing}
                             value={form.horaFin}
                             onChange={(e) =>
                               updateDia(d.key, { horaFin: e.target.value })
                             }
-                            className="w-full px-2.5 py-2 rounded-lg border-[1.5px] border-slate-200 text-[13px] text-slate-800 outline-none bg-white box-border"
+                            className={`w-full px-2.5 py-2 rounded-lg border-[1.5px] text-[13px] outline-none box-border ${!isEditing
+                              ? 'border-slate-200 bg-slate-50 text-slate-600 cursor-not-allowed'
+                              : 'border-slate-200 bg-white text-slate-800 focus:border-blue-500'
+                              }`}
                           />
                         </div>
                       </div>
@@ -429,7 +568,7 @@ function PracticanteHorarios() {
               className={`text-[13px] font-semibold ${esValido ? 'text-emerald-800' : 'text-red-800'
                 }`}
             >
-              Total declarado
+              {isEditing ? 'Total recalculado' : 'Total de horas'}
             </span>
             <span
               className={`text-[16px] font-extrabold flex items-center gap-1.5 ${esValido ? 'text-emerald-600' : 'text-red-600'
@@ -438,7 +577,7 @@ function PracticanteHorarios() {
               {totalHoras.toFixed(1)}h / 30h
             </span>
           </div>
-          {!esValido && (
+          {isEditing && !esValido && (
             <div className="text-red-600 text-[12px] font-bold mt-2 text-center">
               ⚠️ Error: El horario debe sumar exactamente 30 horas semanales. Actual: {totalHoras.toFixed(1)}h
             </div>
@@ -446,9 +585,10 @@ function PracticanteHorarios() {
 
           <button
             id="btn-enviar-horario"
+            type="button"
             onClick={procesarEnvio}
-            disabled={enviando || !!pendienteActual || !esValido}
-            className={`w-full mt-3 py-3.5 border-none rounded-xl text-[14px] font-bold flex items-center justify-center gap-2 transition-all duration-200 ${(enviando || !!pendienteActual || !esValido) ? 'bg-slate-300 text-white cursor-not-allowed' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white cursor-pointer'}`}
+            disabled={!isEditing || enviando || !!pendienteActual || !esValido}
+            className={`w-full mt-3 py-3.5 border-none rounded-xl text-[14px] font-bold flex items-center justify-center gap-2 transition-all duration-200 ${(!isEditing || enviando || !!pendienteActual || !esValido) ? 'bg-slate-300 text-white cursor-not-allowed' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white cursor-pointer active:opacity-90'}`}
           >
             <Send size={16} />
             {enviando ? 'Enviando…' : 'Guardar y Enviar Horario'}

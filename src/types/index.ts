@@ -52,7 +52,7 @@ export type EstadoLaboral = 'activo' | 'retirado'
 export interface DiaHorario {
   dia: 'Lunes' | 'Martes' | 'Miércoles' | 'Jueves' | 'Viernes' | 'Sábado' | 'Domingo'
   modalidadDiaria: ModalidadDiaria
-  horas: number
+  horas?: number
   // Legacy fields
   modalidad?: Modalidad
   horaInicio?: string  // "08:00"
@@ -105,7 +105,7 @@ export interface RetiroData {
 export interface MovimientoHE {
   id: string
   tipo: 'acumulo' | 'deduccion'
-  horas: number
+  horas?: number
   fecha: string           // fecha del movimiento
   fechaAsistencia?: string // fecha de la falta compensada
   descripcion: string
@@ -125,7 +125,7 @@ export interface ActividadDiaria {
   id: string
   descripcion: string
   tipo: 'Macromec' | 'SENATI'
-  horas: number
+  horas?: number
 }
 
 export interface VersionHistorial {
@@ -139,14 +139,21 @@ export interface RegistroDiario {
   fecha: string
   actividades: ActividadDiaria[]
   historialVersiones: VersionHistorial[]
+  horasExtras?: number
+  heSupervisor?: number
+  hePendienteValidacion?: boolean
 }
+
+export type TipoAsistencia = 'asistio' | 'tardanza' | 'falta' | 'campo' | 'libre' | 'pendiente'
 
 // ── Módulo de Asistencia, Incidencias y Hikvision ────────────
 export interface RegistroAsistencia {
-  estado: 'Asistió' | 'Tardanza' | 'Falta' | 'Campo' | 'Pendiente';
+  estado: 'Asistió' | 'Tardanza' | 'Falta' | 'Campo' | 'Pendiente' | 'Libre';
   observacion?: string
   horasExtraManuales: number
   horasExtraHikvision: number
+  horasExtraSupervisor?: number
+  hePendienteValidacion?: boolean
   faltaCubierta: boolean
 }
 
@@ -169,6 +176,7 @@ export interface Practicante {
   horasSemanalesTarget: number
   historial: RegistroDia[]
   horarioAprobado?: HorarioSemanal
+  horarioVigente?: HorarioSemanal
   horarioActual?: HorarioSemanal // Legacy
   horarioPendiente?: HorarioSemanal
   semanasHojaFisica: SemanaFisica[]
@@ -177,6 +185,11 @@ export interface Practicante {
   entregaHojaFisica: boolean
   almuerzosConfirmados: string[] // fechas ISO
   estadoLaboral: EstadoLaboral
+  estado?: 'activo' | 'retirado'
+  motivoRetiro?: string
+  fechaRetiro?: string | Date
+  saldoHorasExtras?: number
+  hePendienteValidacion?: boolean
   retiro?: RetiroData
   fechaIngreso?: string
   hikvisionSync?: boolean
