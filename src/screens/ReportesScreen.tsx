@@ -35,6 +35,8 @@ export default function ReportesScreen() {
   const [modalOpen, setModalOpen] = useState(false)
   const [modalBovedaOpen, setModalBovedaOpen] = useState(false)
   const [informeAEliminar, setInformeAEliminar] = useState<string | null>(null)
+  const periodos = useAppStore((s) => s.periodos)
+  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('todos')
   const [selectedInforme, setSelectedInforme] = useState<typeof informes[0] | null>(null)
 
 
@@ -346,7 +348,7 @@ export default function ReportesScreen() {
                   </div>
                   <div>
                     <h3 className="text-[16px] font-bold text-slate-800 m-0 leading-tight">Bóveda de Archivados</h3>
-                    <span className="text-[11px] text-slate-400 font-medium">Informes finalizados o archivados</span>
+                    <span className="text-[11px] text-slate-400 font-medium">Bóveda histórica multiciclo</span>
                   </div>
                 </div>
                 <button
@@ -358,6 +360,23 @@ export default function ReportesScreen() {
                 </button>
               </div>
 
+              {/* Filtro por Periodo Académico */}
+              <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <span className="text-[11px] font-bold text-slate-500">Historial de Periodo:</span>
+                <select
+                  value={filtroPeriodo}
+                  onChange={(e) => setFiltroPeriodo(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 outline-none cursor-pointer shadow-2xs"
+                >
+                  <option value="todos">Todos los periodos</option>
+                  {periodos.map(per => (
+                    <option key={per.id} value={per.id}>
+                      Ver: {per.nombre} {per.estado === 'activo' ? '(Activo)' : per.estado === 'cerrado' ? '(Cerrado)' : '(Borrador)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="p-4 flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pb-12">
                 {archivadosSupervisor.length === 0 ? (
                   <div className="text-center py-8 text-slate-400 text-[13px]">
@@ -365,7 +384,12 @@ export default function ReportesScreen() {
                     No hay informes archivados en la bóveda
                   </div>
                 ) : (
-                  archivadosSupervisor.map((inf) => {
+                  archivadosSupervisor.filter((inf) => {
+                    if (filtroPeriodo === 'todos') return true;
+                    return (inf.periodoId || 'per-2026-02') === filtroPeriodo;
+                  }).map((inf) => {
+                    const perDelInf = periodos.find(p => p.id === (inf.periodoId || 'per-2026-02'));
+                    const esCerrado = perDelInf?.estado === 'cerrado';
                     const pract = practicantes.find((p) => p.id === inf.practicanteId);
                     const nombreCompleto = pract ? `${pract.nombre} ${pract.apellido}` : 'Practicante';
 
@@ -449,28 +473,36 @@ export default function ReportesScreen() {
                           )}
                         </div>
 
-                        {/* Acciones Restaurar y Eliminar */}
+                        {/* Acciones Restaurar y Eliminar (Bloqueado si el periodo está cerrado) */}
                         <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              archivarInformeQuincenal(inf.id, false);
-                              toast.success('Informe restaurado al listado principal');
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-transparent border-none cursor-pointer"
-                          >
-                            <RotateCcw size={12} /> Restaurar
-                          </button>
+                          {esCerrado ? (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              🔒 Periodo Cerrado (Solo Lectura)
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  archivarInformeQuincenal(inf.id, false);
+                                  toast.success('Informe restaurado al listado principal');
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-transparent border-none cursor-pointer"
+                              >
+                                <RotateCcw size={12} /> Restaurar
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setInformeAEliminar(inf.id);
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-transparent border-none cursor-pointer"
-                          >
-                            <Trash2 size={12} /> Eliminar definitivamente
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setInformeAEliminar(inf.id);
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-transparent border-none cursor-pointer"
+                              >
+                                <Trash2 size={12} /> Eliminar definitivamente
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     );

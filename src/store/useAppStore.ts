@@ -10,6 +10,8 @@ import {
   MOCK_SEMESTRES,
   MOCK_PLANTILLA,
   MOCK_MONITORES,
+  MOCK_PERIODOS,
+  MOCK_POSTULANTES,
 } from '../data/mockData'
 import type {
   DiaHorario,
@@ -31,7 +33,9 @@ import type {
   Postulante,
   Monitor,
   DatosEmpresa,
-  ActividadDiaria
+  ActividadDiaria,
+  PeriodoAcademico,
+  EstadoPeriodo,
 } from '../types'
 
 // ============================================================
@@ -195,6 +199,20 @@ interface AppState {
   ) => void
   archivarInformeQuincenal: (informeId: string, archivado?: boolean) => void
   eliminarInformeQuincenal: (informeId: string) => void
+
+  // ── Periodos Académicos (Motor ERP) ──────────────────────────────
+  periodos: PeriodoAcademico[]
+  getPeriodoActivo: () => PeriodoAcademico | undefined
+  crearPeriodoBorrador: (payload: { nombre: string; fechaInicio: string; fechaFin: string; clonarRoles?: boolean }) => void
+  lanzarNuevoPeriodo: (payload: {
+    nombre: string;
+    fechaInicio: string;
+    fechaFin: string;
+    promociones: Record<string, 'promover' | 'egresar' | 'retirado'>;
+    supervisores?: Record<string, string>;
+    clonarRoles?: boolean;
+  }) => void
+  cerrarPeriodo: (periodoId: string) => void
 
   // ── Postulaciones (RF-13) ─────────────────────────────────────────
   postulaciones: Postulante[]
@@ -1444,8 +1462,108 @@ export const useAppStore = create<AppState>()(
       })),
       updatePlantilla: (plantilla) => set((state) => ({ plantillaAceptacion: { ...state.plantillaAceptacion, ...plantilla } })),
 
+      // ── Periodos Académicos (Motor ERP) ───────────────────────────
+      periodos: MOCK_PERIODOS,
+      getPeriodoActivo: () => {
+        return get().periodos.find(p => p.estado === 'activo') || get().periodos[0];
+      },
+      crearPeriodoBorrador: (payload) => {
+        const borradorId = `per-${payload.nombre.toLowerCase().replace(/\s+/g, '-')}-draft`;
+        const nuevoBorrador: PeriodoAcademico = {
+          id: borradorId,
+          nombre: payload.nombre,
+          fechaInicio: payload.fechaInicio,
+          fechaFin: payload.fechaFin,
+          estado: 'borrador',
+          clonarRoles: payload.clonarRoles ?? true,
+        };
+        set(state => ({
+          periodos: [...state.periodos.filter(p => p.id !== borradorId), nuevoBorrador]
+        }));
+      },
+      lanzarNuevoPeriodo: (payload) => {
+        const nuevoPeriodoId = `per-${payload.nombre.toLowerCase().replace(/\s+/g, '-')}`;
+        set(state => {
+          // 1. Cerrar periodos anteriores activos
+          const periodosActualizados: PeriodoAcademico[] = state.periodos.map(p =>
+            p.estado === 'activo' ? { ...p, estado: 'cerrado' as const } : p
+          );
+
+          // 2. Agregar o activar nuevo periodo
+          const existeIdx = periodosActualizados.findIndex(p => p.id === nuevoPeriodoId);
+          const nuevoObj: PeriodoAcademico = {
+            id: nuevoPeriodoId,
+            nombre: payload.nombre,
+            fechaInicio: payload.fechaInicio,
+            fechaFin: payload.fechaFin,
+            estado: 'activo',
+            clonarRoles: payload.clonarRoles ?? true,
+          };
+          if (existeIdx >= 0) {
+            periodosActualizados[existeIdx] = nuevoObj;
+          } else {
+            periodosActualizados.push(nuevoObj);
+          }
+
+          // 3. Aplicar promociones y resetear HE a 0 en practicantes
+          const practicantesActualizados = state.practicantes.map(p => {
+            const accion = payload.promociones[p.id];
+            let nuevoSemestre = p.semestre;
+            let nuevoEstadoLaboral = p.estadoLaboral;
+            let nuevoEstado = p.estado;
+            let nuevoMotivoRetiro = p.motivoRetiro;
+
+            if (accion === 'promover') {
+              if (p.semestre === 'S4') nuevoSemestre = 'S5';
+              else if (p.semestre === 'S5') nuevoSemestre = 'S6';
+            } else if (accion === 'egresar') {
+              nuevoEstadoLaboral = 'retirado' as const;
+              nuevoEstado = 'retirado' as const;
+              nuevoMotivoRetiro = 'Egresado del ciclo anterior';
+            } else if (accion === 'retirado') {
+              nuevoEstadoLaboral = 'retirado' as const;
+              nuevoEstado = 'retirado' as const;
+              nuevoMotivoRetiro = 'Dado de baja / Retirado al cierre del ciclo';
+            }
+
+            const supervisorAsignado = payload.supervisores?.[p.id] || p.monitorId;
+
+            return {
+              ...p,
+              semestre: nuevoSemestre,
+              estadoLaboral: nuevoEstadoLaboral,
+              estado: nuevoEstado,
+              motivoRetiro: nuevoMotivoRetiro,
+              monitorId: supervisorAsignado,
+              saldoHorasExtras: 0, // Regla ERP: Resetear Horas Extras a 0 al abrir nuevo periodo
+              periodoId: nuevoPeriodoId,
+            };
+          });
+
+          // 4. Resetear balances globales de Horas Extras a 0
+          const balancesReseteados = state.extraHoursBalances.map(b => ({
+            ...b,
+            horasDisponibles: 0,
+            historial: [],
+          }));
+
+          return {
+            periodos: periodosActualizados,
+            practicantes: practicantesActualizados,
+            extraHoursBalances: balancesReseteados,
+          };
+        });
+      },
+      cerrarPeriodo: (periodoId) => {
+        set(state => ({
+          periodos: state.periodos.map(p =>
+            p.id === periodoId ? { ...p, estado: 'cerrado' as const } : p
+          )
+        }));
+      },
+
       // ── Postulaciones ─────────────────────────────────────────
-      postulaciones: [],
+      postulaciones: MOCK_POSTULANTES,
       addPostulacion: (postulante) => set((state) => ({ postulaciones: [...state.postulaciones, postulante] })),
       updatePostulacion: (id, data) => set((state) => ({ postulaciones: state.postulaciones.map(p => p.id === id ? { ...p, ...data } : p) })),
       removePostulacion: (id) => set((state) => ({ postulaciones: state.postulaciones.filter(p => p.id !== id) })),
@@ -1503,13 +1621,26 @@ export const useAppStore = create<AppState>()(
           }
         }
 
-        // Asegurar sincronización de horarioVigente y reseteo de HE ficticias en practicantes persistidos
+        // Asegurar sincronización de horarioVigente, normalización de semestres y reseteo de HE ficticias en practicantes persistidos
         if (persistedState?.practicantes) {
           const resetearHE = !persistedState?.extraHoursBalances || persistedState.extraHoursBalances.every((b: any) => (b.horasDisponibles || 0) === 0 && (!b.historial || b.historial.length === 0));
           persistedState.practicantes = persistedState.practicantes.map((p: any) => {
             const horario = p.horarioVigente || p.horarioAprobado || p.horarioActual;
+
+            // Normalización de semestre para consistencia S4, S5, S6
+            let sem = p.semestre;
+            if (sem) {
+              const s = String(sem).toUpperCase().trim();
+              if (s === 'S4' || s.includes('IV')) sem = 'S4';
+              else if (s === 'S6' || s.includes('VI')) sem = 'S6';
+              else if (s === 'S5' || s.includes('V')) sem = 'S5';
+            }
+
             return {
               ...p,
+              semestre: sem || p.semestre,
+              periodoId: p.periodoId || 'per-2026-02',
+              supervisorId: p.supervisorId || p.monitorId,
               saldoHorasExtras: resetearHE ? 0 : (p.saldoHorasExtras ?? 0),
               horarioVigente: p.horarioVigente || (horario ? { ...horario, estado: horario.estado || 'Aprobado' } : undefined),
               horarioAprobado: p.horarioAprobado || (horario ? { ...horario, estado: horario.estado || 'Aprobado' } : undefined),
@@ -1532,6 +1663,7 @@ export const useAppStore = create<AppState>()(
         plantillaAceptacion: state.plantillaAceptacion,
         monitores: state.monitores,
         postulaciones: state.postulaciones,
+        periodos: state.periodos,
       }),
     },
   ),

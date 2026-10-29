@@ -157,9 +157,22 @@ export interface RegistroAsistencia {
   faltaCubierta: boolean
 }
 
+// ── Periodos Académicos (Motor ERP) ──────────────────────────
+export type EstadoPeriodo = 'activo' | 'cerrado' | 'borrador';
+
+export interface PeriodoAcademico {
+  id: string;
+  nombre: string;       // ej. '2026-02', '2027-01'
+  fechaInicio: string;  // ISO YYYY-MM-DD
+  fechaFin: string;     // ISO YYYY-MM-DD
+  estado: EstadoPeriodo;
+  clonarRoles?: boolean;
+}
+
 // ── Practicante en el sistema ────────────────────────────────
 export interface Practicante {
   id: string
+  periodoId?: string
   nombre: string
   apellido?: string
   email: string
@@ -172,6 +185,7 @@ export interface Practicante {
   carreraId: string;
   semestre: string
   monitorId: string;
+  supervisorId?: string;
   modalidadBase: ModalidadBase
   horasSemanalesTarget: number
   historial: RegistroDia[]
@@ -208,6 +222,7 @@ export interface Practicante {
 // ── Informes Quincenales ──────────────────────────────────────
 export interface InformeQuincenal {
   id: string;
+  periodoId?: string;
   practicanteId: string;
   fechaInicio: string; // ISO YYYY-MM-DD
   fechaFin: string; // ISO YYYY-MM-DD

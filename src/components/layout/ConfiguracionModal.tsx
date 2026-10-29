@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
-import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone, Download, Check } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone, Download, Check, ChevronDown, ChevronUp, Rocket, AlertCircle, GraduationCap } from 'lucide-react'
 import type { Especialista } from '../../types'
 import { useAppStore, enviarCredencialesWhatsApp } from '../../store/useAppStore'
 import ModalConfirmacion from '../ModalConfirmacion'
+import WizardNuevoPeriodo from '../WizardNuevoPeriodo'
 import { toast } from 'sonner'
 import type { Carrera, AsignacionCarreraEspecialista, PeasPorSemestre, ArchivoPea } from '../../types'
 import { descargarArchivoBase64, SAMPLE_PEA_PDF_BASE64 } from '../../utils/fileUtils'
@@ -827,27 +828,137 @@ function SeccionCarreras() {
 
 
 function SeccionSemestres() {
+  const periodos = useAppStore(s => s.periodos)
+  const practicantes = useAppStore(s => s.practicantes)
+  const carreras = useAppStore(s => s.carreras)
+  const monitores = useAppStore(s => s.monitores || [])
+  const especialistas = useAppStore(s => s.especialistas || [])
   const semestres = useAppStore(s => s.semestres)
   const updateSemestreCalendario = useAppStore(s => s.updateSemestreCalendario)
   const agregarFeriado = useAppStore(s => s.agregarFeriado)
   const eliminarFeriado = useAppStore(s => s.eliminarFeriado)
 
-  const activo = semestres[0]
+  const periodoActivo = useMemo(() => {
+    return periodos?.find(p => p.estado === 'activo') || periodos?.[0] || {
+      id: 'per-2026-02',
+      nombre: '2026-02',
+      fechaInicio: '2026-08-03',
+      fechaFin: '2026-12-18',
+      estado: 'activo'
+    }
+  }, [periodos])
 
-  const [fInicioPost, setFInicioPost] = useState(activo?.fechaInicioPostulacion ?? '')
-  const [fFinPost, setFFinPost] = useState(activo?.fechaFinPostulacion ?? '')
-  const [fInicioConv, setFInicioConv] = useState(activo?.fechaInicioConvenio ?? '')
-  const [fFinConv, setFFinConv] = useState(activo?.fechaFinConvenio ?? '')
-  const [fInicioPrac, setFInicioPrac] = useState(activo?.fechaInicioPracticas ?? '')
-  const [fFinPrac, setFFinPrac] = useState(activo?.fechaFinPracticas ?? '')
-  const [linkPost, setLinkPost] = useState(activo?.linkPostulacion ?? '')
+  // Estado del Wizard de nuevo periodo
+  const [wizardOpen, setWizardOpen] = useState(false)
+
+  // Acordeones colapsables para monitoreo en vivo
+  const [colapCarreras, setColapCarreras] = useState(true)
+  const [colapSupervisores, setColapSupervisores] = useState(false)
+  const [colapEspecialistas, setColapEspecialistas] = useState(false)
+  const [colapRetirados, setColapRetirados] = useState(false)
+  const [colapCalendario, setColapCalendario] = useState(false)
+
+  // Helper de normalización de semestre (IV Semestre -> S4, V Semestre -> S5, VI Semestre -> S6)
+  const normalizarSemestre = (sem?: string): 'S4' | 'S5' | 'S6' | null => {
+    if (!sem) return null
+    const s = sem.toUpperCase().trim()
+    if (s === 'S4' || s === 'IV' || s.includes('IV') || s === '4' || s.startsWith('4')) return 'S4'
+    if (s === 'S6' || s === 'VI' || s.includes('VI') || s === '6' || s.startsWith('6')) return 'S6'
+    if (s === 'S5' || s === 'V' || (s.includes('V') && !s.includes('IV') && !s.includes('VI')) || s === '5' || s.startsWith('5')) return 'S5'
+    return null
+  }
+
+  // Helper para verificar pertenencia a carrera
+  const perteneceACarrera = (p: any, c: Carrera): boolean => {
+    if (p.carreraId && p.carreraId === c.id) return true
+    if (p.carrera && c.nombre && p.carrera.toLowerCase().trim() === c.nombre.toLowerCase().trim()) return true
+    const pNorm = (p.carrera || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    const cNorm = (c.nombre || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (pNorm && cNorm && (pNorm.includes(cNorm) || cNorm.includes(pNorm))) return true
+    if (pNorm.includes('software') && cNorm.includes('software')) return true
+    if (pNorm.includes('administraci') && cNorm.includes('administraci')) return true
+    if (pNorm.includes('mecatronic') && cNorm.includes('mecatronic')) return true
+    if (pNorm.includes('electric') && cNorm.includes('electric')) return true
+    return false
+  }
+
+  // 1. Alumnos pertenecientes estrictamente al periodo activo (o por defecto en migración)
+  const alumnosPeriodo = useMemo(() => {
+    return practicantes.filter(p => !p.periodoId || p.periodoId === periodoActivo.id)
+  }, [practicantes, periodoActivo.id])
+
+  // 2. Alumnos activos y retirados del periodo activo
+  const activos = useMemo(() => {
+    return alumnosPeriodo.filter(p => p.estadoLaboral !== 'retirado' && p.estado !== 'retirado')
+  }, [alumnosPeriodo])
+
+  const retirados = useMemo(() => {
+    return alumnosPeriodo.filter(p => p.estadoLaboral === 'retirado' || p.estado === 'retirado')
+  }, [alumnosPeriodo])
+
+  // 3. Desglose estrictamente matemático por Carrera y Semestre
+  const desgloseCarreras = useMemo(() => {
+    return carreras.map(c => {
+      const alumnosCarrera = activos.filter(p => perteneceACarrera(p, c))
+      const s4Count = alumnosCarrera.filter(p => normalizarSemestre(p.semestre) === 'S4').length
+      const s5Count = alumnosCarrera.filter(p => normalizarSemestre(p.semestre) === 'S5').length
+      const s6Count = alumnosCarrera.filter(p => normalizarSemestre(p.semestre) === 'S6').length
+      const totalAlumnos = s4Count + s5Count + s6Count
+
+      return {
+        carrera: c,
+        s4Count,
+        s5Count,
+        s6Count,
+        totalAlumnos,
+      }
+    })
+  }, [carreras, activos])
+
+  // 4. Supervisores y Alumnos a cargo estrictamente en el periodo activo
+  const supervisoresConCarga = useMemo(() => {
+    return monitores.map(m => {
+      const asignados = activos.filter(p => {
+        const matchSupervisor = p.monitorId === m.id || (p as any).supervisorId === m.id
+        const matchPeriodo = !p.periodoId || p.periodoId === periodoActivo.id
+        return matchSupervisor && matchPeriodo
+      })
+      return {
+        supervisor: m,
+        totalAlumnos: asignados.length,
+      }
+    })
+  }, [monitores, activos, periodoActivo.id])
+
+  // 5. Especialistas y Semestres Asignados
+  const especialistasConAsignaciones = useMemo(() => {
+    return especialistas.map(esp => {
+      const asigs = carreras.flatMap(c =>
+        (c.asignaciones || [])
+          .filter(a => a.especialistaId === esp.id)
+          .map(a => ({ carreraNombre: c.nombre, semestres: a.semestres || ['S4', 'S5', 'S6'] }))
+      )
+      return {
+        especialista: esp,
+        asigs,
+      }
+    })
+  }, [especialistas, carreras])
+
+  // Datos del calendario legacy
+  const activoSem = semestres[0]
+  const [fInicioPost, setFInicioPost] = useState(activoSem?.fechaInicioPostulacion ?? '')
+  const [fFinPost, setFFinPost] = useState(activoSem?.fechaFinPostulacion ?? '')
+  const [fInicioConv, setFInicioConv] = useState(activoSem?.fechaInicioConvenio ?? '')
+  const [fFinConv, setFFinConv] = useState(activoSem?.fechaFinConvenio ?? '')
+  const [fInicioPrac, setFInicioPrac] = useState(activoSem?.fechaInicioPracticas ?? '')
+  const [fFinPrac, setFFinPrac] = useState(activoSem?.fechaFinPracticas ?? '')
+  const [linkPost, setLinkPost] = useState(activoSem?.linkPostulacion ?? '')
 
   const [nuevoFeriadoFecha, setNuevoFeriadoFecha] = useState('')
   const [nuevoFeriadoMotivo, setNuevoFeriadoMotivo] = useState('')
 
-  if (!activo) return <div className="p-4 text-center text-slate-500">No hay semestres disponibles</div>
-
-  const handleGuardar = () => {
+  const handleGuardarCalendario = () => {
     updateSemestreCalendario({
       fechaInicioPostulacion: fInicioPost,
       fechaFinPostulacion: fFinPost,
@@ -878,89 +989,331 @@ function SeccionSemestres() {
 
   return (
     <div className="flex flex-col gap-4 pb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="bg-emerald-50 text-emerald-800 p-3 rounded-xl border border-emerald-200 flex items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-[11px] uppercase font-bold text-emerald-600">Semestre Activo</span>
-          <span className="font-extrabold text-[15px]">{activo.nombre}</span>
-        </div>
-      </div>
 
-      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-4">
-        <h3 className="font-bold text-slate-800 text-[14px]">Formulario (Postulación)</h3>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Inicio</label>
-            <input type="date" value={fInicioPost} onChange={e => setFInicioPost(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
+      {/* ── BANNER DEL PERIODO ACTIVO (Solo lectura y tiempo real) ── */}
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-900 text-white rounded-2xl p-4 shadow-md relative overflow-hidden flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] uppercase tracking-wider font-extrabold text-blue-200">
+              Periodo Académico Activo
+            </span>
           </div>
-          <div className="flex-1">
-            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Fin</label>
-            <input type="date" value={fFinPost} onChange={e => setFFinPost(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
-          </div>
+          <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            {periodoActivo.estado}
+          </span>
         </div>
-        <div>
-          <label className="text-[11px] font-bold text-slate-500 mb-1 block">Enlace de Postulación</label>
-          <input type="url" value={linkPost} onChange={e => setLinkPost(e.target.value)} placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
-        </div>
-      </div>
 
-      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-4">
-        <h3 className="font-bold text-slate-800 text-[14px]">Fechas del Convenio</h3>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Inicio</label>
-            <input type="date" value={fInicioConv} onChange={e => setFInicioConv(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
-          </div>
-          <div className="flex-1">
-            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Fin</label>
-            <input type="date" value={fFinConv} onChange={e => setFFinConv(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-4">
-        <h3 className="font-bold text-slate-800 text-[14px]">Fechas de Prácticas</h3>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Inicio</label>
-            <input type="date" value={fInicioPrac} onChange={e => setFInicioPrac(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
-          </div>
-          <div className="flex-1">
-            <label className="text-[11px] font-bold text-slate-500 mb-1 block">Fin</label>
-            <input type="date" value={fFinPrac} onChange={e => setFFinPrac(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-4">
-        <h3 className="font-bold text-slate-800 text-[14px]">Feriados Nacionales</h3>
-        <div className="flex flex-col gap-2">
-          {activo.feriados.length === 0 && <span className="text-[12px] text-slate-400">Sin feriados registrados</span>}
-          {activo.feriados.map(f => (
-            <div key={f.id} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              <span className="text-[13px] font-medium text-slate-700 flex items-center gap-2">
-                <CalendarIcon size={14} className="text-emerald-600" />
-                {f.fecha} - {f.motivo}
+        <div className="flex items-baseline justify-between">
+          <div>
+            <h2 className="text-[26px] font-black text-white m-0 tracking-tight leading-none">
+              {periodoActivo.nombre}
+            </h2>
+            <div className="text-[12px] text-blue-200/80 font-medium flex items-center gap-1.5 mt-1.5">
+              <CalendarIcon size={13} className="text-blue-300" />
+              <span>
+                {periodoActivo.fechaInicio} al {periodoActivo.fechaFin}
               </span>
-              <button onClick={() => handleRemoveFeriado(f.id)} className="text-red-500 p-1.5 hover:bg-red-50 rounded-md transition-colors">
-                <Trash2 size={16} />
-              </button>
             </div>
-          ))}
-        </div>
-        <div className="flex flex-col gap-2 mt-2 border-t border-slate-100 pt-3">
-          <div className="flex gap-2">
-            <input type="date" value={nuevoFeriadoFecha} onChange={e => setNuevoFeriadoFecha(e.target.value)} className="flex-[0.4] bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
-            <input type="text" placeholder="Motivo (Ej: Navidad)" value={nuevoFeriadoMotivo} onChange={e => setNuevoFeriadoMotivo(e.target.value)} className="flex-[0.6] bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] outline-none focus:ring-2 focus:ring-emerald-500/50 transition-shadow" />
           </div>
-          <button onClick={handleAddFeriado} className="w-full bg-emerald-50 text-emerald-700 p-2.5 rounded-lg flex items-center justify-center gap-1 font-bold text-[12px] hover:bg-emerald-100 transition-colors">
-            <Plus size={16} /> Agregar Feriado
-          </button>
+        </div>
+
+        {/* Botón Principal: Asignar Nuevo Periodo (Dispara el Wizard) */}
+        <button
+          type="button"
+          onClick={() => setWizardOpen(true)}
+          className="w-full mt-1 py-3 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-[13px] rounded-xl flex items-center justify-center gap-2 border border-white/20 shadow-md cursor-pointer transition-all active:scale-[0.98]"
+        >
+          <Rocket size={16} /> Asignar Nuevo Periodo
+        </button>
+      </div>
+
+      {/* ── KPIs EN TIEMPO REAL ── */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col items-center justify-center text-center shadow-2xs">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Activos</span>
+          <span className="text-[22px] font-black text-blue-600 leading-tight mt-0.5">{activos.length}</span>
+          <span className="text-[10px] text-slate-400 font-medium">alumnos</span>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col items-center justify-center text-center shadow-2xs">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Supervisores</span>
+          <span className="text-[22px] font-black text-emerald-600 leading-tight mt-0.5">{monitores.length}</span>
+          <span className="text-[10px] text-slate-400 font-medium">activos</span>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col items-center justify-center text-center shadow-2xs">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retirados</span>
+          <span className="text-[22px] font-black text-rose-600 leading-tight mt-0.5">{retirados.length}</span>
+          <span className="text-[10px] text-slate-400 font-medium">bajas</span>
         </div>
       </div>
 
-      <button onClick={handleGuardar} className="w-full bg-emerald-600 text-white rounded-xl py-3.5 font-bold text-[14px] flex items-center justify-center gap-2 mt-2 shadow-sm active:bg-emerald-700 transition-colors">
-        <Save size={18} /> Guardar Calendario
-      </button>
+      {/* ── LISTA 1: DESGLOSE POR CARRERA Y SEMESTRE (S4, S5, S6) ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setColapCarreras(!colapCarreras)}
+          className="w-full p-3.5 flex items-center justify-between bg-white text-left border-none cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Building2 size={16} className="text-blue-600" />
+            <span className="text-[13px] font-bold text-slate-800">
+              Desglose por Carrera y Semestre
+            </span>
+          </div>
+          {colapCarreras ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+        </button>
+
+        {colapCarreras && (
+          <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-2.5">
+            {desgloseCarreras.map(({ carrera: c, s4Count, s5Count, s6Count, totalAlumnos }) => (
+              <div key={c.id} className="bg-slate-50 border border-slate-200/70 rounded-xl p-2.5 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-slate-800 truncate flex-1">{c.nombre}</span>
+                  <span className="text-[11px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                    {totalAlumnos} {totalAlumnos === 1 ? 'alumno' : 'alumnos'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-200/40">
+                  <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                    S4: {s4Count}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                    S5: {s5Count}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                    S6: {s6Count}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── LISTA 2: SUPERVISORES Y ALUMNOS A CARGO ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setColapSupervisores(!colapSupervisores)}
+          className="w-full p-3.5 flex items-center justify-between bg-white text-left border-none cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Users size={16} className="text-emerald-600" />
+            <span className="text-[13px] font-bold text-slate-800">
+              Supervisores y Alumnos a Cargo
+            </span>
+          </div>
+          {colapSupervisores ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+        </button>
+
+        {colapSupervisores && (
+          <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-2">
+            {supervisoresConCarga.map(({ supervisor: m, totalAlumnos }) => (
+              <div key={m.id} className="bg-slate-50 border border-slate-200/70 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-bold text-slate-800 truncate">{m.nombre}</div>
+                  <div className="text-[10px] text-slate-400 truncate">{m.area || 'Operaciones'}</div>
+                </div>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full shrink-0">
+                  {totalAlumnos} {totalAlumnos === 1 ? 'alumno' : 'alumnos'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── LISTA 3: ESPECIALISTAS Y SEMESTRES ASIGNADOS ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setColapEspecialistas(!colapEspecialistas)}
+          className="w-full p-3.5 flex items-center justify-between bg-white text-left border-none cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Briefcase size={16} className="text-indigo-600" />
+            <span className="text-[13px] font-bold text-slate-800">
+              Especialistas y Semestres Asignados
+            </span>
+          </div>
+          {colapEspecialistas ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+        </button>
+
+        {colapEspecialistas && (
+          <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-2">
+            {especialistasConAsignaciones.map(({ especialista: esp, asigs }) => (
+              <div key={esp.id} className="bg-slate-50 border border-slate-200/70 rounded-xl p-2.5 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-slate-800">{esp.nombres} {esp.apellidos}</span>
+                  <span className="text-[10px] text-slate-400">{esp.correo}</span>
+                </div>
+                {asigs.length === 0 ? (
+                  <span className="text-[10px] text-slate-400 italic">Sin carreras asignadas</span>
+                ) : (
+                  <div className="flex flex-col gap-1 pt-1 border-t border-slate-200/40">
+                    {asigs.map((as, i) => (
+                      <div key={i} className="text-[10px] text-slate-600 flex items-center justify-between">
+                        <span className="truncate flex-1 font-medium">• {as.carreraNombre}</span>
+                        <span className="font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 ml-1">
+                          {as.semestres.join(', ')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── LISTA 4: ALUMNOS RETIRADOS (Reactivo) ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setColapRetirados(!colapRetirados)}
+          className="w-full p-3.5 flex items-center justify-between bg-white text-left border-none cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="text-rose-600" />
+            <span className="text-[13px] font-bold text-slate-800">
+              Alumnos Retirados ({retirados.length})
+            </span>
+          </div>
+          {colapRetirados ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+        </button>
+
+        {colapRetirados && (
+          <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-2">
+            {retirados.length === 0 ? (
+              <div className="text-center py-4 text-slate-400 text-[12px] italic">
+                No hay alumnos retirados en el periodo actual ({periodoActivo.nombre}).
+              </div>
+            ) : (
+              retirados.map(p => (
+                <div key={p.id} className="bg-rose-50/50 border border-rose-200/70 rounded-xl p-2.5 flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-bold text-slate-800">{p.nombre} {p.apellido || ''}</span>
+                    <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                      Retirado
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {p.carrera} • Semestre: {p.semestre}
+                  </div>
+                  {p.motivoRetiro && (
+                    <div className="text-[10px] text-rose-800 italic bg-white p-1.5 rounded-md border border-rose-200/50 mt-0.5">
+                      <strong>Motivo:</strong> {p.motivoRetiro}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── ACORDEÓN 5: CALENDARIO Y FERIADOS DE SENATI (Configuración) ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setColapCalendario(!colapCalendario)}
+          className="w-full p-3.5 flex items-center justify-between bg-white text-left border-none cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <CalendarIcon size={16} className="text-slate-600" />
+            <span className="text-[13px] font-bold text-slate-800">
+              Fechas de Convocatoria y Feriados
+            </span>
+          </div>
+          {colapCalendario ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+        </button>
+
+        {colapCalendario && activoSem && (
+          <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-4">
+            {/* Formulario Postulación */}
+            <div className="flex flex-col gap-2 pt-2">
+              <span className="font-bold text-slate-800 text-[13px]">Formulario de Postulación</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Inicio</label>
+                  <input type="date" value={fInicioPost} onChange={e => setFInicioPost(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Fin</label>
+                  <input type="date" value={fFinPost} onChange={e => setFFinPost(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Fechas de Convenio */}
+            <div className="flex flex-col gap-2">
+              <span className="font-bold text-slate-800 text-[13px]">Fechas del Convenio</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Inicio</label>
+                  <input type="date" value={fInicioConv} onChange={e => setFInicioConv(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Fin</label>
+                  <input type="date" value={fFinConv} onChange={e => setFFinConv(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Fechas de Prácticas */}
+            <div className="flex flex-col gap-2">
+              <span className="font-bold text-slate-800 text-[13px]">Fechas de Prácticas</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Inicio</label>
+                  <input type="date" value={fInicioPrac} onChange={e => setFInicioPrac(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Fin</label>
+                  <input type="date" value={fFinPrac} onChange={e => setFFinPrac(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Feriados Nacionales */}
+            <div className="flex flex-col gap-2">
+              <span className="font-bold text-slate-800 text-[13px]">Feriados Registrados</span>
+              {activoSem.feriados.map(f => (
+                <div key={f.id} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                  <span className="text-[11px] font-medium text-slate-700 flex items-center gap-1.5">
+                    <CalendarIcon size={12} className="text-emerald-600" />
+                    {f.fecha} - {f.motivo}
+                  </span>
+                  <button onClick={() => handleRemoveFeriado(f.id)} className="text-red-500 p-1 hover:bg-red-50 rounded border-none cursor-pointer">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+
+              <div className="flex gap-2 pt-1">
+                <input type="date" value={nuevoFeriadoFecha} onChange={e => setNuevoFeriadoFecha(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none" />
+                <input type="text" placeholder="Motivo" value={nuevoFeriadoMotivo} onChange={e => setNuevoFeriadoMotivo(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none" />
+                <button onClick={handleAddFeriado} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold border-none cursor-pointer">
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+
+            <button onClick={handleGuardarCalendario} className="w-full bg-slate-800 text-white rounded-xl py-2.5 font-bold text-[12px] flex items-center justify-center gap-1.5 cursor-pointer">
+              <Save size={14} /> Guardar Fechas de Convocatoria
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── WIZARD MODAL ── */}
+      <WizardNuevoPeriodo
+        isOpen={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+      />
     </div>
   )
 }

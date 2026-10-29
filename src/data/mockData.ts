@@ -16,6 +16,8 @@ import type {
   Especialista,
   Semestre,
   PlantillaAceptacion,
+  PeriodoAcademico,
+  Postulante,
 } from '../types'
 
 // ============================================================
@@ -265,30 +267,30 @@ function makeHistorial(
 // ============================================================
 
 export const practicantesData: any[] = [
-  { id: 'p1', nombre: 'Junior', apellido: 'Sandoval', dni: '72849102', celular: '999999999', carrera: 'Ingeniería Industrial', semestre: 'S6', modalidadBase: 'Presencial', monitorId: 'sup-1', estado: 'activo', fechaNacimiento: '2004-01-01' },
-  { id: 'prac-0', nombre: 'Paul Anderson', apellido: 'Velasquez Rivera', dni: '72033653', celular: '989 997 058', carrera: 'Electricidad Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2005-01-01' },
-  { id: 'prac-1', nombre: 'Fernando', apellido: 'Laime Fernandez', dni: '71544323', celular: '900 253 793', carrera: 'Electricidad Industrial', semestre: 'VI Semestre', modalidadBase: 'Presencial', monitorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2005-01-08' },
-  { id: 'prac-2', nombre: 'Joseph Andriy', apellido: 'Hidalgo Romero', dni: '60481186', celular: '921 729 939', carrera: 'Electricidad Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2007-03-30' },
-  { id: 'prac-3', nombre: 'Luis Angel', apellido: 'Lavado Bernardo', dni: '60010984', celular: '987398164', carrera: 'Mecatrónica Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2007-01-17' },
-  { id: 'prac-4', nombre: 'Francisc Leonid', apellido: 'De la cruz alberto', dni: '70945793', celular: '957649763', carrera: 'Mecatrónica Industrial', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2004-03-12' },
-  { id: 'prac-5', nombre: 'Jhomar Grover', apellido: 'Buenalaya Vargas', dni: '60316214', celular: '957582141', carrera: 'Mecatrónica Industrial', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2007-12-21' },
-  { id: 'prac-6', nombre: 'Luis Alexandro', apellido: 'Flores Galvan', dni: '60316202', celular: '918 273 785', carrera: 'Electricidad Industrial', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2005-01-01' },
-  { id: 'prac-7', nombre: 'Jesus David', apellido: 'Ledesma Fernandez', dni: '76339946', celular: '983243884', carrera: 'Electricidad Industrial', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2005-01-01' },
-  { id: 'prac-8', nombre: 'Brayann Jesus', apellido: 'Huamalies Rodriguez', dni: '76515619', celular: '912309138', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2002-04-03' },
-  { id: 'prac-9', nombre: 'Rossel Robiño', apellido: 'Alfonso Vilcarano', dni: '71306749', celular: '918587422', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-david', estado: 'activo', fechaNacimiento: '2005-05-20' },
-  { id: 'prac-10', nombre: 'Cristopher Raúl', apellido: 'Alfaro Benito', dni: '60005824', celular: '913138969', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-david', estado: 'activo', fechaNacimiento: '2006-07-03' },
-  { id: 'prac-11', nombre: 'Jhojan Jesus', apellido: 'Ccente Chocca', dni: '60005813', celular: '936364152', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-david', estado: 'activo', fechaNacimiento: '2006-06-02' },
-  { id: 'prac-12', nombre: 'Jenifer Mercedes', apellido: 'Carhuamaca Morales', dni: '62916601', celular: '906561817', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '1999-07-08' },
-  { id: 'prac-13', nombre: 'Yhoner', apellido: 'Carreon uzco', dni: '60243679', celular: '985756873', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '2007-11-14' },
-  { id: 'prac-14', nombre: 'Franco', apellido: 'Acuña Huaman', dni: '75252121', celular: '933977111', carrera: 'Electricidad Industrial', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '2006-06-25' },
-  { id: 'prac-15', nombre: 'Leydi Xiomi', apellido: 'RIMARI VENTURA', dni: '73644362', celular: '962566085', carrera: 'Administración', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-tamy', estado: 'activo', fechaNacimiento: '2001-08-27' },
-  { id: 'prac-16', nombre: 'Yhesely Nandely', apellido: 'Pariona Paez', dni: '60273212', celular: '930483472', carrera: 'Administración', semestre: 'IV Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-tamy', estado: 'activo', fechaNacimiento: '2007-07-05' },
-  { id: 'prac-17', nombre: 'Álvaro Cristofer', apellido: 'Díaz Castro', dni: '61695399', celular: '+51 934 870 269', carrera: 'Ingeniería de Software', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2003-10-12' },
-  { id: 'prac-18', nombre: 'WILLY ROY', apellido: 'PASMINIO AREVALO', dni: '47215963', celular: '999146946', carrera: 'Ingeniería de Software', semestre: 'VI Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '1992-07-27' },
-  { id: 'prac-19', nombre: 'Mayerly Ayelen', apellido: 'Galarza Sánchez', dni: '60514630', celular: '922067673', carrera: 'Ingeniería de Software', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2007-08-22' },
-  { id: 'prac-20', nombre: 'Luis Alexander', apellido: 'Márquez Oré', dni: '72402294', celular: '961041473', carrera: 'Mecatrónica Industrial', semestre: 'Egresado', modalidadBase: 'Semipresencial', monitorId: 'sup-1', estado: 'activo', fechaNacimiento: '2002-09-08' },
-  { id: 'prac-21', nombre: 'Tatiana Maybet', apellido: 'Pacheco Quijano', dni: '80836189', celular: '989418140', carrera: 'Ingeniería de Software', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2006-05-14' },
-  { id: 'prac-22', nombre: 'Estefany', apellido: 'Vilchez Gutierrez', dni: '70720431', celular: '925132541', carrera: 'Ingeniería de Software', semestre: 'V Semestre', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2007-07-31' }
+  { id: 'p1', nombre: 'Junior', apellido: 'Sandoval', dni: '72849102', celular: '999999999', carrera: 'Ing. Software con IA', carreraId: 'c3', semestre: 'S6', modalidadBase: 'Presencial', monitorId: 'sup-1', supervisorId: 'sup-1', estado: 'activo', fechaNacimiento: '2004-01-01', periodoId: 'per-2026-02' },
+  { id: 'prac-0', nombre: 'Paul Anderson', apellido: 'Velasquez Rivera', dni: '72033653', celular: '989 997 058', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S6', modalidadBase: 'Semipresencial', monitorId: 'sup-omar', supervisorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2005-01-01', periodoId: 'per-2026-02' },
+  { id: 'prac-1', nombre: 'Fernando', apellido: 'Laime Fernandez', dni: '71544323', celular: '900 253 793', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S6', modalidadBase: 'Presencial', monitorId: 'sup-omar', supervisorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2005-01-08', periodoId: 'per-2026-02' },
+  { id: 'prac-2', nombre: 'Joseph Andriy', apellido: 'Hidalgo Romero', dni: '60481186', celular: '921 729 939', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S6', modalidadBase: 'Semipresencial', monitorId: 'sup-omar', supervisorId: 'sup-omar', estado: 'activo', fechaNacimiento: '2007-03-30', periodoId: 'per-2026-02' },
+  { id: 'prac-3', nombre: 'Luis Angel', apellido: 'Lavado Bernardo', dni: '60010984', celular: '987398164', carrera: 'Mecatrónica Industrial', carreraId: 'c5', semestre: 'S6', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', supervisorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2007-01-17', periodoId: 'per-2026-02' },
+  { id: 'prac-4', nombre: 'Francisc Leonid', apellido: 'De la cruz alberto', dni: '70945793', celular: '957649763', carrera: 'Mecatrónica Industrial', carreraId: 'c5', semestre: 'S6', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', supervisorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2004-03-12', periodoId: 'per-2026-02' },
+  { id: 'prac-5', nombre: 'Jhomar Grover', apellido: 'Buenalaya Vargas', dni: '60316214', celular: '957582141', carrera: 'Mecatrónica Industrial', carreraId: 'c5', semestre: 'S5', modalidadBase: 'Semipresencial', monitorId: 'sup-alexander', supervisorId: 'sup-alexander', estado: 'activo', fechaNacimiento: '2007-12-21', periodoId: 'per-2026-02' },
+  { id: 'prac-6', nombre: 'Luis Alexandro', apellido: 'Flores Galvan', dni: '60316202', celular: '918 273 785', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', supervisorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2005-01-01', periodoId: 'per-2026-02' },
+  { id: 'prac-7', nombre: 'Jesus David', apellido: 'Ledesma Fernandez', dni: '76339946', celular: '983243884', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', supervisorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2005-01-01', periodoId: 'per-2026-02' },
+  { id: 'prac-8', nombre: 'Brayann Jesus', apellido: 'Huamalies Rodriguez', dni: '76515619', celular: '912309138', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jheferson', supervisorId: 'sup-jheferson', estado: 'activo', fechaNacimiento: '2002-04-03', periodoId: 'per-2026-02' },
+  { id: 'prac-9', nombre: 'Rossel Robiño', apellido: 'Alfonso Vilcarano', dni: '71306749', celular: '918587422', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-david', supervisorId: 'sup-david', estado: 'activo', fechaNacimiento: '2005-05-20', periodoId: 'per-2026-02' },
+  { id: 'prac-10', nombre: 'Cristopher Raúl', apellido: 'Alfaro Benito', dni: '60005824', celular: '913138969', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-david', supervisorId: 'sup-david', estado: 'activo', fechaNacimiento: '2006-07-03', periodoId: 'per-2026-02' },
+  { id: 'prac-11', nombre: 'Jhojan Jesus', apellido: 'Ccente Chocca', dni: '60005813', celular: '936364152', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-david', supervisorId: 'sup-david', estado: 'activo', fechaNacimiento: '2006-06-02', periodoId: 'per-2026-02' },
+  { id: 'prac-12', nombre: 'Jenifer Mercedes', apellido: 'Carhuamaca Morales', dni: '62916601', celular: '906561817', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', supervisorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '1999-07-08', periodoId: 'per-2026-02' },
+  { id: 'prac-13', nombre: 'Yhoner', apellido: 'Carreon uzco', dni: '60243679', celular: '985756873', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', supervisorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '2007-11-14', periodoId: 'per-2026-02' },
+  { id: 'prac-14', nombre: 'Franco', apellido: 'Acuña Huaman', dni: '75252121', celular: '933977111', carrera: 'Electricidad Industrial', carreraId: 'c6', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-jeremy', supervisorId: 'sup-jeremy', estado: 'activo', fechaNacimiento: '2006-06-25', periodoId: 'per-2026-02' },
+  { id: 'prac-15', nombre: 'Leydi Xiomi', apellido: 'RIMARI VENTURA', dni: '73644362', celular: '962566085', carrera: 'Administración de Empresas', carreraId: 'c7', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-tamy', supervisorId: 'sup-tamy', estado: 'activo', fechaNacimiento: '2001-08-27', periodoId: 'per-2026-02' },
+  { id: 'prac-16', nombre: 'Yhesely Nandely', apellido: 'Pariona Paez', dni: '60273212', celular: '930483472', carrera: 'Administración de Empresas', carreraId: 'c7', semestre: 'S4', modalidadBase: 'Semipresencial', monitorId: 'sup-tamy', supervisorId: 'sup-tamy', estado: 'activo', fechaNacimiento: '2007-07-05', periodoId: 'per-2026-02' },
+  { id: 'prac-17', nombre: 'Álvaro Cristofer', apellido: 'Díaz Castro', dni: '61695399', celular: '+51 934 870 269', carrera: 'Ing. Software con IA', carreraId: 'c3', semestre: 'S6', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', supervisorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2003-10-12', periodoId: 'per-2026-02' },
+  { id: 'prac-18', nombre: 'WILLY ROY', apellido: 'PASMINIO AREVALO', dni: '47215963', celular: '999146946', carrera: 'Ing. Software con IA', carreraId: 'c3', semestre: 'S6', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', supervisorId: 'sup-juan', estado: 'activo', fechaNacimiento: '1992-07-27', periodoId: 'per-2026-02' },
+  { id: 'prac-19', nombre: 'Mayerly Ayelen', apellido: 'Galarza Sánchez', dni: '60514630', celular: '922067673', carrera: 'Ing. Software con IA', carreraId: 'c3', semestre: 'S5', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', supervisorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2007-08-22', periodoId: 'per-2026-02' },
+  { id: 'prac-20', nombre: 'Luis Alexander', apellido: 'Márquez Oré', dni: '72402294', celular: '961041473', carrera: 'Mecatrónica Industrial', carreraId: 'c5', semestre: 'S6', modalidadBase: 'Semipresencial', monitorId: 'sup-1', supervisorId: 'sup-1', estado: 'retirado', motivoRetiro: 'Egresado del ciclo anterior', fechaNacimiento: '2002-09-08', periodoId: 'per-2026-02' },
+  { id: 'prac-21', nombre: 'Tatiana Maybet', apellido: 'Pacheco Quijano', dni: '80836189', celular: '989418140', carrera: 'Ing. Software con IA', carreraId: 'c3', semestre: 'S5', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', supervisorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2006-05-14', periodoId: 'per-2026-02' },
+  { id: 'prac-22', nombre: 'Estefany', apellido: 'Vilchez Gutierrez', dni: '70720431', celular: '925132541', carrera: 'Ing. Software con IA', carreraId: 'c3', semestre: 'S5', modalidadBase: 'Semipresencial', monitorId: 'sup-juan', supervisorId: 'sup-juan', estado: 'activo', fechaNacimiento: '2007-07-31', periodoId: 'per-2026-02' }
 ];
 
 export const MOCK_PRACTICANTES: Practicante[] = practicantesData.map((p) => {
@@ -296,9 +298,10 @@ export const MOCK_PRACTICANTES: Practicante[] = practicantesData.map((p) => {
   const horarioInicial = tieneHorario ? (p.id === 'prac-3' ? makeHorarioSemipresencial(38) : makeHorario(38, [])) : undefined;
   return {
     ...p,
+    periodoId: p.periodoId || 'per-2026-02',
     email: `${p.nombre.toLowerCase().split(' ')[0]}@macromec.pe`,
     tel: p.celular,
-    carreraId: p.carrera, // Mock relation mapping
+    carreraId: p.carreraId || p.carrera,
     horasSemanalesTarget: 30,
     horarioAprobado: horarioInicial,
     horarioVigente: horarioInicial,
@@ -440,9 +443,9 @@ export const MOCK_CARRERAS: Carrera[] = [
   },
   {
     id: 'c5',
-    nombre: 'Mecatrónica Automotriz',
+    nombre: 'Mecatrónica Industrial',
     peas: [
-      { id: 'pea-c5', nombre: 'PEA-Mecatronica-Automotriz.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+      { id: 'pea-c5', nombre: 'PEA-Mecatronica-Industrial.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
     ],
     asignaciones: [
       { id: 'a5-1', carreraId: 'c5', especialistaId: 'esp-2', semestres: ['S5'] },
@@ -549,3 +552,60 @@ export const MOCK_PLANTILLA: PlantillaAceptacion = {
   id: 'tpl-1',
   contenidoHTML: '<p>Estimado(a) practicante, nos complace informarle que ha sido aceptado(a)...</p>'
 }
+
+
+export const MOCK_PERIODOS: PeriodoAcademico[] = [
+  {
+    id: 'per-2026-02',
+    nombre: '2026-02',
+    fechaInicio: '2026-08-03',
+    fechaFin: '2026-12-18',
+    estado: 'activo',
+    clonarRoles: true,
+  }
+];
+
+export const MOCK_POSTULANTES: Postulante[] = [
+  {
+    id: 'post-1',
+    nombres: 'María Elena',
+    apellidos: 'Quispe Soto',
+    dni: '74839201',
+    correo: 'maria.quispe@senati.pe',
+    celular: '987654321',
+    carreraId: 'c3', // Ing. Software con IA
+    semestre: 'S4',
+    fechaNacimiento: '2003-05-14',
+    estado: 'pendiente',
+    fechaPostulacion: '2026-08-10',
+    observaciones: 'Estudiante destacada en desarrollo front-end y React.',
+  },
+  {
+    id: 'post-2',
+    nombres: 'Carlos Andrés',
+    apellidos: 'Mendoza Paredes',
+    dni: '71298453',
+    correo: 'carlos.mendoza@senati.pe',
+    celular: '954321876',
+    carreraId: 'c2', // Ing. Ciberseguridad
+    semestre: 'S5',
+    fechaNacimiento: '2002-11-20',
+    estado: 'pendiente',
+    fechaPostulacion: '2026-08-12',
+    observaciones: 'Conocimientos en redes y seguridad perimetral.',
+  },
+  {
+    id: 'post-3',
+    nombres: 'Andrea Nicole',
+    apellidos: 'Castillo Ramos',
+    dni: '76543210',
+    correo: 'andrea.castillo@senati.pe',
+    celular: '912345678',
+    carreraId: 'c1', // Diseño Gráfico Digital
+    semestre: 'S4',
+    fechaNacimiento: '2004-02-18',
+    estado: 'pendiente',
+    fechaPostulacion: '2026-08-15',
+    observaciones: 'Manejo de Figma, Photoshop e identidad corporativa.',
+  }
+];
