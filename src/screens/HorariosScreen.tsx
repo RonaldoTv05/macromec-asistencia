@@ -197,6 +197,8 @@ function PracticanteHorarios() {
   const [showModal, setShowModal] = useState(false)
   const [showArchivadosModal, setShowArchivadosModal] = useState(false)
   const [informeAEliminar, setInformeAEliminar] = useState<string | null>(null)
+  const periodos = useAppStore((s) => s.periodos)
+  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('todos')
 
   // Horario aprobado / vigente de la entidad relacional Practicante
   const horarioVigente = getHorarioVigente(p)
@@ -722,7 +724,7 @@ function PracticanteHorarios() {
                 </div>
                 <div>
                   <h3 className="text-[16px] font-bold text-slate-800 m-0 leading-tight">Documentos Archivados</h3>
-                  <span className="text-[11px] text-slate-400 font-medium">Bóveda personal de informes</span>
+                  <span className="text-[11px] text-slate-400 font-medium">Bóveda histórica multiciclo</span>
                 </div>
               </div>
               <button
@@ -734,13 +736,37 @@ function PracticanteHorarios() {
               </button>
             </div>
 
+            {/* Filtro por Periodo Académico */}
+            <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <span className="text-[11px] font-bold text-slate-500">Historial de Periodo:</span>
+              <select
+                value={filtroPeriodo}
+                onChange={(e) => setFiltroPeriodo(e.target.value)}
+                className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 outline-none cursor-pointer shadow-2xs"
+              >
+                <option value="todos">Todos los periodos</option>
+                {periodos.map(per => (
+                  <option key={per.id} value={per.id}>
+                    Ver: {per.nombre} {per.estado === 'activo' ? '(Activo)' : per.estado === 'cerrado' ? '(Cerrado)' : '(Borrador)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="p-4 flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pb-12">
               {misInformesArchivados.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-[13px] italic">
                   No tienes informes archivados.
                 </div>
               ) : (
-                misInformesArchivados.map((inf) => (
+                misInformesArchivados.filter((inf) => {
+                  if (filtroPeriodo === 'todos') return true;
+                  return (inf.periodoId || 'per-2026-02') === filtroPeriodo;
+                }).map((inf) => {
+                  const perDelInf = periodos.find(p => p.id === (inf.periodoId || 'per-2026-02'));
+                  const esCerrado = perDelInf?.estado === 'cerrado';
+
+                  return (
                   <div key={inf.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] font-bold text-slate-700">
@@ -788,29 +814,37 @@ function PracticanteHorarios() {
                       >
                         <Download size={13} /> Descargar
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          archivarInformeQuincenal(inf.id, false);
-                          toast.success('Informe restaurado a la lista activa');
-                        }}
-                        className="py-2 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors border border-blue-200"
-                        title="Restaurar informe a la lista activa"
-                      >
-                        Restaurar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInformeAEliminar(inf.id)}
-                        className="py-2 px-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors border border-red-200"
-                        title="Eliminar definitivamente"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {esCerrado ? (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+                          🔒 Periodo Cerrado (Solo Lectura)
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              archivarInformeQuincenal(inf.id, false);
+                              toast.success('Informe restaurado a la lista activa');
+                            }}
+                            className="py-2 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors border border-blue-200"
+                            title="Restaurar informe a la lista activa"
+                          >
+                            Restaurar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInformeAEliminar(inf.id)}
+                            className="py-2 px-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors border border-red-200"
+                            title="Eliminar definitivamente"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
-                ))
-              )}
+                )
+              }))}
             </div>
           </div>
         </div>

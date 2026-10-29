@@ -464,6 +464,10 @@ function BottomSheetEvaluacion({
   const addPracticante = useAppStore(s => s.addPracticante)
   const monitores = useAppStore(s => s.monitores)
   const carrerasGlobal = useAppStore(s => s.carreras)
+  const getPeriodoActivo = useAppStore(s => s.getPeriodoActivo)
+  const getEspecialistaAsignado = useAppStore(s => s.getEspecialistaAsignado)
+
+  const periodoActivo = getPeriodoActivo() || { id: 'per-2026-02', nombre: '2026-02', estado: 'activo' as const }
 
   const [observaciones, setObservaciones] = useState(postulante.observaciones)
   const [vistaContratacion, setVistaContratacion] = useState(false)
@@ -500,34 +504,51 @@ function BottomSheetEvaluacion({
     }
 
     const passGenerada = Math.random().toString(36).slice(-6)
+    const carreraObj = carrerasGlobal.find(c => c.id === carreraIdSeleccionada)
+    const espAsignado = getEspecialistaAsignado(carreraIdSeleccionada, cicloActual)
+    const peasCarrera = carreraObj?.peas || []
 
     const nuevoPracticante: Practicante = {
       id: `prac-${Date.now()}`,
+      periodoId: periodoActivo.id,
       nombre: postulante.nombres,
       apellido: postulante.apellidos,
       email: postulante.correo,
       fechaNacimiento: postulante.fechaNacimiento || '2000-01-01',
       dni: postulante.dni,
       celular: postulante.celular,
-      carrera: 'Especialidad Asignada',
+      carrera: carreraObj?.nombre || 'Especialidad Asignada',
       tel: postulante.celular,
       carreraId: carreraIdSeleccionada,
       semestre: cicloActual,
       monitorId: monitorId,
-      modalidadBase: modalidad as 'Presencial' | 'Semipresencial' | 'Virtual',
+      modalidadBase: (modalidad === 'presencial' ? 'Presencial' : modalidad === 'semipresencial' ? 'Semipresencial' : 'Virtual') as any,
       horasSemanalesTarget: 30,
       historial: [],
       semanasHojaFisica: [],
       entregaHojaFisica: false,
       almuerzosConfirmados: [],
       estadoLaboral: 'activo',
+      estado: 'activo',
+      saldoHorasExtras: 0,
       fechaIngreso: new Date().toISOString().split('T')[0],
       password: passGenerada,
       hikvisionSync: false,
+      documentos: {
+        cartaPresentacion: null,
+        evidenciaFormulario: null,
+        cartaAceptacionFirmada: null,
+        convenioFirmado: null,
+        registroVinculacion: null,
+        peaArchivos: peasCarrera.map(p => typeof p === 'string' ? p : p.nombre)
+      }
     }
 
     addPracticante(nuevoPracticante)
     removePostulacion(postulante.id)
+    toast.success(`¡${postulante.nombres} inyectado al periodo ${periodoActivo.nombre}!`, {
+      description: `Especialista asignado: ${espAsignado ? espAsignado.nombres + ' ' + espAsignado.apellidos : 'General'}`
+    })
 
     toast.promise(
       enviarCredencialesWhatsApp(nuevoPracticante.tel || '', nuevoPracticante.nombre, passGenerada, 'PRACTICANTE'),
@@ -605,12 +626,21 @@ function BottomSheetEvaluacion({
           </div>
         ) : (
           <div className="flex-1 flex flex-col gap-5 overflow-y-auto pb-6 animate-in slide-in-from-right-4 duration-300">
-            <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-200 mb-2 relative">
-              <h4 className="font-bold text-[14px]">Confirmar Ingreso</h4>
-              <p className="text-[12px] opacity-80 mt-0.5">Verifica los datos y asigna modalidad y supervisor.</p>
-              <div className="mt-2">
-                <span onClick={() => setEdicionHabilitada(!edicionHabilitada)} className="text-blue-600 text-[13px] underline cursor-pointer">
-                  {edicionHabilitada ? 'Deshabilitar edición' : 'Habilitar edición de datos base'}
+            <div className="bg-gradient-to-br from-emerald-500/10 to-blue-500/10 text-slate-800 p-4 rounded-2xl border border-emerald-200 mb-2 relative flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-[15px] text-slate-800 m-0">Aceptación Mágica de Practicante</h4>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  {periodoActivo.nombre}
+                </span>
+              </div>
+              <p className="text-[12px] text-slate-600 m-0 leading-relaxed">
+                El practicante será vinculado automáticamente al periodo activo <strong>{periodoActivo.nombre}</strong> con su PEA y especialista en tiempo real.
+              </p>
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60 text-[11px] text-slate-600">
+                <span>Especialista: <strong>{getEspecialistaAsignado(carreraIdSeleccionada, cicloActual)?.nombres || 'General'}</strong></span>
+                <span>•</span>
+                <span onClick={() => setEdicionHabilitada(!edicionHabilitada)} className="text-blue-600 font-bold underline cursor-pointer">
+                  {edicionHabilitada ? 'Fijar datos' : 'Editar datos base'}
                 </span>
               </div>
             </div>
