@@ -175,9 +175,26 @@ interface AppState {
 
   // ── Informes Quincenales ──────────────────────────────────────────
   informesQuincenales: InformeQuincenal[]
-  enviarInformeQuincenal: (informe: Omit<InformeQuincenal, 'id' | 'estado'>) => void
+  enviarInformeQuincenal: (informe: {
+    practicanteId?: string;
+    fechaInicio: string;
+    fechaFin: string;
+    archivoPracticanteBase64: string;
+    nombreArchivo?: string;
+    tipoMime?: string;
+    mensajePracticante?: string;
+  }) => void
   aceptarInformeQuincenal: (informeId: string, feedback: string) => void
-  procesarInformeMonitor: (informeId: string, nuevoEstado: 'observado' | 'aprobado_y_firmado', feedback: string, archivoFirmado?: string) => void
+  procesarInformeMonitor: (
+    informeId: string,
+    nuevoEstado: 'observado' | 'aprobado_y_firmado',
+    feedback: string,
+    archivoFirmado?: string,
+    nombreArchivoFirmado?: string,
+    tipoMimeFirmado?: string
+  ) => void
+  archivarInformeQuincenal: (informeId: string, archivado?: boolean) => void
+  eliminarInformeQuincenal: (informeId: string) => void
 
   // ── Postulaciones (RF-13) ─────────────────────────────────────────
   postulaciones: Postulante[]
@@ -270,7 +287,6 @@ export const useAppStore = create<AppState>()(
         let carrera = carreras.find(c => c.id === carreraId || c.nombre === carreraId);
 
         // 1.5. Fallback defensivo para Zustand Persist (Si el caché tiene la interfaz antigua sin asignaciones)
-        // 1.5. Fallback defensivo con tipado estricto (sin any)
         if (carrera && !carrera.asignaciones) {
           const carrerasDefault = get().carreras || [];
           carrera = carrerasDefault.find((c: Carrera) => c.id === carreraId || c.nombre === carreraId);
@@ -278,19 +294,19 @@ export const useAppStore = create<AppState>()(
 
         if (!carrera || !carrera.asignaciones) return undefined;
 
-        // 2. Normalizar el semestre entrante ('VI Semestre' -> 'S6')
+        // 2. Normalizar el semestre entrante ('VI Semestre', 'S6', '6' -> 'S6')
         const normalizeSemestre = (s: string) => {
-          if (!s) return '';
-          const upper = s.toUpperCase();
-          if (upper.includes('IV ') || upper === 'S4') return 'S4';
-          if (upper.includes('VI ') || upper === 'S6') return 'S6';
-          if (upper.includes('V ') || upper === 'S5') return 'S5';
-          return s; // Fallback
+          if (!s) return 'S4';
+          const upper = s.toUpperCase().trim();
+          if (upper.includes('VI') || upper === 'S6' || upper === '6') return 'S6';
+          if (upper.includes('IV') || upper === 'S4' || upper === '4') return 'S4';
+          if (upper.includes('V') || upper === 'S5' || upper === '5') return 'S5';
+          return upper;
         };
         const semNormalizado = normalizeSemestre(semestre);
 
         // 3. Encontrar la asignación que incluya este semestre normalizado
-        const asignacion = carrera.asignaciones.find(a => a.semestres.includes(semNormalizado));
+        const asignacion = carrera.asignaciones.find(a => a.semestres && a.semestres.includes(semNormalizado));
         if (!asignacion) return undefined;
 
         // 4. Devolver el especialista
@@ -1029,14 +1045,17 @@ export const useAppStore = create<AppState>()(
       ],
       enviarInformeQuincenal: (payload) => {
         set((state) => {
-          const nuevoInforme = {
+          const nuevoInforme: import('../types').InformeQuincenal = {
             id: `inf-${Date.now()}`,
-            practicanteId: state.usuarioActual?.id || 'p1',
+            practicanteId: payload.practicanteId || state.usuarioActual?.id || 'p1',
             fechaInicio: payload.fechaInicio,
             fechaFin: payload.fechaFin,
             archivoPracticanteBase64: payload.archivoPracticanteBase64,
+            nombreArchivo: payload.nombreArchivo || 'documento_senati.pdf',
+            tipoMime: payload.tipoMime || 'application/pdf',
             mensajePracticante: payload.mensajePracticante || '',
-            estado: 'en_revision' as const,
+            estado: 'en_revision',
+            archivado: false,
           };
           return { informesQuincenales: [nuevoInforme, ...state.informesQuincenales] };
         })
@@ -1050,7 +1069,7 @@ export const useAppStore = create<AppState>()(
           )
         }))
       },
-      procesarInformeMonitor: (informeId, nuevoEstado, feedback, archivoFirmado) => {
+      procesarInformeMonitor: (informeId, nuevoEstado, feedback, archivoFirmado, nombreArchivoFirmado, tipoMimeFirmado) => {
         set((state) => ({
           informesQuincenales: state.informesQuincenales.map(inf =>
             inf.id === informeId
@@ -1058,10 +1077,24 @@ export const useAppStore = create<AppState>()(
                 ...inf,
                 estado: nuevoEstado,
                 feedbackMonitor: feedback,
-                archivoFirmadoBase64: archivoFirmado
+                archivoFirmadoBase64: archivoFirmado ? archivoFirmado : undefined,
+                nombreArchivoFirmado: archivoFirmado ? (nombreArchivoFirmado || 'documento_firmado.pdf') : undefined,
+                tipoMimeFirmado: archivoFirmado ? (tipoMimeFirmado || 'application/pdf') : undefined,
               }
               : inf
           )
+        }))
+      },
+      archivarInformeQuincenal: (informeId, archivado = true) => {
+        set((state) => ({
+          informesQuincenales: state.informesQuincenales.map(inf =>
+            inf.id === informeId ? { ...inf, archivado } : inf
+          )
+        }))
+      },
+      eliminarInformeQuincenal: (informeId) => {
+        set((state) => ({
+          informesQuincenales: state.informesQuincenales.filter(inf => inf.id !== informeId)
         }))
       },
 
@@ -1420,8 +1453,31 @@ export const useAppStore = create<AppState>()(
     {
       name: 'macromec-v2-storage',
       merge: (persistedState: any, currentState) => {
+        // Limpiar informes observados que hayan heredado documento
+        if (persistedState?.informesQuincenales && Array.isArray(persistedState.informesQuincenales)) {
+          persistedState.informesQuincenales = persistedState.informesQuincenales.map((inf: any) => {
+            if (inf.estado === 'observado' && inf.archivoFirmadoBase64 === inf.archivoPracticanteBase64) {
+              return { ...inf, archivoFirmadoBase64: undefined, nombreArchivoFirmado: undefined, tipoMimeFirmado: undefined };
+            }
+            return inf;
+          });
+        }
         if (persistedState?.carreras?.length === 3) {
           persistedState.carreras = MOCK_CARRERAS;
+        }
+        // Asegurar que las carreras tengan la propiedad 'peas'
+        if (persistedState?.carreras && Array.isArray(persistedState.carreras)) {
+          persistedState.carreras = persistedState.carreras.map((c: any) => {
+            if (!c.peas || c.peas.length === 0) {
+              const mock = MOCK_CARRERAS.find(mc => mc.id === c.id);
+              if (mock?.peas) {
+                c.peas = mock.peas;
+              } else if (c.peaArchivos) {
+                c.peas = c.peaArchivos;
+              }
+            }
+            return c;
+          });
         }
         // Limpiar cache si especialistas tiene el formato antiguo (propiedad 'nombre' en vez de 'nombres')
         if (persistedState?.especialistas && persistedState.especialistas.length > 0 && 'nombre' in persistedState.especialistas[0]) {

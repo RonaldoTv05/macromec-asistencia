@@ -1,8 +1,23 @@
-import React, { useState, useMemo } from 'react'
-import { FileText, CheckCircle2, X, Clock, Check, XCircle, Download, ChevronDown, ChevronUp, Upload } from 'lucide-react'
+import React, { useState } from 'react'
+import {
+  FileText,
+  CheckCircle2,
+  X,
+  Clock,
+  Check,
+  XCircle,
+  Download,
+  Upload,
+  Archive,
+  Trash2,
+  RotateCcw
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
+import { descargarArchivoBase64 } from '../utils/fileUtils'
 import type { Monitor } from '../types';
+import ModalRevisarInforme from '../components/ModalRevisarInforme';
+import ModalConfirmacion from '../components/ModalConfirmacion';
 
 export default function ReportesScreen() {
   const rolActivo = useAppStore((s) => s.rolActivo)
@@ -13,65 +28,45 @@ export default function ReportesScreen() {
   // SUPERVISOR
   const informes = useAppStore((s) => s.informesQuincenales)
   const procesarInformeMonitor = useAppStore((s) => s.procesarInformeMonitor)
+  const archivarInformeQuincenal = useAppStore((s) => s.archivarInformeQuincenal)
+  const eliminarInformeQuincenal = useAppStore((s) => s.eliminarInformeQuincenal)
   const usuarioActual = useAppStore((s) => s.usuarioActual)
+
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalBovedaOpen, setModalBovedaOpen] = useState(false)
+  const [informeAEliminar, setInformeAEliminar] = useState<string | null>(null)
   const [selectedInforme, setSelectedInforme] = useState<typeof informes[0] | null>(null)
-  const [feedback, setFeedback] = useState('')
-  const [archivoFirmado, setArchivoFirmado] = useState<string | undefined>(undefined)
 
 
   // ── Lógica Supervisor ──
   const pendientesSupervisor = informes.filter((informe) => {
+    if (informe.archivado) return false;
     if (informe.estado !== 'en_revision') return false;
     const practicante = practicantes.find(p => p.id === informe.practicanteId);
     return practicante?.monitorId === usuarioActual?.id;
-  })
+  });
 
   const revisadosSupervisor = informes.filter((informe) => {
-    // Solo queremos los que YA pasaron revisión ('observado' o 'aprobado_y_firmado')
+    if (informe.archivado) return false;
     if (informe.estado === 'en_revision') return false;
+    const practicante = practicantes.find(p => p.id === informe.practicanteId);
+    return practicante?.monitorId === usuarioActual?.id;
+  });
 
-    // Filtro relacional estricto (solo mis practicantes)
+  const archivadosSupervisor = informes.filter((informe) => {
+    if (!informe.archivado) return false;
     const practicante = practicantes.find(p => p.id === informe.practicanteId);
     return practicante?.monitorId === usuarioActual?.id;
   });
 
   const handleOpenModal = (informe: typeof informes[0]) => {
     setSelectedInforme(informe)
-    setFeedback('')
-    setArchivoFirmado(undefined)
     setModalOpen(true)
   }
 
-  const handleDevolver = () => {
-    if (!selectedInforme) return
-    if (!feedback.trim()) {
-      toast.error('Debes ingresar un feedback para devolver el informe')
-      return
-    }
-    procesarInformeMonitor(selectedInforme.id, 'observado', feedback)
-    toast.success('Informe devuelto con observaciones')
+  const handleCloseModal = () => {
     setModalOpen(false)
     setSelectedInforme(null)
-  }
-
-  const handleAprobarYSubir = () => {
-    if (!selectedInforme) return
-    if (!archivoFirmado) {
-      toast.error('Debes subir el informe firmado para aprobarlo')
-      return
-    }
-    procesarInformeMonitor(selectedInforme.id, 'aprobado_y_firmado', feedback, archivoFirmado)
-    toast.success('Informe aprobado y firmado exitosamente')
-    setModalOpen(false)
-    setSelectedInforme(null)
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setArchivoFirmado(e.target.files[0].name) // Simulamos base64 guardando el nombre
-      toast.success(`Archivo adjuntado: ${e.target.files[0].name}`)
-    }
   }
 
   const renderTarjetaSupervisor = (informe: typeof informes[0]) => {
@@ -99,27 +94,56 @@ export default function ReportesScreen() {
     return (
       <div
         key={informe.id}
-        className={`bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4 ${isRevisado ? 'opacity-60 grayscale' : ''}`}
+        className={`bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4 ${isRevisado ? 'bg-slate-50/70 border-slate-200' : ''}`}
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-[14px] font-bold uppercase shrink-0">
             {iniciales}
           </div>
-          <div className="flex-1">
-            <div className="font-bold text-[15px] text-slate-800">
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-[15px] text-slate-800 truncate">
               {nombreCompleto}
             </div>
             <div className="text-[12px] text-slate-500 font-medium capitalize mt-0.5">
               Periodo: {iniStr} - {finStr}
             </div>
           </div>
+          {isRevisado && (
+            <span
+              className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${informe.estado === 'aprobado_y_firmado'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+                }`}
+            >
+              {informe.estado === 'aprobado_y_firmado' ? 'Firmado' : 'Observado'}
+            </span>
+          )}
         </div>
 
-        <div className="bg-slate-50 rounded-xl p-3 mt-3 border border-slate-100 flex items-center gap-2">
-          <FileText size={18} className="text-blue-500 shrink-0" />
-          <span className="text-[13px] font-medium text-slate-700 truncate">
-            {informe.archivoPracticanteBase64 || 'Documento adjunto de SENATI'}
-          </span>
+        <div className="bg-slate-50 rounded-xl p-3 mt-3 border border-slate-100 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <FileText size={18} className="text-blue-500 shrink-0" />
+            <span className="text-[13px] font-medium text-slate-700 truncate">
+              {informe.nombreArchivo || (informe.archivoPracticanteBase64?.startsWith('data:') ? 'Documento adjunto de SENATI' : informe.archivoPracticanteBase64) || 'Documento adjunto de SENATI'}
+            </span>
+          </div>
+          {informe.archivoPracticanteBase64 && (
+            <button
+              type="button"
+              onClick={() => {
+                descargarArchivoBase64(
+                  informe.archivoPracticanteBase64!,
+                  informe.nombreArchivo || `SENATI_${informe.id}.pdf`,
+                  informe.tipoMime
+                );
+                toast.success('Descargando documento de SENATI...');
+              }}
+              title="Descargar documento de SENATI"
+              className="p-1.5 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded-lg shrink-0 cursor-pointer shadow-xs transition-colors"
+            >
+              <Download size={14} />
+            </button>
+          )}
         </div>
 
         {informe.mensajePracticante && (
@@ -136,9 +160,53 @@ export default function ReportesScreen() {
             Revisar Informe
           </button>
         )}
-        {isRevisado && informe.feedbackMonitor && (
-          <div className="bg-emerald-50 text-emerald-800 text-[11px] p-2 rounded-lg font-medium border border-emerald-100 mt-3">
-            <span className="font-bold">Tu feedback:</span> {informe.feedbackMonitor}
+
+        {isRevisado && (
+          <div className="mt-3 flex flex-col gap-2">
+            {informe.feedbackMonitor && (
+              <div className="bg-emerald-50 text-emerald-800 text-[11px] p-2.5 rounded-lg font-medium border border-emerald-100">
+                <span className="font-bold">Tu feedback:</span> {informe.feedbackMonitor}
+              </div>
+            )}
+
+            {/* Documento de respuesta / firmado del supervisor */}
+            {informe.archivoFirmadoBase64 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  descargarArchivoBase64(
+                    informe.archivoFirmadoBase64!,
+                    informe.nombreArchivoFirmado || (informe.estado === 'aprobado_y_firmado' ? `Firmado_${informe.id}.pdf` : `Observacion_${informe.id}.pdf`),
+                    informe.tipoMimeFirmado
+                  );
+                  toast.success('Descargando documento...');
+                }}
+                className={`w-full py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs border ${
+                  informe.estado === 'aprobado_y_firmado'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                    : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                }`}
+              >
+                <Download size={13} /> {informe.estado === 'aprobado_y_firmado' ? 'Descargar Doc Firmado' : 'Descargar Doc Observación'}
+              </button>
+            ) : (
+              <div className="w-full py-2 px-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 text-[11px] font-semibold flex items-center justify-center text-center">
+                No se adjuntó documento
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  archivarInformeQuincenal(informe.id, true);
+                  toast.success('Informe archivado correctamente');
+                }}
+                className="inline-flex items-center gap-1.5 text-[12px] font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg border-none cursor-pointer transition-colors"
+              >
+                <Archive size={14} /> Archivar informe
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -229,6 +297,20 @@ export default function ReportesScreen() {
   if (rolActivo === 'SUPERVISOR') {
     return (
       <div className="flex flex-col gap-3">
+        {/* Cabecera Supervisor con acceso a la Bóveda */}
+        <div className="flex items-center justify-between px-1">
+          <div className="text-[13px] font-semibold text-slate-600">
+            Panel de Informes Quincenales
+          </div>
+          <button
+            type="button"
+            onClick={() => setModalBovedaOpen(true)}
+            className="inline-flex items-center gap-1.5 text-[12px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+          >
+            <Archive size={14} /> Bóveda / Archivados ({archivadosSupervisor.length})
+          </button>
+        </div>
+
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
           <div className="font-bold text-[14px] text-slate-900 mb-3 flex items-center gap-2">
             📑 Informes pendientes de revisión ({pendientesSupervisor.length})
@@ -245,95 +327,184 @@ export default function ReportesScreen() {
 
         {revisadosSupervisor.length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm mt-2">
-            <div className="font-bold text-[14px] text-slate-500 mb-3 flex items-center gap-2">
+            <div className="font-bold text-[14px] text-slate-700 mb-3 flex items-center gap-2">
               ✅ Informes revisados ({revisadosSupervisor.length})
             </div>
             {revisadosSupervisor.map(renderTarjetaSupervisor)}
           </div>
         )}
 
-        {/* Modal */}
-        {modalOpen && selectedInforme && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-5 w-full max-w-md shadow-2xl relative flex flex-col max-h-[90vh]">
-              <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
-                <h3 className="m-0 text-[18px] font-bold text-slate-900">Revisar Informe</h3>
+        {/* Modal de Bóveda / Documentos Archivados (Supervisor) */}
+        {modalBovedaOpen && (
+          <div className="fixed inset-0 z-[100] bg-slate-900/75 backdrop-blur-xs flex items-end justify-center animate-in fade-in duration-200">
+            <div className="absolute inset-0" onClick={() => setModalBovedaOpen(false)} />
+            <div className="w-full max-w-[430px] mx-auto bg-white rounded-t-[24px] overflow-hidden relative flex flex-col animate-in slide-in-from-bottom-full duration-300 max-h-[85vh] h-[85vh] shadow-2xl">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <Archive size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-[16px] font-bold text-slate-800 m-0 leading-tight">Bóveda de Archivados</h3>
+                    <span className="text-[11px] text-slate-400 font-medium">Informes finalizados o archivados</span>
+                  </div>
+                </div>
                 <button
-                  onClick={() => setModalOpen(false)}
-                  className="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center border-none text-slate-500 cursor-pointer hover:bg-slate-200"
+                  type="button"
+                  onClick={() => setModalBovedaOpen(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border-none cursor-pointer active:bg-slate-200"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="overflow-y-auto pr-1 flex flex-col gap-4">
-                <div>
-                  <div className="flex flex-col gap-1 mb-3">
-                    <span className="text-[13px] font-bold text-slate-700">Periodo evaluado:</span>
-                    <span className="text-[13px] text-slate-600 capitalize bg-slate-50 p-2 rounded-lg border border-slate-100">
-                      {new Intl.DateTimeFormat('es-PE', { day: 'numeric', month: 'short' }).format(new Date(selectedInforme.fechaInicio.split('-').map(Number) as any))} - {new Intl.DateTimeFormat('es-PE', { day: 'numeric', month: 'short' }).format(new Date(selectedInforme.fechaFin.split('-').map(Number) as any))}
-                    </span>
+              <div className="p-4 flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pb-12">
+                {archivadosSupervisor.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-[13px]">
+                    <Archive size={36} className="mx-auto mb-2 text-slate-300" />
+                    No hay informes archivados en la bóveda
                   </div>
+                ) : (
+                  archivadosSupervisor.map((inf) => {
+                    const pract = practicantes.find((p) => p.id === inf.practicanteId);
+                    const nombreCompleto = pract ? `${pract.nombre} ${pract.apellido}` : 'Practicante';
 
-                  {selectedInforme.mensajePracticante && (
-                    <div className="mb-4">
-                      <span className="text-[13px] font-bold text-slate-700 block mb-1">Nota del alumno:</span>
-                      <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-[13px] text-slate-700 italic">
-                        "{selectedInforme.mensajePracticante}"
+                    const formateador = new Intl.DateTimeFormat('es-PE', { day: 'numeric', month: 'short' });
+                    const iniStr = inf.fechaInicio
+                      ? (() => {
+                        const [y, m, d] = inf.fechaInicio.split('-').map(Number);
+                        return formateador.format(new Date(y, m - 1, d));
+                      })()
+                      : '';
+                    const finStr = inf.fechaFin
+                      ? (() => {
+                        const [y, m, d] = inf.fechaFin.split('-').map(Number);
+                        return formateador.format(new Date(y, m - 1, d));
+                      })()
+                      : '';
+
+                    return (
+                      <div
+                        key={inf.id}
+                        className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col gap-2.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-bold text-[14px] text-slate-800">
+                              {nombreCompleto}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-medium">
+                              Periodo: {iniStr} - {finStr}
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              inf.estado === 'aprobado_y_firmado'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {inf.estado === 'aprobado_y_firmado' ? 'Firmado' : 'Observado'}
+                          </span>
+                        </div>
+
+                        {/* Botones de Descarga */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          {inf.archivoPracticanteBase64 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                descargarArchivoBase64(
+                                  inf.archivoPracticanteBase64!,
+                                  inf.nombreArchivo || `SENATI_${inf.id}.pdf`,
+                                  inf.tipoMime
+                                );
+                                toast.success('Descargando doc SENATI...');
+                              }}
+                              className="py-2 px-2.5 bg-white border border-slate-200 rounded-xl text-blue-700 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:bg-blue-50 transition-colors shadow-xs"
+                            >
+                              <Download size={13} /> Doc SENATI
+                            </button>
+                          ) : (
+                            <div className="text-[11px] text-slate-400 text-center py-1">Sin doc SENATI</div>
+                          )}
+
+                          {inf.archivoFirmadoBase64 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                descargarArchivoBase64(
+                                  inf.archivoFirmadoBase64!,
+                                  inf.nombreArchivoFirmado || `Firmado_${inf.id}.pdf`,
+                                  inf.tipoMimeFirmado
+                                );
+                                toast.success('Descargando doc FIRMADO...');
+                              }}
+                              className="py-2 px-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:bg-emerald-100 transition-colors shadow-xs"
+                            >
+                              <Download size={13} /> Doc Firmado
+                            </button>
+                          ) : (
+                            <div className="py-2 px-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 text-[11px] font-semibold flex items-center justify-center text-center">No se adjuntó documento</div>
+                          )}
+                        </div>
+
+                        {/* Acciones Restaurar y Eliminar */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              archivarInformeQuincenal(inf.id, false);
+                              toast.success('Informe restaurado al listado principal');
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-transparent border-none cursor-pointer"
+                          >
+                            <RotateCcw size={12} /> Restaurar
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInformeAEliminar(inf.id);
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-transparent border-none cursor-pointer"
+                          >
+                            <Trash2 size={12} /> Eliminar definitivamente
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => toast.success('Descargando archivo adjunto...')}
-                    className="w-full py-3.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl flex items-center justify-center gap-2 text-[14px] font-bold cursor-pointer hover:bg-blue-100 transition-colors mb-1 shadow-sm"
-                  >
-                    <Download size={18} /> Descargar documento de SENATI
-                  </button>
-                  <div className="text-center text-[11px] text-slate-500 mb-4 font-medium">
-                    Adjunto: {selectedInforme.archivoPracticanteBase64}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[13px] font-bold text-slate-700 block mb-1">Feedback / Observaciones <span className="font-normal text-slate-500">(Opcional si se aprueba)</span></label>
-                  <textarea
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="Escribe aquí las observaciones o felicitaciones..."
-                    className="w-full h-24 p-3 border border-slate-200 rounded-xl resize-none text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[13px] font-bold text-slate-700 block mb-1">Subir documento FIRMADO (RF-59) <span className="text-red-500">*</span></label>
-                  <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-blue-400 transition-colors bg-white">
-                    <Upload size={24} className="text-slate-400 mb-2" />
-                    <span className="text-[13px] font-medium text-slate-600 text-center">
-                      {archivoFirmado ? archivoFirmado : "Toca para subir el documento PDF/IMG firmado"}
-                    </span>
-                    <input type="file" className="hidden" accept="application/pdf,image/*" onChange={handleFileChange} />
-                  </label>
-                </div>
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col gap-3">
-                <button
-                  onClick={handleDevolver}
-                  className="w-full py-3 rounded-xl border-none bg-red-600 text-white font-bold text-[14px] cursor-pointer hover:bg-red-700 shadow-md transition-colors"
-                >
-                  Observar
-                </button>
-                <button
-                  onClick={handleAprobarYSubir}
-                  className="w-full py-3 rounded-xl border-none bg-emerald-600 text-white font-bold text-[14px] cursor-pointer hover:bg-emerald-700 shadow-md transition-colors"
-                >
-                  Aprobar y Firmar
-                </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
         )}
+
+        {/* Modal de Confirmación para Eliminar Definitivamente (Supervisor) */}
+        <ModalConfirmacion
+          isOpen={!!informeAEliminar}
+          onClose={() => setInformeAEliminar(null)}
+          onConfirm={() => {
+            if (informeAEliminar) {
+              eliminarInformeQuincenal(informeAEliminar);
+              toast.success('Informe eliminado definitivamente');
+              setInformeAEliminar(null);
+            }
+          }}
+          titulo="¿Eliminar definitivamente?"
+          mensaje="Esta acción eliminará el informe y sus documentos asociados de forma permanente."
+          textoConfirmar="Eliminar definitivamente"
+          tipo="peligro"
+        />
+
+        {/* Modal Revisar Informe */}
+        <ModalRevisarInforme
+          isOpen={modalOpen}
+          onClose={handleCloseModal}
+          informe={selectedInforme}
+          onProcesar={procesarInformeMonitor}
+        />
       </div>
     )
   }

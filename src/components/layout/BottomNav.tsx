@@ -55,7 +55,7 @@ export default function BottomNav() {
     <nav
       role="navigation"
       aria-label="Navegación principal"
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 bg-white/95 backdrop-blur-[16px] border-t border-slate-200/80 flex items-center justify-around pt-2 pb-[max(28px,env(safe-area-inset-bottom))]"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-30 bg-white/95 backdrop-blur-[16px] border-t border-slate-200/80 flex items-center justify-around pt-2 pb-[max(28px,env(safe-area-inset-bottom))]"
     >
       {tabs.map(({ key, label, Icon }) => {
         const isActive = tabActiva === key

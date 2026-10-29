@@ -212,10 +212,15 @@ export interface InformeQuincenal {
   fechaInicio: string; // ISO YYYY-MM-DD
   fechaFin: string; // ISO YYYY-MM-DD
   archivoPracticanteBase64: string;
+  nombreArchivo?: string;
+  tipoMime?: string;
   mensajePracticante?: string;
   estado: 'en_revision' | 'observado' | 'aprobado_y_firmado';
   feedbackMonitor?: string;
-  archivoFirmadoBase64?: string; // Para simular la subida del PDF/IMG
+  archivoFirmadoBase64?: string;
+  nombreArchivoFirmado?: string;
+  tipoMimeFirmado?: string;
+  archivado?: boolean;
 }
 
 // ── Usuario autenticado del sistema ──────────────────────────
@@ -266,6 +271,8 @@ export interface MacromecConfig {
 export interface ArchivoPea {
   id?: string;
   nombre: string;
+  base64?: string;
+  tipoMime?: string;
   url?: string;
   fechaSubida?: string;
 }
@@ -296,9 +303,10 @@ export interface AsignacionCarreraEspecialista {
 export interface Carrera {
   id: string;
   nombre: string;
-  asignaciones?: AsignacionCarreraEspecialista[]; // Relación TypeORM
-  peasPorSemestre?: PeasPorSemestre;              // PEAs por semestre a nivel de carrera
-  peaArchivos?: string[];                         // Lista general de PEAs sin límite
+  asignaciones?: AsignacionCarreraEspecialista[]; // Relación TypeORM (Múltiples especialistas por carrera con semestres)
+  peas?: (string | ArchivoPea)[];                 // Plan de Aprendizaje (PEA) vinculado directamente a la Carrera
+  peasPorSemestre?: PeasPorSemestre;              // Legacy / Compatibilidad
+  peaArchivos?: string[];                         // Legacy / Compatibilidad
 }
 
 export interface Monitor {

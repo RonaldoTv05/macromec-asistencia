@@ -1,3 +1,4 @@
+import { SAMPLE_PEA_PDF_BASE64 } from '../utils/fileUtils';
 import type {
   CodigoHoja,
   DiaHorario,
@@ -400,101 +401,122 @@ export const MOCK_MONITORES: import('../types').Monitor[] = monitoresData as imp
 
 export const MOCK_CARRERAS: Carrera[] = [
   {
-    id: 'c1', nombre: 'Diseño Gráfico Digital',
-    asignaciones: [{ id: 'a1', carreraId: 'c1', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c1',
+    nombre: 'Diseño Gráfico Digital',
+    peas: [
+      { id: 'pea-c1', nombre: 'PEA-Diseno-Grafico-Digital.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a1', carreraId: 'c1', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c2', nombre: 'Ing. Ciberseguridad',
-    asignaciones: [{ id: 'a2', carreraId: 'c2', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c2',
+    nombre: 'Ing. Ciberseguridad',
+    peas: [
+      { id: 'pea-c2', nombre: 'PEA-Ing-Ciberseguridad.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a2', carreraId: 'c2', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c3', nombre: 'Ing. Software con IA',
+    id: 'c3',
+    nombre: 'Ing. Software con IA',
+    peas: [
+      { id: 'pea-c3-1', nombre: 'PEA-PIAD-202310 - S4 (1).pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' },
+      { id: 'pea-c3-2', nombre: 'PEA-Ing-Software-IA.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
     asignaciones: [{
       id: 'a3',
       carreraId: 'c3',
       especialistaId: 'esp-1',
-      semestres: ['S4', 'S5', 'S6'],
-      peaArchivo: 'PEA-PIAD-202310 - S4 (1).pdf',
-      peasPorSemestre: {
-        S4: ['PEA-PIAD-202310 - S4 (1).pdf'],
-        S5: [],
-        S6: []
-      }
-    }],
-    peasPorSemestre: {
-      S4: ['PEA-PIAD-202310 - S4 (1).pdf'],
-      S5: [],
-      S6: []
-    }
+      semestres: ['S4', 'S5', 'S6']
+    }]
   },
   {
-    id: 'c4', nombre: 'Mecánico de Mantenimiento',
-    asignaciones: [{ id: 'a4', carreraId: 'c4', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c4',
+    nombre: 'Mecánico de Mantenimiento',
+    peas: [
+      { id: 'pea-c4', nombre: 'PEA-Mecanico-Mantenimiento.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a4', carreraId: 'c4', especialistaId: 'esp-1', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c5', nombre: 'Mecatrónica Automotriz',
+    id: 'c5',
+    nombre: 'Mecatrónica Automotriz',
+    peas: [
+      { id: 'pea-c5', nombre: 'PEA-Mecatronica-Automotriz.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
     asignaciones: [
-      { id: 'a5-1', carreraId: 'c5', especialistaId: 'esp-2', semestres: ['S5'], peaArchivo: null },
-      { id: 'a5-2', carreraId: 'c5', especialistaId: 'esp-3', semestres: ['S4', 'S6'], peaArchivo: null }
+      { id: 'a5-1', carreraId: 'c5', especialistaId: 'esp-2', semestres: ['S5'] },
+      { id: 'a5-2', carreraId: 'c5', especialistaId: 'esp-3', semestres: ['S4', 'S6'] }
     ]
   },
   {
-    id: 'c6', nombre: 'Electricidad Industrial',
+    id: 'c6',
+    nombre: 'Electricidad Industrial',
+    peas: [
+      { id: 'pea-c6', nombre: 'PEA-Electricidad-Industrial.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
     asignaciones: [
       {
         id: 'a6-1',
         carreraId: 'c6',
         especialistaId: 'esp-4',
-        semestres: ['S4', 'S5'],
-        peaArchivo: 'PEA-Electricidad-Industrial-S4.pdf',
-        peasPorSemestre: {
-          S4: ['PEA-Electricidad-Industrial-S4.pdf'],
-          S5: ['PEA-Electricidad-Industrial-S5.pdf'],
-          S6: []
-        }
+        semestres: ['S4', 'S5']
       },
       {
         id: 'a6-2',
         carreraId: 'c6',
         especialistaId: 'esp-2',
-        semestres: ['S6'],
-        peaArchivo: 'PEA-Electricidad-Industrial-S6.pdf',
-        peasPorSemestre: {
-          S4: [],
-          S5: [],
-          S6: ['PEA-Electricidad-Industrial-S6.pdf']
-        }
+        semestres: ['S6']
       }
+    ]
+  },
+  {
+    id: 'c7',
+    nombre: 'Administración de Empresas',
+    peas: [
+      { id: 'pea-c7', nombre: 'PEA-Administracion-Empresas.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
     ],
-    peasPorSemestre: {
-      S4: ['PEA-Electricidad-Industrial-S4.pdf'],
-      S5: ['PEA-Electricidad-Industrial-S5.pdf'],
-      S6: ['PEA-Electricidad-Industrial-S6.pdf']
-    }
+    asignaciones: [{ id: 'a7', carreraId: 'c7', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c7', nombre: 'Administración de Empresas',
-    asignaciones: [{ id: 'a7', carreraId: 'c7', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c8',
+    nombre: 'Administración Industrial',
+    peas: [
+      { id: 'pea-c8', nombre: 'PEA-Administracion-Industrial.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a8', carreraId: 'c8', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c8', nombre: 'Administración Industrial',
-    asignaciones: [{ id: 'a8', carreraId: 'c8', especialistaId: 'esp-4', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c9',
+    nombre: 'Seguridad Industrial y Prevención de Riesgo',
+    peas: [
+      { id: 'pea-c9', nombre: 'PEA-Seguridad-Industrial.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a9', carreraId: 'c9', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c9', nombre: 'Seguridad Industrial y Prevención de Riesgo',
-    asignaciones: [{ id: 'a9', carreraId: 'c9', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c10',
+    nombre: 'Administración de Negocios Internacionales',
+    peas: [
+      { id: 'pea-c10', nombre: 'PEA-Negocios-Internacionales.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a10', carreraId: 'c10', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c10', nombre: 'Administración de Negocios Internacionales',
-    asignaciones: [{ id: 'a10', carreraId: 'c10', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c11',
+    nombre: 'Mecánico Automotriz',
+    peas: [
+      { id: 'pea-c11', nombre: 'PEA-Mecanico-Automotriz.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a11', carreraId: 'c11', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'] }]
   },
   {
-    id: 'c11', nombre: 'Mecánico Automotriz',
-    asignaciones: [{ id: 'a11', carreraId: 'c11', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
-  },
-  {
-    id: 'c12', nombre: 'Campus Virtual',
-    asignaciones: [{ id: 'a12', carreraId: 'c12', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'], peaArchivo: null }]
+    id: 'c12',
+    nombre: 'Campus Virtual',
+    peas: [
+      { id: 'pea-c12', nombre: 'PEA-Campus-Virtual.pdf', base64: SAMPLE_PEA_PDF_BASE64, tipoMime: 'application/pdf', fechaSubida: '2026-03-01' }
+    ],
+    asignaciones: [{ id: 'a12', carreraId: 'c12', especialistaId: 'esp-5', semestres: ['S4', 'S5', 'S6'] }]
   }
 ];
 
