@@ -1,5 +1,6 @@
+import { sumarDosMeses } from '../../utils/dateUtils';
 import { useState, useEffect, useMemo } from 'react'
-import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone, Download, Check, ChevronDown, ChevronUp, Rocket, AlertCircle, GraduationCap } from 'lucide-react'
+import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone, Download, Check, ChevronDown, ChevronUp, Rocket, AlertCircle, GraduationCap, Copy } from 'lucide-react'
 import type { Especialista } from '../../types'
 import { useAppStore, enviarCredencialesWhatsApp } from '../../store/useAppStore'
 import ModalConfirmacion from '../ModalConfirmacion'
@@ -834,6 +835,7 @@ function SeccionSemestres() {
   const monitores = useAppStore(s => s.monitores || [])
   const especialistas = useAppStore(s => s.especialistas || [])
   const semestres = useAppStore(s => s.semestres)
+  const postulaciones = useAppStore(s => s.postulaciones || [])
   const updateSemestreCalendario = useAppStore(s => s.updateSemestreCalendario)
   const agregarFeriado = useAppStore(s => s.agregarFeriado)
   const eliminarFeriado = useAppStore(s => s.eliminarFeriado)
@@ -949,14 +951,67 @@ function SeccionSemestres() {
   const activoSem = semestres[0]
   const [fInicioPost, setFInicioPost] = useState(activoSem?.fechaInicioPostulacion ?? '')
   const [fFinPost, setFFinPost] = useState(activoSem?.fechaFinPostulacion ?? '')
-  const [fInicioConv, setFInicioConv] = useState(activoSem?.fechaInicioConvenio ?? '')
-  const [fFinConv, setFFinConv] = useState(activoSem?.fechaFinConvenio ?? '')
-  const [fInicioPrac, setFInicioPrac] = useState(activoSem?.fechaInicioPracticas ?? '')
-  const [fFinPrac, setFFinPrac] = useState(activoSem?.fechaFinPracticas ?? '')
+  const fInicioConv = periodoActivo.fechaInicio || '2026-08-03'
+  const [fFinConv, setFFinConv] = useState(() => {
+    return periodoActivo.fechaFinConvenio || activoSem?.fechaFinConvenio || sumarDosMeses(periodoActivo.fechaInicio) || '2026-10-03'
+  })
   const [linkPost, setLinkPost] = useState(activoSem?.linkPostulacion ?? '')
+  const [forzarCierre, setForzarCierre] = useState(activoSem?.forzarCierrePostulacion ?? false)
+  const [limitePostulantes, setLimitePostulantes] = useState<number>(activoSem?.limitePostulantes ?? 0)
+  const [copiado, setCopiado] = useState(false)
 
   const [nuevoFeriadoFecha, setNuevoFeriadoFecha] = useState('')
   const [nuevoFeriadoMotivo, setNuevoFeriadoMotivo] = useState('')
+  const listaFeriados = periodoActivo.feriados || activoSem?.feriados || []
+
+  useEffect(() => {
+    if (activoSem) {
+      setForzarCierre(activoSem.forzarCierrePostulacion ?? false)
+      setLimitePostulantes(activoSem.limitePostulantes ?? 0)
+    }
+    if (periodoActivo) {
+      const finConvenio = periodoActivo.fechaFinConvenio || activoSem?.fechaFinConvenio || sumarDosMeses(periodoActivo.fechaInicio)
+      if (finConvenio) setFFinConv(finConvenio)
+    }
+  }, [activoSem?.forzarCierrePostulacion, activoSem?.limitePostulantes, periodoActivo.id, periodoActivo.fechaInicio, periodoActivo.fechaFinConvenio])
+
+  const enlacePostulacion = useMemo(() => {
+    if (typeof window === 'undefined') return 'http://localhost:5173/#/postula'
+    return `${window.location.origin}/#/postula`
+  }, [])
+
+  const hoyFechaStr = new Date().toISOString().split('T')[0]
+  const fueraDeFecha = (fInicioPost && hoyFechaStr < fInicioPost) || (fFinPost && hoyFechaStr > fFinPost)
+  const limiteAlcanzado = limitePostulantes > 0 && postulaciones.length >= limitePostulantes
+  const isPostulacionAbierta = !forzarCierre && !fueraDeFecha && !limiteAlcanzado
+
+  const handleCopiarEnlace = () => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(enlacePostulacion)
+      setCopiado(true)
+      toast.success('Enlace de postulación copiado al portapapeles')
+      setTimeout(() => setCopiado(false), 2000)
+    } else {
+      toast.error('No se pudo copiar el enlace')
+    }
+  }
+
+  const handleToggleForzarCierre = (val: boolean) => {
+    setForzarCierre(val)
+    updateSemestreCalendario({ forzarCierrePostulacion: val })
+    if (val) {
+      toast.warning('Convocatoria forzada a CERRADO')
+    } else {
+      toast.success('Cierre forzado desactivado')
+    }
+  }
+
+  const handleCambiarLimite = (val: number) => {
+    const num = Math.max(0, val)
+    setLimitePostulantes(num)
+    updateSemestreCalendario({ limitePostulantes: num })
+  }
+
 
   const handleGuardarCalendario = () => {
     updateSemestreCalendario({
@@ -964,9 +1019,9 @@ function SeccionSemestres() {
       fechaFinPostulacion: fFinPost,
       fechaInicioConvenio: fInicioConv,
       fechaFinConvenio: fFinConv,
-      fechaInicioPracticas: fInicioPrac,
-      fechaFinPracticas: fFinPrac,
-      linkPostulacion: linkPost
+      linkPostulacion: enlacePostulacion,
+      forzarCierrePostulacion: forzarCierre,
+      limitePostulantes: limitePostulantes
     })
     toast.success('Calendario de semestre actualizado')
   }
@@ -1232,7 +1287,80 @@ function SeccionSemestres() {
         </button>
 
         {colapCalendario && activoSem && (
-          <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-4">
+          <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-4 pt-3.5">
+            {/* ── CONTENEDOR DE ESTADO Y ENLACE DE CONVOCATORIA (Mobile-First) ── */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3 mb-4 flex flex-col gap-3">
+              {/* Estado Dinámico (Badge) */}
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-bold text-slate-700">Estado de Postulación</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold flex items-center gap-1 ${
+                  isPostulacionAbierta ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {isPostulacionAbierta ? '🟢 Abierto' : '🔴 Cerrado'}
+                </span>
+              </div>
+
+              {/* Campo de Enlace Local + Botón Copiar */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500">Enlace de Postulación (Entorno Local / Dinámico)</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    readOnly
+                    value={enlacePostulacion}
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-600 outline-none select-all truncate font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopiarEnlace}
+                    title="Copiar enlace"
+                    className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0 shadow-2xs"
+                  >
+                    {copiado ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    <span className="text-[10px]">{copiado ? 'Copiado' : 'Copiar'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Controles de Cierre y Límite */}
+              <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/60">
+                {/* Toggle Switch: Forzar cierre de convocatoria */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[12px] font-bold text-slate-700">Forzar cierre de convocatoria</span>
+                    <span className="text-[10px] text-slate-400">Bloquea el acceso sin importar la fecha límite</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={forzarCierre}
+                      onChange={(e) => handleToggleForzarCierre(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+                  </label>
+                </div>
+
+                {/* Input Numérico: Límite de postulantes */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col flex-1">
+                    <label className="text-[12px] font-bold text-slate-700">Límite de postulantes</label>
+                    <span className="text-[10px] text-slate-400">0 = Sin límite · Registrados: {postulaciones.length}</span>
+                  </div>
+                  <div className="w-24">
+                    <input
+                      type="number"
+                      min="0"
+                      value={limitePostulantes}
+                      onChange={(e) => handleCambiarLimite(parseInt(e.target.value, 10) || 0)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12px] font-bold text-slate-700 text-center outline-none focus:border-blue-500"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Formulario Postulación */}
             <div className="flex flex-col gap-2 pt-2">
               <span className="font-bold text-slate-800 text-[13px]">Formulario de Postulación</span>
@@ -1248,57 +1376,98 @@ function SeccionSemestres() {
               </div>
             </div>
 
-            {/* Fechas de Convenio */}
+            {/* Fechas de Convenio (Inicio readOnly automático, Fin editable +2 meses) */}
             <div className="flex flex-col gap-2">
-              <span className="font-bold text-slate-800 text-[13px]">Fechas del Convenio</span>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-800 text-[13px]">Fechas del Convenio</span>
+                <span className="text-[10px] text-slate-400 font-medium">Inicio automático · Fin editable (+2 meses)</span>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Inicio</label>
-                  <input type="date" value={fInicioConv} onChange={e => setFInicioConv(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Inicio (Periodo)</label>
+                  <input
+                    type="date"
+                    readOnly
+                    value={fInicioConv}
+                    className="w-full bg-slate-100 text-slate-500 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none cursor-not-allowed font-medium select-none"
+                  />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Fin</label>
-                  <input type="date" value={fFinConv} onChange={e => setFFinConv(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Fin (Editable)</label>
+                  <input
+                    type="date"
+                    value={fFinConv}
+                    onChange={e => setFFinConv(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-colors"
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Fechas de Prácticas */}
-            <div className="flex flex-col gap-2">
-              <span className="font-bold text-slate-800 text-[13px]">Fechas de Prácticas</span>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Inicio</label>
-                  <input type="date" value={fInicioPrac} onChange={e => setFInicioPrac(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">Fin</label>
-                  <input type="date" value={fFinPrac} onChange={e => setFFinPrac(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] outline-none" />
-                </div>
+            {/* Feriados Oficiales y Calendario */}
+            <div className="flex flex-col gap-2.5 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-800 text-[13px]">Feriados Oficiales</span>
+                <span className="text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                  {listaFeriados.length} {listaFeriados.length === 1 ? 'feriado' : 'feriados'}
+                </span>
               </div>
-            </div>
 
-            {/* Feriados Nacionales */}
-            <div className="flex flex-col gap-2">
-              <span className="font-bold text-slate-800 text-[13px]">Feriados Registrados</span>
-              {activoSem.feriados.map(f => (
-                <div key={f.id} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                  <span className="text-[11px] font-medium text-slate-700 flex items-center gap-1.5">
-                    <CalendarIcon size={12} className="text-emerald-600" />
-                    {f.fecha} - {f.motivo}
-                  </span>
-                  <button onClick={() => handleRemoveFeriado(f.id)} className="text-red-500 p-1 hover:bg-red-50 rounded border-none cursor-pointer">
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
-
-              <div className="flex gap-2 pt-1">
-                <input type="date" value={nuevoFeriadoFecha} onChange={e => setNuevoFeriadoFecha(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none" />
-                <input type="text" placeholder="Motivo" value={nuevoFeriadoMotivo} onChange={e => setNuevoFeriadoMotivo(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none" />
-                <button onClick={handleAddFeriado} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold border-none cursor-pointer">
-                  <Plus size={14} />
+              {/* Inputs para registrar nuevo feriado */}
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={nuevoFeriadoFecha}
+                  onChange={e => setNuevoFeriadoFecha(e.target.value)}
+                  className="w-36 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-colors"
+                />
+                <input
+                  type="text"
+                  placeholder="Motivo del feriado"
+                  value={nuevoFeriadoMotivo}
+                  onChange={e => setNuevoFeriadoMotivo(e.target.value)}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddFeriado}
+                  title="Agregar feriado"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 border-none cursor-pointer active:scale-95 transition-all shadow-2xs shrink-0"
+                >
+                  <Plus size={14} /> Agregar
                 </button>
+              </div>
+
+              {/* LISTA VISIBLE (ACUMULABLE) DEBAJO DE LOS INPUTS */}
+              <div className="flex flex-col gap-1.5 mt-0.5">
+                {listaFeriados.length === 0 ? (
+                  <div className="text-center py-3 bg-slate-50 border border-slate-200/60 rounded-lg text-slate-400 text-[11px] italic">
+                    No hay feriados oficiales registrados en este periodo.
+                  </div>
+                ) : (
+                  listaFeriados.map(f => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-2xs hover:border-slate-300 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+                        <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[12px] font-bold text-slate-800 truncate">{f.motivo}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{f.fecha}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFeriado(f.id)}
+                        title="Eliminar feriado"
+                        className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg border-none cursor-pointer active:scale-95 transition-colors shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

@@ -5,6 +5,7 @@ import { descargarArchivoBase64, SAMPLE_PEA_PDF_BASE64 } from '../utils/fileUtil
 import {
   AlertCircle,
   AlertTriangle,
+  Lock,
   Award,
   BarChart2,
   Check,
@@ -97,6 +98,9 @@ function DashboardPracticante() {
   const plantilla = useAppStore((s) => s.plantillaAceptacion)
   const carreras = useAppStore((s) => s.carreras || [])
   const monitores = useAppStore((s) => s.monitores || [])
+  const periodos = useAppStore((s) => s.periodos || [])
+  const periodoActivo = periodos.find(p => p.estado === 'activo') || periodos[0]
+  const periodoActivoNombre = periodoActivo?.nombre || '2026-02'
 
   const getEspecialistaAsignado = useAppStore(s => s.getEspecialistaAsignado);
 
@@ -396,20 +400,30 @@ function DashboardPracticante() {
           </div>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4 space-y-2">
-          <div className="flex flex-col">
-            <span className="text-xs text-slate-500 font-semibold uppercase">Carrera SENATI</span>
-            <span className="text-sm font-medium text-slate-800">{usuario?.carrera || 'Sin carrera registrada'}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 mt-2">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4 space-y-2.5">
+          <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 font-semibold uppercase">Especialista (SENATI)</span>
-              <span className="text-sm font-medium text-blue-700">{nombreEspecialista}</span>
+              <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Carrera SENATI</span>
+              <span className="text-sm font-medium text-slate-800 truncate" title={usuario?.carrera || practicanteCompleto?.carrera || 'Sin carrera registrada'}>
+                {usuario?.carrera || practicanteCompleto?.carrera || 'Sin carrera registrada'}
+              </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-slate-500 font-semibold uppercase">Supervisor (MACROMEC)</span>
-              <span className="text-sm font-medium text-green-700">{nombreSupervisor}</span>
+              <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Periodo Actual</span>
+              <span className="text-sm font-bold text-slate-800">
+                {periodoActivoNombre}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-2.5 border-t border-slate-200 mt-2">
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Especialista (SENATI)</span>
+              <span className="text-sm font-medium text-blue-700 truncate" title={nombreEspecialista}>{nombreEspecialista}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Supervisor (MACROMEC)</span>
+              <span className="text-sm font-medium text-green-700 truncate" title={nombreSupervisor}>{nombreSupervisor}</span>
             </div>
           </div>
         </div>
@@ -1060,6 +1074,14 @@ function ModalExpediente({
   onUpload: (id: string, key: string, name: string) => void
   onCerrar: () => void
 }) {
+  const periodos = useAppStore(s => s.periodos)
+  const semestres = useAppStore(s => s.semestres)
+  const periodoActivo = periodos?.find(p => p.estado === 'activo') || periodos?.[0]
+  const fechaFinConvenio = periodoActivo?.fechaFinConvenio || semestres?.[0]?.fechaFinConvenio
+
+  const hoyISO = new Date().toISOString().split('T')[0]
+  const plazoVencido = Boolean(fechaFinConvenio && hoyISO > fechaFinConvenio)
+
   const docs = practicante.documentos ?? {
     cartaPresentacion: null, evidenciaFormulario: null,
     cartaAceptacionFirmada: null, convenioFirmado: null,
@@ -1103,6 +1125,14 @@ function ModalExpediente({
             <X size={18} />
           </button>
         </div>
+
+        {/* Alerta fija si el plazo para subir documentos ha vencido */}
+        {plazoVencido && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl mb-3 flex items-center gap-2.5 text-[12px] font-bold sticky top-0 z-20 shadow-xs">
+            <AlertCircle size={16} className="text-red-600 shrink-0" />
+            <span>El plazo para subir documentos ha vencido. Comuníquese con el administrador.</span>
+          </div>
+        )}
 
         {/* Info Fechas de Convenio Sincronizadas */}
         {(() => {
@@ -1164,9 +1194,25 @@ function ModalExpediente({
                 </div>
 
                 {value ? (
-                  <div className="text-[12px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2 truncate">
-                    📄 {value}
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    <span className="text-[12px] text-slate-700 font-medium truncate flex-1">📄 {value}</span>
+                    <button
+                      type="button"
+                      onClick={() => toast.info(`Descargando ${value}...`)}
+                      className="text-blue-600 hover:text-blue-800 text-[11px] font-bold flex items-center gap-1 ml-2 cursor-pointer"
+                    >
+                      <Download size={13} /> Descargar
+                    </button>
                   </div>
+                ) : plazoVencido ? (
+                  <button
+                    type="button"
+                    disabled
+                    onClick={() => toast.error('El plazo para subir documentos ha vencido. Comuníquese con el administrador.')}
+                    className="w-full bg-slate-100 text-slate-400 font-bold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 cursor-not-allowed opacity-60 border border-slate-200"
+                  >
+                    <Lock size={15} /> Plazo Vencido
+                  </button>
                 ) : (
                   <>
                     <input
@@ -1210,6 +1256,9 @@ function ModalExpediente({
 function DashboardSupervisor() {
   const todosPracticantes = useAppStore((s) => s.practicantes)
   const usuarioActual = useAppStore((s) => s.usuarioActual)
+  const periodos = useAppStore((s) => s.periodos || [])
+  const periodoActivo = periodos.find(p => p.estado === 'activo') || periodos[0]
+  const periodoActivoNombre = periodoActivo?.nombre || '2026-02'
 
   // PASO 4: Filtro relacional estricto — el Supervisor solo ve sus practicantes
   const practicantes = usuarioActual
@@ -1456,8 +1505,13 @@ function DashboardSupervisor() {
 
   return (
     <div className="flex flex-col gap-4 pb-6">
-      <div className="font-bold text-[15px] text-slate-900 px-1">
-        Panel de Control (Día a Día)
+      <div className="flex items-center gap-2.5 px-1">
+        <h2 className="font-bold text-[15px] text-slate-900 m-0">
+          Panel de Control (Día a Día)
+        </h2>
+        <span className="bg-gray-100 text-gray-600 rounded-full px-3 py-0.5 text-xs font-semibold border border-slate-200/80">
+          {periodoActivoNombre}
+        </span>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">

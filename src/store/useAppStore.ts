@@ -1,3 +1,4 @@
+import { sumarDosMeses } from '../utils/dateUtils';
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
@@ -261,6 +262,7 @@ interface AppState {
   agregarFeriado: (fecha: string, motivo: string) => void
   eliminarFeriado: (id: string) => void
   updatePlantilla: (plantilla: Partial<PlantillaAceptacion>) => void
+  isConvocatoriaAbierta: () => boolean
 }
 
 // ============================================================
@@ -1445,22 +1447,59 @@ export const useAppStore = create<AppState>()(
       addSemestre: (semestre) => set((state) => ({ semestres: [...state.semestres, semestre] })),
       updateSemestre: (id, data) => set((state) => ({ semestres: state.semestres.map(s => s.id === id ? { ...s, ...data } : s) })),
       updateSemestreCalendario: (datos) => set((state) => ({
-        semestres: state.semestres.map((s, idx) => idx === 0 ? { ...s, ...datos } : s)
-      })),
-      agregarFeriado: (fecha, motivo) => set((state) => ({
-        semestres: state.semestres.map((s, idx) => {
-          if (idx !== 0) return s;
-          const nuevoFeriado = { id: `f-${Date.now()}`, fecha, motivo };
-          return { ...s, feriados: [...s.feriados, nuevoFeriado] };
+        semestres: state.semestres.map((s, idx) => idx === 0 ? { ...s, ...datos } : s),
+        periodos: state.periodos.map(p => {
+          if (p.estado === 'activo') {
+            return {
+              ...p,
+              fechaInicioConvenio: datos.fechaInicioConvenio ?? p.fechaInicioConvenio,
+              fechaFinConvenio: datos.fechaFinConvenio ?? p.fechaFinConvenio,
+            };
+          }
+          return p;
         })
       })),
+      agregarFeriado: (fecha, motivo) => set((state) => {
+        const nuevoFeriado = { id: `f-${Date.now()}`, fecha, motivo };
+        return {
+          periodos: state.periodos.map(p => {
+            if (p.estado === 'activo') {
+              const feriados = p.feriados || [];
+              return { ...p, feriados: [...feriados, nuevoFeriado] };
+            }
+            return p;
+          }),
+          semestres: state.semestres.map((s, idx) => {
+            if (idx !== 0) return s;
+            return { ...s, feriados: [...(s.feriados || []), nuevoFeriado] };
+          })
+        };
+      }),
       eliminarFeriado: (id) => set((state) => ({
+        periodos: state.periodos.map(p => {
+          if (p.estado === 'activo') {
+            return { ...p, feriados: (p.feriados || []).filter(f => f.id !== id) };
+          }
+          return p;
+        }),
         semestres: state.semestres.map((s, idx) => {
           if (idx !== 0) return s;
-          return { ...s, feriados: s.feriados.filter(f => f.id !== id) };
+          return { ...s, feriados: (s.feriados || []).filter(f => f.id !== id) };
         })
       })),
       updatePlantilla: (plantilla) => set((state) => ({ plantillaAceptacion: { ...state.plantillaAceptacion, ...plantilla } })),
+      isConvocatoriaAbierta: () => {
+        const sem = get().semestres[0];
+        if (!sem) return false;
+        if (sem.forzarCierrePostulacion) return false;
+        if (sem.limitePostulantes && sem.limitePostulantes > 0) {
+          if ((get().postulaciones?.length || 0) >= sem.limitePostulantes) return false;
+        }
+        const hoy = new Date().toISOString().split('T')[0];
+        if (sem.fechaInicioPostulacion && hoy < sem.fechaInicioPostulacion) return false;
+        if (sem.fechaFinPostulacion && hoy > sem.fechaFinPostulacion) return false;
+        return true;
+      },
 
       // ── Periodos Académicos (Motor ERP) ───────────────────────────
       periodos: MOCK_PERIODOS,
@@ -1601,9 +1640,29 @@ export const useAppStore = create<AppState>()(
         if (persistedState?.especialistas && persistedState.especialistas.length > 0 && 'nombre' in persistedState.especialistas[0]) {
           persistedState.especialistas = MOCK_ESPECIALISTAS;
         }
+        if (persistedState?.periodos && Array.isArray(persistedState.periodos)) {
+          persistedState.periodos = persistedState.periodos.map((p: any) => {
+            if (p.estado === 'activo') {
+              return {
+                ...p,
+                fechaInicioConvenio: p.fechaInicioConvenio || p.fechaInicio || '2026-08-03',
+                fechaFinConvenio: p.fechaFinConvenio || sumarDosMeses(p.fechaInicio || '2026-08-03'),
+                feriados: (p.feriados && p.feriados.length > 0) ? p.feriados : [
+                  { id: 'f-1', fecha: '2026-08-30', motivo: 'Santa Rosa de Lima' },
+                  { id: 'f-2', fecha: '2026-10-08', motivo: 'Combate de Angamos' },
+                  { id: 'f-3', fecha: '2026-11-01', motivo: 'Día de Todos los Santos' },
+                  { id: 'f-4', fecha: '2026-12-08', motivo: 'Inmaculada Concepción' },
+                ],
+              };
+            }
+            return p;
+          });
+        }
         // Limpiar cache para forzar los feriados a objetos y datos SENATI
         if (persistedState?.semestres && persistedState.semestres.length > 0) {
           const first = persistedState.semestres[0];
+          if (first.forzarCierrePostulacion === undefined) first.forzarCierrePostulacion = false;
+          if (first.limitePostulantes === undefined) first.limitePostulantes = 0;
           if (first.feriados && typeof first.feriados[0] === 'string') {
             persistedState.semestres = MOCK_SEMESTRES;
           }

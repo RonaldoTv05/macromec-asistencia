@@ -70,6 +70,9 @@ function TarjetaColaborador({
         <div className={`text-[13px] font-bold mb-0.5 truncate ${isRetirado ? 'text-slate-400' : 'text-slate-800'}`}>
           {practicante.nombre} {practicante.apellido}
         </div>
+        <div className="text-[11px] text-slate-400 truncate font-medium">
+          {practicante.carrera} - {practicante.semestre}
+        </div>
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             <BadgeEstado estado={practicante.estadoLaboral} />
@@ -805,9 +808,9 @@ function BottomSheetPracticante({
       // Futuro endpoint NestJS -> Python ISAPI Recolector
       // await axios.post('/api/hikvision/forzar-sincronizacion');
       await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('Marcaciones sincronizadas con el terminal Hikvision');
+      toast.success('Marcaciones sincronizadas con el terminal Hikvision');
     } catch (error) {
-      alert('Error al conectar con el terminal en la red local');
+      toast.error('Error al conectar con el terminal en la red local');
     } finally {
       setIsSyncingHikvision(false);
     }
@@ -1017,7 +1020,7 @@ function BottomSheetSupervisor({
                     </div>
                     <div className="min-w-0">
                       <div className="text-[13px] font-bold text-slate-700 truncate">{p.nombre} {p.apellido}</div>
-                      <div className="text-[10px] text-slate-400 truncate">{p.carreraId}</div>
+                      <div className="text-[11px] text-slate-400 truncate font-medium">{p.carrera} - {p.semestre}</div>
                     </div>
                   </div>
                   <button onClick={() => handleRemover(p.id)} disabled={isAssigning === p.id} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50 shrink-0">
@@ -1040,7 +1043,7 @@ function BottomSheetSupervisor({
                     </div>
                     <div className="min-w-0">
                       <div className="text-[13px] font-bold text-slate-600 truncate">{p.nombre} {p.apellido}</div>
-                      <div className="text-[10px] text-slate-400 truncate">{p.carreraId}</div>
+                      <div className="text-[11px] text-slate-400 truncate font-medium">{p.carrera} - {p.semestre}</div>
                     </div>
                   </div>
                   <button onClick={() => handleAsignar(p.id)} disabled={isAssigning === p.id} className="bg-blue-100 text-blue-600 text-[11px] font-bold px-3 py-1.5 rounded-md hover:bg-blue-200 transition-colors disabled:opacity-50 shrink-0">
