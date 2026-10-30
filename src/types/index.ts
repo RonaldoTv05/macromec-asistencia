@@ -167,6 +167,9 @@ export interface PeriodoAcademico {
   fechaFin: string;     // ISO YYYY-MM-DD
   estado: EstadoPeriodo;
   clonarRoles?: boolean;
+  feriados?: Feriado[];
+  fechaInicioConvenio?: string;
+  fechaFinConvenio?: string;
 }
 
 // ── Practicante en el sistema ────────────────────────────────
@@ -380,6 +383,8 @@ export interface Semestre {
   fechaFinPracticas: string
   linkPostulacion: string
   feriados: Feriado[]
+  forzarCierrePostulacion?: boolean
+  limitePostulantes?: number
 }
 
 export interface PlantillaAceptacion {

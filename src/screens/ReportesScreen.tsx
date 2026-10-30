@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   FileText,
   CheckCircle2,
@@ -10,9 +10,12 @@ import {
   Upload,
   Archive,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  FileSpreadsheet,
+  Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import * as XLSX from 'xlsx'
 import { useAppStore } from '../store/useAppStore'
 import { descargarArchivoBase64 } from '../utils/fileUtils'
 import type { Monitor } from '../types';
@@ -602,57 +605,264 @@ export default function ReportesScreen() {
 }
 
 export function GeneradorReportes() {
-  const { monitores } = useAppStore();
+  const usuarioActual = useAppStore((s) => s.usuarioActual);
+  const monitores = useAppStore((s) => s.monitores || []);
+  const practicantes = useAppStore((s) => s.practicantes || []);
+  const periodos = useAppStore((s) => s.periodos || []);
+  const semestres = useAppStore((s) => s.semestres || []);
+
+  const esAdmin =
+    usuarioActual?.rol === 'GERENCIA' ||
+    (usuarioActual as any)?.rol === 'ADMIN' ||
+    (usuarioActual as any)?.role === 'ADMIN' ||
+    (usuarioActual as any)?.role === 'GERENCIA';
+
+  // 🛡️ Seguridad RBAC: Solo visible para administradores/gerencia
+  if (!esAdmin || usuarioActual?.rol === 'PRACTICANTE') {
+    return null;
+  }
+
+  const periodoActivo = periodos.find((p) => p.estado === 'activo') || periodos[0];
+  const feriados = periodoActivo?.feriados || semestres[0]?.feriados || [];
 
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [monitoresSeleccionados, setMonitoresSeleccionados] = useState<Monitor[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [archivoGenerado, setArchivoGenerado] = useState<{
+    url: string;
+    nombre: string;
+    tamanoStr: string;
+  } | null>(null);
 
+  const downloadAnchorRef = useRef<HTMLAnchorElement>(null);
+
+  // Limpieza de memoria RAM al desmontar o al sustituir archivo
+  useEffect(() => {
+    return () => {
+      if (archivoGenerado?.url) {
+        URL.revokeObjectURL(archivoGenerado.url);
+      }
+    };
+  }, [archivoGenerado]);
 
   const handleMonitorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
+    if (!value) return;
+
     if (value === 'ALL') {
-      setMonitoresSeleccionados(monitores);
-    } else if (value) {
-      const monitor = monitores.find(m => m.id === value);
-      if (monitor && !monitoresSeleccionados.some(m => m.id === monitor.id)) {
-        setMonitoresSeleccionados(prev => [...prev, monitor]);
+      setMonitoresSeleccionados([...monitores]);
+    } else {
+      const monitor = monitores.find((m) => m.id === value);
+      if (monitor && !monitoresSeleccionados.some((m) => m.id === monitor.id)) {
+        setMonitoresSeleccionados((prev) => [...prev, monitor]);
       }
     }
     e.target.value = ''; // Reset select
   };
 
   const quitarMonitor = (id: string) => {
-    setMonitoresSeleccionados(prev => prev.filter(m => m.id !== id));
+    setMonitoresSeleccionados((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  const handleEliminarArchivo = () => {
+    if (archivoGenerado) {
+      URL.revokeObjectURL(archivoGenerado.url);
+      setArchivoGenerado(null);
+      toast.info('Archivo eliminado de memoria');
+    }
   };
 
   const handleExportarExcel = async () => {
-    if (!fechaInicio || !fechaFin) return alert('Seleccione las fechas');
-    if (monitoresSeleccionados.length === 0) return alert('Seleccione al menos un supervisor');
+    // Validaciones sin alertas nativas
+    if (!fechaInicio || !fechaFin) {
+      toast.error('Seleccione las fechas de inicio y fin');
+      return;
+    }
+
+    if (fechaInicio > fechaFin) {
+      toast.error('La fecha de inicio no puede ser posterior a la fecha de fin');
+      return;
+    }
+
+    if (monitoresSeleccionados.length === 0) {
+      toast.error('Seleccione al menos un supervisor');
+      return;
+    }
 
     setIsExporting(true);
 
-    // 1. Preparar payload para NestJS
-    const payload = {
-      fechaInicio,
-      fechaFin,
-      supervisoresIds: monitoresSeleccionados.map(m => m.id)
-    };
-
     try {
-      // 2. Simular llamada Axios a NestJS (POST /api/reportes/exportar-excel)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Liberar URL previa si existía
+      if (archivoGenerado?.url) {
+        URL.revokeObjectURL(archivoGenerado.url);
+        setArchivoGenerado(null);
+      }
 
-      // NOTA PARA EL FUTURO BACKEND:
-      // NestJS recibirá este payload, hará un JOIN en PostgreSQL filtrando 
-      // practicantes por supervisor_id y fechas de asistencia.
-      // NestJS usará 'exceljs' para crear la tabla y añadirá una fila final:
-      // "MONITORES SELECCIONADOS: Nombre 1, Nombre 2..."
+      // Ligero delay visual de feedback en memoria
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      alert('Reporte Excel descargado correctamente (Simulación)');
+      // 1. Generar array con el rango de fechas estrictas
+      const fechas: string[] = [];
+      const cursor = new Date(fechaInicio + 'T00:00:00');
+      const finDate = new Date(fechaFin + 'T00:00:00');
+      while (cursor <= finDate) {
+        const y = cursor.getFullYear();
+        const m = String(cursor.getMonth() + 1).padStart(2, '0');
+        const d = String(cursor.getDate()).padStart(2, '0');
+        fechas.push(`${y}-${m}-${d}`);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      // 2. Construir matriz y estilos con SheetJS (xlsx-js-style)
+      const wb = XLSX.utils.book_new();
+      const aoa: any[][] = [];
+      const merges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }> = [];
+      const supervisorHeaderRows: number[] = [];
+      const tableHeaderRows: number[] = [];
+
+      monitoresSeleccionados.forEach((sup) => {
+        // Alumnos asignados al supervisor
+        const alumnos = practicantes.filter(
+          (p) => p.supervisorId === sup.id || p.monitorId === sup.id
+        );
+
+        // Cabecera del supervisor (Fila con fondo azul tenue)
+        const supRowIdx = aoa.length;
+        supervisorHeaderRows.push(supRowIdx);
+        aoa.push([`SUPERVISOR: ${sup.nombre}`]);
+        merges.push({ s: { r: supRowIdx, c: 0 }, e: { r: supRowIdx, c: 9 } });
+
+        // Fila de encabezados de columna
+        const colHeaderIdx = aoa.length;
+        tableHeaderRows.push(colHeaderIdx);
+        aoa.push(['DNI', 'Nombre', 'Modalidad', 'HE', 'OK', 'T', 'F', 'Fr', 'L', 'Total Días']);
+
+        // Filas de practicantes
+        if (alumnos.length === 0) {
+          aoa.push(['-', 'Sin alumnos asignados', '-', 0, 0, 0, 0, 0, 0, 0]);
+        } else {
+          alumnos.forEach((p) => {
+            let ok = 0;
+            let t = 0;
+            let f = 0;
+            let he = 0;
+            let l = 0;
+            let fr = 0;
+
+            fechas.forEach((fStr) => {
+              // Feriado
+              const esFeriado = feriados.some((fer: any) => fer.fecha === fStr);
+              if (esFeriado) {
+                fr++;
+                return;
+              }
+
+              // Retirado
+              if (p.estadoLaboral === 'retirado' && p.retiro && fStr >= p.retiro.fechaInicio) {
+                return;
+              }
+
+              // Registros de asistencia / historial
+              const reg = p.historial?.find((h) => h.fecha === fStr);
+              const regAsis = p.asistencia?.[fStr];
+
+              if (reg?.estado === 'ASISTIO' || regAsis?.estado === 'Asistió') {
+                ok++;
+              } else if (reg?.estado === 'TARDANZA' || regAsis?.estado === 'Tardanza') {
+                t++;
+              } else if (reg?.estado === 'FALTA' || regAsis?.estado === 'Falta') {
+                f++;
+              } else if (
+                reg?.estado === 'COMPENSADO' ||
+                reg?.estado === 'FALTA_CUBIERTA' ||
+                (regAsis?.horasExtraManuales || 0) > 0 ||
+                regAsis?.faltaCubierta
+              ) {
+                he++;
+              } else if (reg?.estado === 'LIBRE' || regAsis?.estado === 'Libre') {
+                l++;
+              } else if (reg?.estado === 'CAMPO' || regAsis?.estado === 'Campo') {
+                ok++;
+              } else {
+                // Horario semanal (si el día está programado como Libre o no laborable)
+                const horarioActivo = p.horarioVigente || p.horarioAprobado || p.horarioActual;
+                if (horarioActivo && (horarioActivo.estado === 'Aprobado' || horarioActivo.estado === 'aprobado')) {
+                  const [yy, mm, dd] = fStr.split('-').map(Number);
+                  const dObj = new Date(yy, mm - 1, dd);
+                  const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                  const nombreDia = diasNombres[dObj.getDay()];
+                  const diaHorario = horarioActivo.dias?.find((dh) => dh.dia === nombreDia);
+                  if (
+                    !diaHorario ||
+                    diaHorario.modalidadDiaria === 'Libre' ||
+                    diaHorario.modalidad === 'libre' ||
+                    nombreDia === 'Domingo'
+                  ) {
+                    l++;
+                  }
+                }
+              }
+            });
+
+            const totalDias = ok + t + f + fr + l + he;
+            const dni = p.dni || '-';
+            const nombreCompleto = `${p.nombre} ${p.apellido || ''}`.trim();
+            const modalidad = p.modalidadBase
+              ? p.modalidadBase.charAt(0).toUpperCase() + p.modalidadBase.slice(1)
+              : 'Presencial';
+
+            aoa.push([dni, nombreCompleto, modalidad, he, ok, t, f, fr, l, totalDias]);
+          });
+        }
+
+        // Espaciador entre supervisores
+        aoa.push([]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+      // Asignar merges
+      ws['!merges'] = merges;
+
+      // Asignar anchos de columnas
+      ws['!cols'] = [
+        { wch: 14 }, // DNI
+        { wch: 34 }, // Nombre
+        { wch: 18 }, // Modalidad
+        { wch: 8 },  // HE
+        { wch: 8 },  // OK
+        { wch: 8 },  // T
+        { wch: 8 },  // F
+        { wch: 8 },  // Fr
+        { wch: 8 },  // L
+        { wch: 13 }, // Total Días
+      ];
+
+
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Reporte Asistencia');
+
+      // 3. Generación en memoria (Blob)
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const nombre = `asistencia_${fechaInicio}_${fechaFin}.xlsx`;
+      const tamanoStr = `${(blob.size / 1024).toFixed(1)} KB`;
+
+      setArchivoGenerado({
+        url,
+        nombre,
+        tamanoStr,
+      });
+
+      // Aviso rápido con Toast UI
+      toast.success('✅ Reporte generado correctamente');
     } catch (error) {
-      alert('Error al generar el reporte');
+      console.error('Error generando reporte Excel:', error);
+      toast.error('Error al generar el reporte de asistencia');
     } finally {
       setIsExporting(false);
     }
@@ -668,7 +878,9 @@ export function GeneradorReportes() {
       {/* FILA 1: Fechas */}
       <div className="grid grid-cols-2 gap-4 mb-5">
         <div>
-          <label className="block text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Fecha Inicio</label>
+          <label className="block text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
+            Fecha Inicio
+          </label>
           <input
             type="date"
             value={fechaInicio}
@@ -677,7 +889,9 @@ export function GeneradorReportes() {
           />
         </div>
         <div>
-          <label className="block text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Fecha Fin</label>
+          <label className="block text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
+            Fecha Fin
+          </label>
           <input
             type="date"
             value={fechaFin}
@@ -689,39 +903,125 @@ export function GeneradorReportes() {
 
       {/* FILA 2: Monitor */}
       <div className="mb-6">
-        <label className="block text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Monitor Asignado (Supervisor)</label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wide">
+            Monitor Asignado (Supervisor)
+          </label>
+          {monitoresSeleccionados.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setMonitoresSeleccionados([])}
+              className="text-[11px] text-slate-400 hover:text-red-600 font-bold bg-transparent border-none cursor-pointer"
+            >
+              Limpiar selección
+            </button>
+          )}
+        </div>
         <select
           defaultValue=""
           onChange={handleMonitorChange}
-          className="w-full border border-slate-200 rounded-lg p-3 text-[14px] text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50"
+          className="w-full border border-slate-200 rounded-lg p-3 text-[14px] text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 cursor-pointer"
         >
-          <option value="" disabled>Seleccione un monitor...</option>
+          <option value="" disabled>
+            Seleccione un monitor...
+          </option>
           <option value="ALL">-- Seleccionar Todos --</option>
-          {monitores.map(m => (
-            <option key={m.id} value={m.id}>{m.nombre} ({m.area})</option>
+          {monitores.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.nombre} ({m.area})
+            </option>
           ))}
         </select>
 
         {monitoresSeleccionados.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
-            {monitoresSeleccionados.map(mon => (
-              <div key={mon.id} className="bg-blue-100 text-blue-700 text-[12px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-2">
-                {mon.nombre}
-                <button onClick={() => quitarMonitor(mon.id)} className="text-blue-500 hover:text-blue-800 font-bold active:scale-95 transition-transform">✕</button>
+            {monitoresSeleccionados.map((mon) => (
+              <div
+                key={mon.id}
+                className="bg-blue-100 text-blue-700 text-[12px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-2xs"
+              >
+                <span>{mon.nombre}</span>
+                <button
+                  type="button"
+                  onClick={() => quitarMonitor(mon.id)}
+                  title={`Quitar a ${mon.nombre}`}
+                  className="text-blue-500 hover:text-blue-800 font-bold active:scale-95 transition-transform bg-transparent border-none cursor-pointer p-0"
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
         )}
       </div>
 
+      {/* Botón de Generación en memoria */}
       <button
+        type="button"
         onClick={handleExportarExcel}
         disabled={isExporting}
-        className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors text-[14px] shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+        className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all text-[14px] shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
       >
-        <Download className="w-4 h-4" />
-        {isExporting ? 'Generando archivo...' : 'Generar y Exportar Reporte'}
+        {isExporting ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin text-white" />
+            <span>Generando archivo...</span>
+          </>
+        ) : (
+          <>
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Generar archivo de asistencia</span>
+          </>
+        )}
       </button>
+
+      {/* 📥 UI DE DESCARGA DIFERIDA: Tarjeta del Archivo Generado */}
+      {archivoGenerado && (
+        <div className="bg-white border border-slate-200/90 rounded-xl p-4 flex justify-between items-center shadow-xs mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          {/* Izquierda: Ícono de Excel y Nombre Dinámico */}
+          <div className="flex items-center gap-3 min-w-0 pr-2">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 shadow-2xs">
+              <FileSpreadsheet size={22} className="text-emerald-600" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span
+                className="text-[13px] font-bold text-slate-800 truncate"
+                title={archivoGenerado.nombre}
+              >
+                {archivoGenerado.nombre}
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium">
+                Microsoft Excel • {archivoGenerado.tamanoStr}
+              </span>
+            </div>
+          </div>
+
+          {/* Derecha: Botones de Acción (Descargar y Eliminar) */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* 1. Botón Descargar: Tag <a> funcional con download */}
+            <a
+              ref={downloadAnchorRef}
+              href={archivoGenerado.url}
+              download={archivoGenerado.nombre}
+              title="Descargar archivo al dispositivo"
+              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3 py-2 rounded-lg text-[12px] font-bold flex items-center gap-1.5 transition-colors shadow-2xs no-underline cursor-pointer"
+            >
+              <Download size={14} />
+              <span>Descargar</span>
+            </a>
+
+            {/* 2. Botón Eliminar: Ícono Papelera roja */}
+            <button
+              type="button"
+              onClick={handleEliminarArchivo}
+              title="Eliminar de memoria"
+              className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg border-none cursor-pointer active:scale-95 transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

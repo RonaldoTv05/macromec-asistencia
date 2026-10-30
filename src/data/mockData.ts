@@ -529,12 +529,19 @@ export const MOCK_SEMESTRES: Semestre[] = [
     nombre: '2026-20',
     fechaInicioPostulacion: '2026-06-22',
     fechaFinPostulacion: '2026-07-08',
-    fechaInicioConvenio: '2026-07-13',
-    fechaFinConvenio: '2026-07-17',
+    fechaInicioConvenio: '2026-08-03',
+    fechaFinConvenio: '2026-10-03',
     fechaInicioPracticas: '2026-08-17',
     fechaFinPracticas: '2026-12-05',
     linkPostulacion: 'https://sistema.macromec.com.pe/#/postula',
-    feriados: [],
+    feriados: [
+      { id: 'f-1', fecha: '2026-08-30', motivo: 'Santa Rosa de Lima' },
+      { id: 'f-2', fecha: '2026-10-08', motivo: 'Combate de Angamos' },
+      { id: 'f-3', fecha: '2026-11-01', motivo: 'Día de Todos los Santos' },
+      { id: 'f-4', fecha: '2026-12-08', motivo: 'Inmaculada Concepción' },
+    ],
+    forzarCierrePostulacion: false,
+    limitePostulantes: 0,
   }
 ]
 
@@ -562,6 +569,14 @@ export const MOCK_PERIODOS: PeriodoAcademico[] = [
     fechaFin: '2026-12-18',
     estado: 'activo',
     clonarRoles: true,
+    fechaInicioConvenio: '2026-08-03',
+    fechaFinConvenio: '2026-10-03',
+    feriados: [
+      { id: 'f-1', fecha: '2026-08-30', motivo: 'Santa Rosa de Lima' },
+      { id: 'f-2', fecha: '2026-10-08', motivo: 'Combate de Angamos' },
+      { id: 'f-3', fecha: '2026-11-01', motivo: 'Día de Todos los Santos' },
+      { id: 'f-4', fecha: '2026-12-08', motivo: 'Inmaculada Concepción' },
+    ],
   }
 ];
 

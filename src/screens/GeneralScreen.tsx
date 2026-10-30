@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
@@ -40,14 +40,30 @@ function fechaEnRango(fecha: string, inicio: string, fin: string): boolean {
 }
 
 // ============================================================
+// VERIFICACIÓN DE HORARIO APROBADO
+// ============================================================
+
+function tieneHorarioAprobado(p: Practicante): boolean {
+  const hActivo = (p.horarioVigente && (p.horarioVigente.estado === 'Aprobado' || p.horarioVigente.estado === 'aprobado'))
+    ? p.horarioVigente
+    : (p.horarioAprobado && (p.horarioAprobado.estado === 'Aprobado' || p.horarioAprobado.estado === 'aprobado'))
+      ? p.horarioAprobado
+      : (p.horarioActual && (p.horarioActual.estado === 'Aprobado' || p.horarioActual.estado === 'aprobado'))
+        ? p.horarioActual
+        : undefined;
+  return Boolean(hActivo);
+}
+
+// ============================================================
 // LOGICA DE CELDAS CON RANGOS DE FECHAS
 // ============================================================
 
 type CeldaInfo = { label: string; cls: string; bloqueado: boolean }
 
 function getCeldaAsistencia(p: Practicante, fecha: string, feriados: import('../types').Feriado[]): CeldaInfo {
-  if (feriados.some(f => f.fecha === fecha)) {
-    return { label: 'Fe', cls: 'bg-purple-100 text-purple-700 border border-purple-200', bloqueado: true }
+  const feriadoObj = feriados.find(f => f.fecha === fecha)
+  if (feriadoObj) {
+    return { label: 'Fr', cls: 'bg-purple-100 text-purple-700 border border-purple-200', bloqueado: true }
   }
 
   if (p.estadoLaboral === 'retirado' && p.retiro) {
@@ -370,6 +386,7 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
 // ============================================================
 
 const LEYENDA_ASISTENCIA = [
+  { label: 'Fr', cls: 'bg-purple-100 text-purple-700', txt: 'Feriado' },
   { label: 'OK', cls: 'bg-emerald-100 text-emerald-700', txt: 'Asistio' },
   { label: 'T', cls: 'bg-amber-100 text-amber-700', txt: 'Tardanza' },
   { label: 'F', cls: 'bg-red-100 text-red-700', txt: 'Falta' },
@@ -452,6 +469,7 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feri
           {practicantes.map((p, ri) => {
             const saldo = p.saldoHorasExtras ?? extraHoursBalances.find((b) => b.practicanteId === p.id)?.horasDisponibles ?? 0
             const rowBg = ri % 2 === 0 ? '#fafafa' : 'white'
+            const sinHorario = p.estadoLaboral !== 'retirado' && !tieneHorarioAprobado(p)
             return (
               <tr key={p.id} style={{ background: rowBg }}>
                 <td
@@ -476,23 +494,59 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feri
                 </td>
                 {dias.map((d) => {
                   const fecha = getFechaStr(year, month, d)
+                  const feriadoObj = feriados.find((f: any) => f.fecha === fecha)
                   const info = getCeldaAsistencia(p, fecha, feriados)
+
+                  if (feriadoObj) {
+                    return (
+                      <td
+                        key={d}
+                        className="text-center"
+                        style={{ padding: '3px 2px', borderLeft: '1px solid #f1f5f9' }}
+                        onClick={() => toast.info(`Feriado oficial: ${feriadoObj.motivo}. Hasta mañana.`)}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toast.info(`Feriado oficial: ${feriadoObj.motivo}. Hasta mañana.`)
+                          }}
+                          className="w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold transition-all bg-purple-100 text-purple-700 border border-purple-200 cursor-pointer hover:bg-purple-200 active:scale-95"
+                          title={`Feriado oficial: ${feriadoObj.motivo}`}
+                        >
+                          Fr
+                        </button>
+                      </td>
+                    )
+                  }
+
                   return (
                     <td
                       key={d}
-                      className="text-center"
+                      className={`text-center ${sinHorario ? 'cursor-not-allowed' : ''}`}
                       style={{ padding: '3px 2px', borderLeft: '1px solid #f1f5f9' }}
+                      onClick={sinHorario ? () => toast.warning('El practicante aún no tiene horario, revisar solicitudes') : undefined}
                     >
                       <button
-                        onClick={() => {
+                        type="button"
+                        onClick={(e) => {
+                          if (sinHorario) {
+                            e.stopPropagation()
+                            toast.warning('El practicante aún no tiene horario, revisar solicitudes')
+                            return
+                          }
                           if (!info.bloqueado) {
                             onCeldaClick(p, fecha, getFechaLegible(year, month, d))
                           }
                         }}
-                        disabled={info.bloqueado}
-                        className={`w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold cursor-pointer transition-all ${info.cls} ${info.bloqueado ? 'cursor-not-allowed opacity-80' : ''}`}
+                        disabled={!sinHorario && info.bloqueado}
+                        className={
+                          sinHorario
+                            ? 'w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold transition-all bg-slate-100 opacity-50 text-slate-400 border border-slate-200 cursor-not-allowed'
+                            : `w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold cursor-pointer transition-all ${info.cls} ${info.bloqueado ? 'cursor-not-allowed opacity-80' : ''}`
+                        }
                       >
-                        {info.label}
+                        {sinHorario ? '-' : info.label}
                       </button>
                     </td>
                   )
@@ -513,7 +567,32 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feri
 export default function GeneralScreen() {
   const todosPracticantes = useAppStore((s) => s.practicantes)
   const usuarioActual = useAppStore((s) => s.usuarioActual)
+  const setTabActiva = useAppStore((s) => s.setTabActiva)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
+  const periodos = useAppStore((s) => s.periodos)
+  const semestres = useAppStore((s) => s.semestres)
+  const periodoActivo = periodos?.find(p => p.estado === 'activo') || periodos?.[0]
+  const feriados = periodoActivo?.feriados || semestres?.[0]?.feriados || []
+
+  // 🛡️ Seguridad RBAC: Vista exclusiva para Administradores / Gerencia
+  const esAdmin =
+    usuarioActual?.rol === 'GERENCIA' ||
+    (usuarioActual as any)?.rol === 'ADMIN' ||
+    (usuarioActual as any)?.role === 'ADMIN' ||
+    (usuarioActual as any)?.role === 'GERENCIA'
+
+  useEffect(() => {
+    if (!esAdmin || usuarioActual?.rol === 'PRACTICANTE') {
+      setTabActiva('hoy')
+      if (typeof window !== 'undefined' && window.location.hash) {
+        window.location.hash = '#/hoy'
+      }
+    }
+  }, [esAdmin, usuarioActual?.rol, setTabActiva])
+
+  if (!esAdmin || usuarioActual?.rol === 'PRACTICANTE') {
+    return null
+  }
 
   // Filtro relacional estricto: Supervisor solo ve sus propios practicantes
   const practicantes = usuarioActual?.rol === 'SUPERVISOR'
@@ -535,6 +614,17 @@ export default function GeneralScreen() {
   const handleNextMes = () => setFechaBase(prev => { const d = new Date(prev); d.setMonth(d.getMonth() + 1); return d })
 
   const handleCeldaClick = (p: Practicante, fecha: string, fechaLegible: string) => {
+    const feriadoObj = feriados.find((f: any) => f.fecha === fecha)
+    if (feriadoObj) {
+      toast.info(`Feriado oficial: ${feriadoObj.motivo}. Hasta mañana.`)
+      return
+    }
+
+    if (!tieneHorarioAprobado(p)) {
+      toast.warning('El practicante aún no tiene horario, revisar solicitudes')
+      return
+    }
+
     // Retirado en rango
     if (p.estadoLaboral === 'retirado' && p.retiro) {
       const inicio = p.retiro.fechaInicio
@@ -624,7 +714,7 @@ export default function GeneralScreen() {
           month={mesActual}
           dias={dias}
           extraHoursBalances={extraHoursBalances}
-          feriados={useAppStore.getState().semestres[0]?.feriados || []}
+          feriados={feriados}
           onCeldaClick={handleCeldaClick}
         />
       </div>

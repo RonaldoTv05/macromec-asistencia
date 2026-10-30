@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Eye, EyeOff, Lock, LogIn, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
@@ -22,9 +22,36 @@ export default function LoginScreen() {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [vistaPostulacion, setVistaPostulacion] = useState(false)
+  // Detección de enlace directo a postulación (#/postula o /postula)
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const hash = window.location.hash.toLowerCase();
+      const path = window.location.pathname.toLowerCase();
+      if (hash.includes('postula') || path.includes('postula')) {
+        setVistaPostulacion(true);
+      }
+    };
+    handleUrlChange();
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, []);
+
 
   if (vistaPostulacion) {
-    return <PostulacionScreen onVolver={() => setVistaPostulacion(false)} />
+    return (
+      <PostulacionScreen
+        onVolver={() => {
+          if (typeof window !== 'undefined' && window.location.hash.includes('postula')) {
+            window.location.hash = '';
+          }
+          setVistaPostulacion(false);
+        }}
+      />
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -398,7 +425,12 @@ export default function LoginScreen() {
         <div style={{ textAlign: 'center', marginTop: 20 }}>
           <button
             type="button"
-            onClick={() => setVistaPostulacion(true)}
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.hash = '/postula';
+              }
+              setVistaPostulacion(true);
+            }}
             style={{
               background: 'none',
               border: 'none',

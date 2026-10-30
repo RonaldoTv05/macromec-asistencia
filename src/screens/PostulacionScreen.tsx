@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, GraduationCap, Send } from 'lucide-react'
+import { ArrowLeft, GraduationCap, Send, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
 // ── Sanitización ────────────────────────────────────────────────
@@ -19,6 +19,8 @@ export default function PostulacionScreen({
 }) {
   const carreras = useAppStore((s) => s.carreras)
   const addPostulacion = useAppStore((s) => s.addPostulacion)
+  const semestres = useAppStore((s) => s.semestres)
+  const postulaciones = useAppStore((s) => s.postulaciones)
 
   const [nombres, setNombres] = useState('')
   const [apellidos, setApellidos] = useState('')
@@ -30,6 +32,101 @@ export default function PostulacionScreen({
   const [fechaNacimiento, setFechaNacimiento] = useState('')
   const [edad, setEdad] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
+
+  const sem = semestres[0]
+  const forzarCierre = sem?.forzarCierrePostulacion ?? false
+  const limite = sem?.limitePostulantes ?? 0
+  const limiteAlcanzado = limite > 0 && postulaciones.length >= limite
+
+  const hoy = new Date().toISOString().split('T')[0]
+  const fInicio = sem?.fechaInicioPostulacion
+  const fFin = sem?.fechaFinPostulacion
+  const fueraDeFecha = (fInicio && hoy < fInicio) || (fFin && hoy > fFin)
+
+  const isCerrado = forzarCierre || fueraDeFecha || limiteAlcanzado
+
+  if (isCerrado) {
+    return (
+      <div
+        style={{
+          minHeight: '100dvh',
+          background: 'linear-gradient(160deg, #0F172A 0%, #1E3A8A 60%, #1e40af 100%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px 20px',
+          boxSizing: 'border-box',
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 390,
+            width: '100%',
+            background: 'white',
+            borderRadius: 24,
+            padding: '32px 24px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 60,
+              height: 60,
+              borderRadius: '50%',
+              background: '#FEE2E2',
+              color: '#DC2626',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Lock size={28} />
+          </div>
+
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1E293B', margin: '0 0 8px 0' }}>
+              Convocatoria Cerrada
+            </h2>
+            <p style={{ fontSize: 13, color: '#64748B', lineHeight: '1.5', margin: 0 }}>
+              Lo sentimos, la convocatoria de prácticas en MACROMEC se encuentra actualmente cerrada.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onVolver}
+            style={{
+              width: '100%',
+              marginTop: 10,
+              padding: '12px 20px',
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)',
+              color: 'white',
+              fontSize: 14,
+              fontWeight: 700,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: '0 4px 12px rgba(37,99,235,0.25)',
+            }}
+          >
+            <ArrowLeft size={16} /> Volver al Login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
 
   useEffect(() => {
     if (fechaNacimiento) {
