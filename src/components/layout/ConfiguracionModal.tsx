@@ -1,13 +1,15 @@
 import { sumarDosMeses } from '../../utils/dateUtils';
-import { useState, useEffect, useMemo } from 'react'
-import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Smartphone, Download, Check, ChevronDown, ChevronUp, Rocket, AlertCircle, GraduationCap, Copy } from 'lucide-react'
-import type { Especialista } from '../../types'
-import { useAppStore, enviarCredencialesWhatsApp } from '../../store/useAppStore'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { X, ArrowLeft, Building2, Calendar as CalendarIcon, FileText, Save, Plus, UploadCloud, Trash2, Settings as SettingsIcon, Briefcase, UserPlus, Users, Pencil, Download, Check, ChevronDown, ChevronUp, Rocket, AlertCircle, Copy, RotateCcw } from 'lucide-react'
+import type { Especialista, Carrera, AsignacionCarreraEspecialista, ArchivoPea, PeriodoAcademico } from '../../types'
+import { useAppStore } from '../../store/useAppStore'
+import { MOCK_PLANTILLA } from '../../data/mockData'
 import ModalConfirmacion from '../ModalConfirmacion'
 import WizardNuevoPeriodo from '../WizardNuevoPeriodo'
 import { toast } from 'sonner'
-import type { Carrera, AsignacionCarreraEspecialista, PeasPorSemestre, ArchivoPea } from '../../types'
+import { getPeriodoContext, perteneceAPeriodo } from '../../utils/periodoHelpers'
 import { descargarArchivoBase64, SAMPLE_PEA_PDF_BASE64 } from '../../utils/fileUtils'
+import { cargarLogoBase64, obtenerUrlPublicaLogo, resolverLogoSrcEnHtml } from '../../utils/cartaAceptacionPdf'
 
 // ============================================================
 // BOTTOM SHEET (RF-03, RF-04)
@@ -20,8 +22,6 @@ function BottomSheetCarrera({
   carrera: Carrera | null
   onCerrar: () => void
 }) {
-  if (!carrera) return null
-
   const updateCarrera = useAppStore(s => s.updateCarrera)
   const especialistas = useAppStore(s => s.especialistas)
 
@@ -29,6 +29,7 @@ function BottomSheetCarrera({
 
   // 1. Multi-Asignación de Especialistas por Carrera y Semestre
   const [asignaciones, setAsignaciones] = useState<AsignacionCarreraEspecialista[]>(() => {
+    if (!carrera) return []
     if (carrera.asignaciones && carrera.asignaciones.length > 0) {
       return carrera.asignaciones.map(a => ({
         ...a,
@@ -47,6 +48,7 @@ function BottomSheetCarrera({
 
   // 2. Plan de Aprendizaje (PEA) vinculado directamente a la Carrera (Base64 real)
   const [peas, setPeas] = useState<ArchivoPea[]>(() => {
+    if (!carrera) return []
     if (carrera.peas && Array.isArray(carrera.peas) && carrera.peas.length > 0) {
       return carrera.peas.map((p, idx) => {
         if (typeof p === 'string') {
@@ -76,6 +78,8 @@ function BottomSheetCarrera({
     }
     return []
   })
+
+  if (!carrera) return null
 
   // Handlers para Especialistas
   const handleAddEspecialista = () => {
@@ -310,11 +314,10 @@ function BottomSheetCarrera({
                               key={sem}
                               type="button"
                               onClick={() => handleToggleSemestre(asig.id, sem)}
-                              className={`flex-1 py-2 px-2 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 ${
-                                estaAsignado
-                                  ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-500'
-                                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                              }`}
+                              className={`flex-1 py-2 px-2 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 ${estaAsignado
+                                ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-500'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                                }`}
                             >
                               {estaAsignado && <Check size={13} className="text-white" />}
                               <span>{sem}</span>
@@ -400,11 +403,10 @@ function BottomSheetCarrera({
 
             {/* Dropzone de subida general para la Carrera */}
             <label
-              className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors group ${
-                peas.length === 0
-                  ? 'border-slate-300 bg-slate-50 hover:bg-slate-100 py-6'
-                  : 'border-blue-200 bg-blue-50/40 hover:bg-blue-50 py-3'
-              }`}
+              className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors group ${peas.length === 0
+                ? 'border-slate-300 bg-slate-50 hover:bg-slate-100 py-6'
+                : 'border-blue-200 bg-blue-50/40 hover:bg-blue-50 py-3'
+                }`}
             >
               <UploadCloud
                 size={peas.length === 0 ? 30 : 22}
@@ -830,6 +832,8 @@ function SeccionCarreras() {
 
 function SeccionSemestres() {
   const periodos = useAppStore(s => s.periodos)
+  const periodoVisualizacionId = useAppStore(s => s.periodoVisualizacionId)
+  const setPeriodoVisualizacionId = useAppStore(s => s.setPeriodoVisualizacionId)
   const practicantes = useAppStore(s => s.practicantes)
   const carreras = useAppStore(s => s.carreras)
   const monitores = useAppStore(s => s.monitores || [])
@@ -840,15 +844,12 @@ function SeccionSemestres() {
   const agregarFeriado = useAppStore(s => s.agregarFeriado)
   const eliminarFeriado = useAppStore(s => s.eliminarFeriado)
 
-  const periodoActivo = useMemo(() => {
-    return periodos?.find(p => p.estado === 'activo') || periodos?.[0] || {
-      id: 'per-2026-02',
-      nombre: '2026-02',
-      fechaInicio: '2026-08-03',
-      fechaFin: '2026-12-18',
-      estado: 'activo'
-    }
-  }, [periodos])
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
 
   // Estado del Wizard de nuevo periodo
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -884,18 +885,18 @@ function SeccionSemestres() {
     return false
   }
 
-  // 1. Alumnos pertenecientes estrictamente al periodo activo (o por defecto en migración)
+  // 1. Alumnos pertenecientes estrictamente al periodo seleccionado en la Máquina del Tiempo
   const alumnosPeriodo = useMemo(() => {
-    return practicantes.filter(p => !p.periodoId || p.periodoId === periodoActivo.id)
-  }, [practicantes, periodoActivo.id])
+    return practicantes.filter(p => perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02'))
+  }, [practicantes, periodoVisId, periodoActivo?.id])
 
-  // 2. Alumnos activos y retirados del periodo activo
+  // 2. Alumnos activos y retirados del periodo visualizado
   const activos = useMemo(() => {
-    return alumnosPeriodo.filter(p => p.estadoLaboral !== 'retirado' && p.estado !== 'retirado')
+    return alumnosPeriodo.filter(p => (p.estadoGlobal || 'ACTIVO') === 'ACTIVO' && p.estadoLaboral !== 'retirado' && p.estado !== 'retirado')
   }, [alumnosPeriodo])
 
   const retirados = useMemo(() => {
-    return alumnosPeriodo.filter(p => p.estadoLaboral === 'retirado' || p.estado === 'retirado')
+    return alumnosPeriodo.filter(p => p.estadoGlobal === 'RETIRADO' || p.estadoGlobal === 'BAJA' || p.estadoGlobal === 'EGRESADO' || p.estadoLaboral === 'retirado' || p.estado === 'retirado')
   }, [alumnosPeriodo])
 
   // 3. Desglose estrictamente matemático por Carrera y Semestre
@@ -917,20 +918,19 @@ function SeccionSemestres() {
     })
   }, [carreras, activos])
 
-  // 4. Supervisores y Alumnos a cargo estrictamente en el periodo activo
+  // 4. Supervisores y Alumnos a cargo estrictamente en el periodo visualizado
   const supervisoresConCarga = useMemo(() => {
     return monitores.map(m => {
       const asignados = activos.filter(p => {
         const matchSupervisor = p.monitorId === m.id || (p as any).supervisorId === m.id
-        const matchPeriodo = !p.periodoId || p.periodoId === periodoActivo.id
-        return matchSupervisor && matchPeriodo
+        return matchSupervisor
       })
       return {
         supervisor: m,
         totalAlumnos: asignados.length,
       }
     })
-  }, [monitores, activos, periodoActivo.id])
+  }, [monitores, activos, periodoActivo?.id])
 
   // 5. Especialistas y Semestres Asignados
   const especialistasConAsignaciones = useMemo(() => {
@@ -947,33 +947,30 @@ function SeccionSemestres() {
     })
   }, [especialistas, carreras])
 
-  // Datos del calendario legacy
+  // Datos del calendario y periodo activo (estado derivado en tiempo real)
   const activoSem = semestres[0]
   const [fInicioPost, setFInicioPost] = useState(activoSem?.fechaInicioPostulacion ?? '')
   const [fFinPost, setFFinPost] = useState(activoSem?.fechaFinPostulacion ?? '')
-  const fInicioConv = periodoActivo.fechaInicio || '2026-08-03'
-  const [fFinConv, setFFinConv] = useState(() => {
-    return periodoActivo.fechaFinConvenio || activoSem?.fechaFinConvenio || sumarDosMeses(periodoActivo.fechaInicio) || '2026-10-03'
-  })
-  const [linkPost, setLinkPost] = useState(activoSem?.linkPostulacion ?? '')
-  const [forzarCierre, setForzarCierre] = useState(activoSem?.forzarCierrePostulacion ?? false)
-  const [limitePostulantes, setLimitePostulantes] = useState<number>(activoSem?.limitePostulantes ?? 0)
+
+  const fInicioConv = periodoActivo?.fechaInicioConvenio || periodoActivo?.fechaInicio || ''
+  const fFinConvCalculado =
+    periodoActivo?.fechaFinConvenio ||
+    activoSem?.fechaFinConvenio ||
+    (periodoActivo?.fechaInicio ? sumarDosMeses(periodoActivo.fechaInicio) : '')
+
+  const [fFinConvDraft, setFFinConvDraft] = useState<{ periodoId?: string; valor: string } | null>(null)
+  const fFinConv =
+    fFinConvDraft && fFinConvDraft.periodoId === periodoActivo?.id
+      ? fFinConvDraft.valor
+      : fFinConvCalculado
+
+  const forzarCierre = activoSem?.forzarCierrePostulacion ?? false
+  const limitePostulantes = activoSem?.limitePostulantes ?? 0
   const [copiado, setCopiado] = useState(false)
 
   const [nuevoFeriadoFecha, setNuevoFeriadoFecha] = useState('')
   const [nuevoFeriadoMotivo, setNuevoFeriadoMotivo] = useState('')
-  const listaFeriados = periodoActivo.feriados || activoSem?.feriados || []
-
-  useEffect(() => {
-    if (activoSem) {
-      setForzarCierre(activoSem.forzarCierrePostulacion ?? false)
-      setLimitePostulantes(activoSem.limitePostulantes ?? 0)
-    }
-    if (periodoActivo) {
-      const finConvenio = periodoActivo.fechaFinConvenio || activoSem?.fechaFinConvenio || sumarDosMeses(periodoActivo.fechaInicio)
-      if (finConvenio) setFFinConv(finConvenio)
-    }
-  }, [activoSem?.forzarCierrePostulacion, activoSem?.limitePostulantes, periodoActivo.id, periodoActivo.fechaInicio, periodoActivo.fechaFinConvenio])
+  const listaFeriados = periodoActivo?.feriados || activoSem?.feriados || []
 
   const enlacePostulacion = useMemo(() => {
     if (typeof window === 'undefined') return 'http://localhost:5173/#/postula'
@@ -997,7 +994,6 @@ function SeccionSemestres() {
   }
 
   const handleToggleForzarCierre = (val: boolean) => {
-    setForzarCierre(val)
     updateSemestreCalendario({ forzarCierrePostulacion: val })
     if (val) {
       toast.warning('Convocatoria forzada a CERRADO')
@@ -1008,7 +1004,6 @@ function SeccionSemestres() {
 
   const handleCambiarLimite = (val: number) => {
     const num = Math.max(0, val)
-    setLimitePostulantes(num)
     updateSemestreCalendario({ limitePostulantes: num })
   }
 
@@ -1023,6 +1018,7 @@ function SeccionSemestres() {
       forzarCierrePostulacion: forzarCierre,
       limitePostulantes: limitePostulantes
     })
+    setFFinConvDraft(null)
     toast.success('Calendario de semestre actualizado')
   }
 
@@ -1055,19 +1051,21 @@ function SeccionSemestres() {
             </span>
           </div>
           <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-            {periodoActivo.estado}
+            {periodoActivo?.estado || 'sin estado'}
           </span>
         </div>
 
         <div className="flex items-baseline justify-between">
           <div>
             <h2 className="text-[26px] font-black text-white m-0 tracking-tight leading-none">
-              {periodoActivo.nombre}
+              {periodoActivo?.nombre || 'Sin periodo activo'}
             </h2>
             <div className="text-[12px] text-blue-200/80 font-medium flex items-center gap-1.5 mt-1.5">
               <CalendarIcon size={13} className="text-blue-300" />
               <span>
-                {periodoActivo.fechaInicio} al {periodoActivo.fechaFin}
+                {periodoActivo?.fechaInicio && periodoActivo?.fechaFin
+                  ? `${periodoActivo.fechaInicio} al ${periodoActivo.fechaFin}`
+                  : 'Fechas sin definir'}
               </span>
             </div>
           </div>
@@ -1082,6 +1080,23 @@ function SeccionSemestres() {
           <Rocket size={16} /> Asignar Nuevo Periodo
         </button>
       </div>
+
+      {esPeriodoPasado && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 flex items-center justify-between gap-2 text-amber-900">
+          <div className="text-[11px] font-bold">
+            Viendo nómina del ciclo histórico: <span className="underline">{periodoVisualizado?.nombre}</span>
+          </div>
+          {periodoActivo && (
+            <button
+              type="button"
+              onClick={() => setPeriodoVisualizacionId(periodoActivo.id)}
+              className="bg-amber-200 hover:bg-amber-300 text-amber-950 border-none rounded-lg px-2.5 py-1 text-[10px] font-extrabold cursor-pointer shrink-0"
+            >
+              Volver al Activo
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── KPIs EN TIEMPO REAL ── */}
       <div className="grid grid-cols-3 gap-2.5">
@@ -1244,7 +1259,7 @@ function SeccionSemestres() {
           <div className="p-3.5 pt-0 border-t border-slate-100 flex flex-col gap-2">
             {retirados.length === 0 ? (
               <div className="text-center py-4 text-slate-400 text-[12px] italic">
-                No hay alumnos retirados en el periodo actual ({periodoActivo.nombre}).
+                No hay alumnos retirados en el periodo actual ({periodoActivo?.nombre || 'Actual'}).
               </div>
             ) : (
               retirados.map(p => (
@@ -1293,9 +1308,8 @@ function SeccionSemestres() {
               {/* Estado Dinámico (Badge) */}
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-bold text-slate-700">Estado de Postulación</span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold flex items-center gap-1 ${
-                  isPostulacionAbierta ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                }`}>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold flex items-center gap-1 ${isPostulacionAbierta ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  }`}>
                   {isPostulacionAbierta ? '🟢 Abierto' : '🔴 Cerrado'}
                 </span>
               </div>
@@ -1397,7 +1411,7 @@ function SeccionSemestres() {
                   <input
                     type="date"
                     value={fFinConv}
-                    onChange={e => setFFinConv(e.target.value)}
+                    onChange={e => setFFinConvDraft({ periodoId: periodoActivo?.id, valor: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-colors"
                   />
                 </div>
@@ -1487,39 +1501,146 @@ function SeccionSemestres() {
   )
 }
 
+const VARIABLES_PLANTILLA = [
+  '[Nombre estudiante]',
+  '[DNI]',
+  '[Carrera]',
+  '[Semestre]',
+  '[Área de Práctica]',
+  '[Modalidad]',
+  '[Fecha Actual]',
+] as const
+
 function SeccionPlantillas() {
   const plantilla = useAppStore(s => s.plantillaAceptacion)
   const updatePlantilla = useAppStore(s => s.updatePlantilla)
 
-  const [html, setHtml] = useState(plantilla?.contenidoHTML ?? '')
+  const [html, setHtml] = useState(plantilla?.contenidoHTML || MOCK_PLANTILLA.contenidoHTML)
+  const [logoSrcPreview, setLogoSrcPreview] = useState<string>(() => obtenerUrlPublicaLogo())
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  useEffect(() => {
+    if (plantilla?.contenidoHTML) {
+      setHtml(plantilla.contenidoHTML)
+    }
+  }, [plantilla?.contenidoHTML])
+
+  useEffect(() => {
+    let activo = true
+    cargarLogoBase64().then((b64) => {
+      if (activo && b64) setLogoSrcPreview(b64)
+    })
+    return () => {
+      activo = false
+    }
+  }, [])
+
+  const htmlVistaPrevia = useMemo(
+    () => resolverLogoSrcEnHtml(html, logoSrcPreview),
+    [html, logoSrcPreview]
+  )
+
+  const handleInsertarVariable = (variable: string) => {
+    const el = textareaRef.current
+    if (!el) {
+      setHtml((prev) => `${prev}${variable}`)
+      return
+    }
+    const start = el.selectionStart ?? html.length
+    const end = el.selectionEnd ?? html.length
+    const next = `${html.slice(0, start)}${variable}${html.slice(end)}`
+    setHtml(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + variable.length
+      el.setSelectionRange(pos, pos)
+    })
+    toast.success(`Variable ${variable} insertada`)
+  }
 
   const handleGuardar = () => {
     updatePlantilla({ contenidoHTML: html })
     toast.success('Plantilla de aceptación guardada')
   }
 
+  const handleRestaurarDefault = () => {
+    setHtml(MOCK_PLANTILLA.contenidoHTML)
+    updatePlantilla({ contenidoHTML: MOCK_PLANTILLA.contenidoHTML })
+    toast.success('Plantilla institucional restaurada')
+  }
+
   return (
     <div className="flex flex-col gap-4 pb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-4">
-        <h3 className="font-bold text-slate-800 text-[14px]">Plantilla de Aceptación</h3>
+      {/* Vista previa A4 institucional */}
+      <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="font-bold text-slate-800 text-[14px]">Vista Previa (Hoja A4)</h3>
+            <p className="text-[11px] text-slate-500">Desliza horizontal o verticalmente para revisar el formato de exportación.</p>
+          </div>
+          <span className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full shrink-0">
+            A4 • 210×297 mm
+          </span>
+        </div>
+
+        <style>{`
+          .carta-a4-preview p { margin-bottom: 14px; }
+          .carta-a4-preview p:last-child { margin-bottom: 0; }
+          .carta-a4-preview h2 { font-weight: 700; }
+        `}</style>
+
+        <div className="bg-slate-200/70 p-2.5 rounded-xl border border-slate-200">
+          <div className="w-full max-h-[420px] overflow-auto bg-white rounded-lg shadow-sm border border-slate-300">
+            <div
+              className="carta-a4-preview w-[794px] min-h-[1122px] bg-white mx-auto"
+              dangerouslySetInnerHTML={{ __html: htmlVistaPrevia }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Editor HTML + Variables */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-bold text-slate-800 text-[14px]">Editor HTML de Aceptación</h3>
+          <button
+            type="button"
+            onClick={handleRestaurarDefault}
+            className="text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1 active:scale-95 transition-all"
+          >
+            <RotateCcw size={12} /> Restaurar Institucional
+          </button>
+        </div>
 
         <div>
-          <label className="text-[11px] font-bold text-slate-500 mb-2 block">Variables dinámicas permitidas:</label>
-          <div className="flex flex-wrap gap-2">
-            {['[Nombre estudiante]', '[DNI]', '[Semestre]', '[Carrera]', '[Área de Práctica]', '[Modalidad]'].map(variable => (
-              <span key={variable} className="bg-purple-50 text-purple-700 border border-purple-200 text-[11px] px-2 py-1 rounded-md font-bold">{variable}</span>
+          <label className="text-[11px] font-bold text-slate-500 mb-2 block">Variables dinámicas permitidas (toca para insertar):</label>
+          <div className="flex flex-wrap gap-1.5">
+            {VARIABLES_PLANTILLA.map(variable => (
+              <button
+                key={variable}
+                type="button"
+                onClick={() => handleInsertarVariable(variable)}
+                className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] px-2 py-1 rounded-md font-bold active:scale-95 transition-transform cursor-pointer"
+              >
+                {variable}
+              </button>
             ))}
           </div>
         </div>
 
         <textarea
+          ref={textareaRef}
           value={html}
           onChange={e => setHtml(e.target.value)}
-          className="w-full h-64 bg-slate-50 border border-slate-200 rounded-lg p-3 text-[13px] font-mono text-slate-700 outline-none focus:ring-2 focus:ring-purple-500/50 resize-none transition-shadow"
-          placeholder="<h1>Bienvenido...</h1>"
+          className="w-full h-64 bg-slate-50 border border-slate-200 rounded-lg p-3 text-[12px] font-mono text-slate-700 outline-none focus:ring-2 focus:ring-purple-500/50 resize-y transition-shadow"
+          placeholder="<div>...</div>"
         />
 
-        <button onClick={handleGuardar} className="w-full bg-purple-600 text-white rounded-xl py-3.5 font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm mt-2 active:bg-purple-700 transition-colors">
+        <button
+          type="button"
+          onClick={handleGuardar}
+          className="w-full bg-purple-600 text-white rounded-xl py-3.5 font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm mt-1 active:bg-purple-700 transition-colors cursor-pointer"
+        >
           <Save size={18} /> Guardar Plantilla
         </button>
       </div>

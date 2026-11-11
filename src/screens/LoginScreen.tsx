@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Eye, EyeOff, Lock, LogIn, User } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '../store/useAppStore'
+import {
+  LOGIN_ALERT_EGRESADO,
+  useAppStore,
+} from '../store/useAppStore'
 import PostulacionScreen from './PostulacionScreen'
 
 // ── Helpers de sanitización ──────────────────────────────────
@@ -20,7 +23,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [cargando, setCargando] = useState(false)
-  const [error, setError] = useState('')
+  const [alerta, setAlerta] = useState<{ tipo: 'error' | 'egresado'; mensaje: string } | null>(null)
   const [vistaPostulacion, setVistaPostulacion] = useState(false)
   // Detección de enlace directo a postulación (#/postula o /postula)
   useEffect(() => {
@@ -56,13 +59,13 @@ export default function LoginScreen() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+    setAlerta(null)
 
     const u = sanitize(username)
     const p = sanitize(password)
 
     if (!u || !p) {
-      setError('Completa todos los campos')
+      setAlerta({ tipo: 'error', mensaje: 'Completa todos los campos' })
       return
     }
 
@@ -74,10 +77,15 @@ export default function LoginScreen() {
     setCargando(false)
 
     if (typeof resultado === 'string') {
-      setError(resultado)
-      toast.error('Acceso denegado')
+      if (resultado === LOGIN_ALERT_EGRESADO) {
+        setAlerta({ tipo: 'egresado', mensaje: resultado })
+        toast.success('Ciclo concluido con éxito')
+      } else {
+        setAlerta({ tipo: 'error', mensaje: resultado })
+        toast.error('Acceso denegado')
+      }
     } else if (!resultado) {
-      setError('Usuario o contraseña incorrectos')
+      setAlerta({ tipo: 'error', mensaje: 'Usuario o contraseña incorrectos' })
       toast.error('Credenciales inválidas — Verifica tus datos')
     } else {
       toast.success('¡Bienvenido al Sistema MACROMEC!')
@@ -256,16 +264,17 @@ export default function LoginScreen() {
                 value={username}
                 onChange={(e) => {
                   setUsername(e.target.value)
-                  setError('')
+                  setAlerta(null)
                 }}
                 maxLength={50}
                 style={{
                   width: '100%',
                   padding: '13px 16px 13px 40px',
                   background: 'rgba(255,255,255,0.08)',
-                  border: error
-                    ? '1.5px solid rgba(239,68,68,0.6)'
-                    : '1.5px solid rgba(255,255,255,0.1)',
+                  border:
+                    alerta?.tipo === 'error'
+                      ? '1.5px solid rgba(239,68,68,0.6)'
+                      : '1.5px solid rgba(255,255,255,0.1)',
                   borderRadius: 12,
                   fontSize: 15,
                   color: 'white',
@@ -277,9 +286,10 @@ export default function LoginScreen() {
                   e.target.style.borderColor = 'rgba(59,130,246,0.7)'
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = error
-                    ? 'rgba(239,68,68,0.6)'
-                    : 'rgba(255,255,255,0.1)'
+                  e.target.style.borderColor =
+                    alerta?.tipo === 'error'
+                      ? 'rgba(239,68,68,0.6)'
+                      : 'rgba(255,255,255,0.1)'
                 }}
               />
             </div>
@@ -320,16 +330,17 @@ export default function LoginScreen() {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value)
-                  setError('')
+                  setAlerta(null)
                 }}
                 maxLength={50}
                 style={{
                   width: '100%',
                   padding: '13px 44px 13px 40px',
                   background: 'rgba(255,255,255,0.08)',
-                  border: error
-                    ? '1.5px solid rgba(239,68,68,0.6)'
-                    : '1.5px solid rgba(255,255,255,0.1)',
+                  border:
+                    alerta?.tipo === 'error'
+                      ? '1.5px solid rgba(239,68,68,0.6)'
+                      : '1.5px solid rgba(255,255,255,0.1)',
                   borderRadius: 12,
                   fontSize: 15,
                   color: 'white',
@@ -341,9 +352,10 @@ export default function LoginScreen() {
                   e.target.style.borderColor = 'rgba(59,130,246,0.7)'
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = error
-                    ? 'rgba(239,68,68,0.6)'
-                    : 'rgba(255,255,255,0.1)'
+                  e.target.style.borderColor =
+                    alerta?.tipo === 'error'
+                      ? 'rgba(239,68,68,0.6)'
+                      : 'rgba(255,255,255,0.1)'
                 }}
               />
               <button
@@ -370,14 +382,18 @@ export default function LoginScreen() {
             </div>
           </div>
 
-          {/* Mensaje de error */}
-          {error && (
+          {/* Alerta de acceso bloqueado / error / egresado */}
+          {alerta && (
             <div
-              role="alert"
-              className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-lg text-sm text-center font-medium mt-4 mb-5"
+              role={alerta.tipo === 'egresado' ? 'status' : 'alert'}
+              className={
+                alerta.tipo === 'egresado'
+                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 p-3 rounded-lg text-sm text-center font-medium mt-4 mb-5 leading-relaxed'
+                  : 'bg-red-50 text-red-600 border border-red-200 p-3 rounded-lg text-sm text-center font-medium mt-4 mb-5 leading-relaxed'
+              }
               style={{ marginBottom: 20 }}
             >
-              ⚠️ {error}
+              {alerta.tipo === 'egresado' ? alerta.mensaje : `⚠️ ${alerta.mensaje}`}
             </div>
           )}
 

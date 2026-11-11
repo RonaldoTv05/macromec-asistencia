@@ -135,13 +135,32 @@ export interface VersionHistorial {
   accion: 'creado' | 'editado'
 }
 
+export type EstadoHE = 'pendiente' | 'aprobado' | 'rechazado'
+
 export interface RegistroDiario {
   fecha: string
   actividades: ActividadDiaria[]
   historialVersiones: VersionHistorial[]
   horasExtras?: number
   heSupervisor?: number
+  horasExtrasPropuestas?: number
+  horasExtrasAprobadas?: number
   hePendienteValidacion?: boolean
+  heRevisadas?: boolean
+  estadoHE?: EstadoHE
+}
+
+export interface RegistroActividadDiaria {
+  id: string // `${practicanteId}_${fecha}`
+  practicanteId: string
+  fecha: string // YYYY-MM-DD
+  actividades: ActividadDiaria[]
+  horasExtrasPropuestas: number
+  horasExtrasAprobadas?: number
+  heRevisadas?: boolean
+  estadoHE?: EstadoHE
+  historialVersiones?: VersionHistorial[]
+  nombreAutor?: string
 }
 
 export type TipoAsistencia = 'asistio' | 'tardanza' | 'falta' | 'campo' | 'libre' | 'pendiente'
@@ -153,7 +172,11 @@ export interface RegistroAsistencia {
   horasExtraManuales: number
   horasExtraHikvision: number
   horasExtraSupervisor?: number
+  horasExtrasPropuestas?: number
+  horasExtrasAprobadas?: number
   hePendienteValidacion?: boolean
+  heRevisadas?: boolean
+  estadoHE?: EstadoHE
   faltaCubierta: boolean
 }
 
@@ -172,18 +195,25 @@ export interface PeriodoAcademico {
   fechaFinConvenio?: string;
 }
 
+// ── Estados globales de ciclo de vida ─────────────────────────
+export type EstadoGlobalPracticante = 'ACTIVO' | 'RETIRADO' | 'EGRESADO' | 'BAJA'
+export type EstadoGlobalMonitor = 'ACTIVO' | 'SUSPENDIDO'
+
 // ── Practicante en el sistema ────────────────────────────────
 export interface Practicante {
   id: string
+  periodo_id: string
   periodoId?: string
   nombre: string
   apellido?: string
   email: string
-  fechaNacimiento: string
+  correo?: string
+  fechaNacimiento?: string
   dni: string
   tel?: string
   celular: string
-  password: string
+  telefono?: string
+  password?: string
   carrera: string
   carreraId: string;
   semestre: string
@@ -201,6 +231,7 @@ export interface Practicante {
   asistencia?: Record<string, RegistroAsistencia>
   entregaHojaFisica: boolean
   almuerzosConfirmados: string[] // fechas ISO
+  estadoGlobal: EstadoGlobalPracticante
   estadoLaboral: EstadoLaboral
   estado?: 'activo' | 'retirado'
   motivoRetiro?: string
@@ -245,14 +276,38 @@ export interface InformeQuincenal {
 export interface User {
   id: string
   username: string
-  password: string        // Sólo para simulación local; no exponer en producción
+  password?: string       // Por defecto DNI en usuarios nuevos; editable por Admin
   nombre: string          // Nombre completo
   rol: Rol
   email: string
+  correo?: string
   dni: string
   tel: string
+  telefono?: string
+  fechaNacimiento?: string
   carrera: string         // Cargo / área
   avatarIniciales: string // Calculadas del nombre
+  fotoHikvision?: string
+}
+
+export type Admin = User;
+export type TipoUsuarioPerfil = 'PRACTICANTE' | 'SUPERVISOR' | 'ADMIN' | 'GERENCIA';
+
+export interface PerfilUsuarioLive {
+  id: string
+  tipoUsuario: TipoUsuarioPerfil
+  nombres: string
+  nombre: string
+  apellido?: string
+  dni: string
+  password?: string
+  correo: string
+  telefono: string
+  carrera: string
+  carreraId?: string
+  modalidad?: ModalidadBase
+  fechaNacimiento: string
+  avatarIniciales: string
 }
 
 // ── Toast de notificación ────────────────────────────────────
@@ -333,13 +388,20 @@ export interface Monitor {
   area: string;
   dni?: string;
   celular?: string;
+  telefono?: string;
   rol?: string;
+  modalidadBase?: ModalidadBase;
   especialistasAsignados?: string[];
   correoGmail?: string;
+  correo?: string;
+  fechaNacimiento?: string;
   password?: string;
+  estadoGlobal: EstadoGlobalMonitor;
   estado?: 'Activo' | 'Suspendido' | 'Retirado';
   motivoSuspension?: string;
 }
+
+export type Supervisor = Monitor;
 
 export interface Especialista {
   id: string

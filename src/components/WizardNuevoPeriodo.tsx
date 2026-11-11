@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
+import { esSupervisorSuspendido, perteneceAPeriodo } from '../utils/periodoHelpers'
 import ModalConfirmacion from './ModalConfirmacion'
 import type { Practicante } from '../types'
 
@@ -42,9 +43,13 @@ export default function WizardNuevoPeriodo({ isOpen, onClose }: WizardNuevoPerio
     estado: 'activo' as const
   }
 
-  // Practicantes activos del periodo actual
+  // Practicantes activos estrictamente del periodo actual
   const practicantesActivos = practicantes.filter(
-    (p) => p.estadoLaboral !== 'retirado' && p.estado !== 'retirado'
+    (p) =>
+      perteneceAPeriodo(p, periodoActivo.id) &&
+      (p.estadoGlobal || 'ACTIVO') === 'ACTIVO' &&
+      p.estadoLaboral !== 'retirado' &&
+      p.estado !== 'retirado'
   )
 
   // Pasos: 1. Definición | 2. Promoción de Alumnos | 3. Configuración de Roles
@@ -494,6 +499,7 @@ export default function WizardNuevoPeriodo({ isOpen, onClose }: WizardNuevoPerio
                           {monitores.map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.nombre} ({m.area?.slice(0, 15) || 'Supervisor'})
+                              {esSupervisorSuspendido(m) ? ' [Suspendido]' : ''}
                             </option>
                           ))}
                         </select>

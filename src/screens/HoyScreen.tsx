@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { Modalidad, ArchivoPea } from '../types'
 import { descargarArchivoBase64, SAMPLE_PEA_PDF_BASE64 } from '../utils/fileUtils'
 import {
@@ -27,12 +27,25 @@ import {
   X,
   Cake,
 } from 'lucide-react'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, tieneHePendienteGlobal } from '../store/useAppStore'
+import {
+  esSupervisorSuspendido,
+  getPeriodoContext,
+  perteneceAPeriodo,
+} from '../utils/periodoHelpers'
 import {
   HORAS_SEMANA_ACTUAL,
   SEMANA_ANTERIOR_LABEL,
   HORAS_SEMANA_ANTERIOR,
+  MOCK_PLANTILLA,
 } from '../data/mockData'
+import {
+  extraerDatosCartaPracticante,
+  generarCartaAceptacionPDF,
+} from '../utils/cartaAceptacionPdf'
+import ModalCumpleaños, {
+  construirCumpleanosActivos,
+} from '../components/ModalCumpleaños'
 import { toast } from 'sonner'
 
 
@@ -99,17 +112,44 @@ function DashboardPracticante() {
   const carreras = useAppStore((s) => s.carreras || [])
   const monitores = useAppStore((s) => s.monitores || [])
   const periodos = useAppStore((s) => s.periodos || [])
-  const periodoActivo = periodos.find(p => p.estado === 'activo') || periodos[0]
-  const periodoActivoNombre = periodoActivo?.nombre || '2026-02'
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
+  const getEspecialistaAsignado = useAppStore((s) => s.getEspecialistaAsignado)
 
-  const getEspecialistaAsignado = useAppStore(s => s.getEspecialistaAsignado);
+  const [expedienteOpen, setExpedienteOpen] = useState(false)
+  const [fechaRegistroModal, setFechaRegistroModal] = useState<string | null>(null)
 
-  const practicanteCompleto = practicantes.find(p => p.dni === usuario?.dni) || practicantes[0];
-  const especialistaObjeto = getEspecialistaAsignado(practicanteCompleto.carreraId || practicanteCompleto.carrera, practicanteCompleto.semestre);
-  const nombreEspecialista = especialistaObjeto ? `${especialistaObjeto.nombres} ${especialistaObjeto.apellidos}` : 'Especialista por asignar';
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
+  const periodoActivoNombre = periodoVisualizado?.nombre || periodoActivo?.nombre || '2026-02'
 
-  const supervisorAsignado = monitores.find(m => m.id === practicanteCompleto?.monitorId);
-  const nombreSupervisor = supervisorAsignado ? supervisorAsignado.nombre : 'Supervisor no asignado';
+  // Filtro relacional estricto al periodo seleccionado en la Máquina del Tiempo
+  const practicanteCompleto = practicantes.find(
+    (pr) =>
+      (pr.id === usuario?.id || (usuario?.dni && pr.dni === usuario.dni)) &&
+      perteneceAPeriodo(pr, periodoVisId, periodoActivo?.id || 'per-2026-02'),
+  )
+
+  const p = practicanteCompleto
+  const idActual = p?.id || ''
+
+  const especialistaObjeto = p
+    ? getEspecialistaAsignado(p.carreraId || p.carrera, p.semestre)
+    : undefined
+  const nombreEspecialista = especialistaObjeto
+    ? `${especialistaObjeto.nombres} ${especialistaObjeto.apellidos}`
+    : 'Especialista por asignar'
+
+  const supervisorAsignado = p
+    ? monitores.find((m) => m.id === p.monitorId)
+    : undefined
+  const supervisorSuspendido = esSupervisorSuspendido(supervisorAsignado)
+  const nombreSupervisor = supervisorAsignado
+    ? supervisorAsignado.nombre
+    : 'Supervisor no asignado'
 
   // Normalización de semestre (ej. "VI Semestre" -> "S6")
   const normalizeSemestre = (s: string) => {
@@ -120,11 +160,11 @@ function DashboardPracticante() {
     if (upper.includes('V') || upper === 'S5') return 'S5';
     return upper;
   };
-  const cicloEstudiante = normalizeSemestre(practicanteCompleto.semestre);
+  const cicloEstudiante = normalizeSemestre(p?.semestre || '');
 
   const carreraPracticante = carreras.find(c =>
-    c.id === practicanteCompleto.carreraId ||
-    c.nombre === practicanteCompleto.carrera ||
+    c.id === p?.carreraId ||
+    c.nombre === p?.carrera ||
     c.nombre === usuario?.carrera ||
     c.id === usuario?.carrera
   );
@@ -134,20 +174,20 @@ function DashboardPracticante() {
     if (!carreraPracticante) return [];
     const list: ArchivoPea[] = [];
     if (carreraPracticante.peas && Array.isArray(carreraPracticante.peas)) {
-      carreraPracticante.peas.forEach((p, idx) => {
-        if (!p) return;
-        if (typeof p === 'string') {
+      carreraPracticante.peas.forEach((pItem, idx) => {
+        if (!pItem) return;
+        if (typeof pItem === 'string') {
           list.push({
             id: `pea-${idx}`,
-            nombre: p,
+            nombre: pItem,
             base64: SAMPLE_PEA_PDF_BASE64,
             tipoMime: 'application/pdf',
           });
         } else {
           list.push({
-            ...p,
-            base64: p.base64 || SAMPLE_PEA_PDF_BASE64,
-            tipoMime: p.tipoMime || 'application/pdf',
+            ...pItem,
+            base64: pItem.base64 || SAMPLE_PEA_PDF_BASE64,
+            tipoMime: pItem.tipoMime || 'application/pdf',
           });
         }
       });
@@ -165,25 +205,19 @@ function DashboardPracticante() {
     }
     return list;
   }, [carreraPracticante]);
-  const [expedienteOpen, setExpedienteOpen] = useState(false);
 
-  const p = practicanteCompleto;
-  const idActual = p.id;
-  const saldoHE = useAppStore(state => {
-    const pActual = state.practicantes.find(pr => pr.id === idActual);
-    if (pActual?.saldoHorasExtras !== undefined) return pActual.saldoHorasExtras;
-    const b = state.extraHoursBalances.find(b => b.practicanteId === idActual);
-    return b?.horasDisponibles || 0;
-  });
-
-  const [fechaRegistroModal, setFechaRegistroModal] = useState<string | null>(null)
+  const saldoHE = useMemo(() => {
+    if (!idActual) return 0
+    if (p?.saldoHorasExtras !== undefined) return p.saldoHorasExtras
+    const b = extraHoursBalances.find((bal) => bal.practicanteId === idActual)
+    return b?.horasDisponibles || 0
+  }, [idActual, p?.saldoHorasExtras, extraHoursBalances])
 
   const pct = Math.round((HORAS_SEMANA_ACTUAL / 30) * 100)
 
-  if (!p || !usuario) return null
-
   // ── Cálculo de los 7 días de la semana actual (Lunes a Domingo) ──
   const bloquesSemana = useMemo(() => {
+    if (!p) return { dias: [], sumaHoras: 0 }
     const d = new Date()
     const diaSemanaNum = d.getDay() === 0 ? 7 : d.getDay() // Lunes=1, ..., Domingo=7
     const lunes = new Date(d)
@@ -253,7 +287,23 @@ function DashboardPracticante() {
     })
 
     return { dias, sumaHoras }
-  }, [p.historial, p.asistencia, p.horarioVigente, p.horarioAprobado, p.horarioActual])
+  }, [p])
+
+  if (!usuario) return null
+  if (!p) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+          <p className="text-[13px] font-bold text-amber-900 mb-1">
+            Sin historial registrado en el periodo {periodoActivoNombre}
+          </p>
+          <p className="text-[11px] text-amber-700">
+            Cambia el selector de ciclo en el encabezado para volver a tu periodo activo.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   // FASE 1: LÓGICA DE REVELACIÓN PROGRESIVA DE DÍAS (TIEMPO REAL)
   const hoy = new Date();
@@ -376,6 +426,13 @@ function DashboardPracticante() {
 
   return (
     <div className="flex flex-col gap-3">
+      {esPeriodoPasado && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+          <Lock size={14} className="shrink-0 text-amber-700" />
+          <span>Modo Histórico ({periodoActivoNombre}) — Solo Lectura.</span>
+        </div>
+      )}
+
       {/* ── Tarjeta de perfil del día ── */}
       <Card>
         <div className="flex items-center gap-3">
@@ -424,6 +481,11 @@ function DashboardPracticante() {
             <div className="flex flex-col">
               <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Supervisor (MACROMEC)</span>
               <span className="text-sm font-medium text-green-700 truncate" title={nombreSupervisor}>{nombreSupervisor}</span>
+              {supervisorSuspendido && (
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5 mt-1 w-fit">
+                  Supervisor Suspendido - Requiere Reasignación
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -735,6 +797,7 @@ function DashboardPracticante() {
           practicante={p}
           usuario={usuario}
           plantilla={plantilla}
+          readOnly={esPeriodoPasado}
           onUpload={uploadDocumento}
           onCerrar={() => setExpedienteOpen(false)}
         />
@@ -746,6 +809,7 @@ function DashboardPracticante() {
           fecha={fechaRegistroModal}
           practicante={p}
           usuarioActual={usuario}
+          readOnly={esPeriodoPasado}
           onClose={() => setFechaRegistroModal(null)}
         />
       )}
@@ -758,42 +822,96 @@ export function BottomSheetRegistroDiario({
   fecha,
   practicante,
   usuarioActual,
+  readOnly = false,
   onClose,
   vistaAuditoriaInicial = false
 }: {
   fecha: string,
   practicante: import('../types').Practicante,
   usuarioActual: import('../types').User,
+  readOnly?: boolean,
   onClose: () => void,
   vistaAuditoriaInicial?: boolean
 }) {
   const guardarRegistroDiario = useAppStore(s => s.guardarRegistroDiario)
+  const actividadesDiarias = useAppStore(s => s.actividadesDiarias)
+  const periodos = useAppStore(s => s.periodos || [])
+  const periodoVisualizacionId = useAppStore(s => s.periodoVisualizacionId)
+  const { esPeriodoPasado } = getPeriodoContext(periodos, periodoVisualizacionId)
+  const soloLectura = Boolean(readOnly || esPeriodoPasado)
+
+  const compositeId = `${practicante.id}_${fecha}`
+  const registroAct = useMemo(() => {
+    return actividadesDiarias.find(
+      (a) => a.id === compositeId || (a.practicanteId === practicante.id && a.fecha === fecha)
+    )
+  }, [actividadesDiarias, compositeId, practicante.id, fecha])
 
   const registroActual = practicante.registrosDiarios?.[fecha]
-  const heInicial = registroActual?.horasExtras ?? practicante.asistencia?.[fecha]?.horasExtraSupervisor ?? 0
+
+  const actividadesIniciales = useMemo(() => {
+    return registroAct?.actividades || registroActual?.actividades || []
+  }, [registroAct, registroActual])
+
+  const heInicial = useMemo(() => {
+    return (
+      registroAct?.horasExtrasPropuestas ??
+      registroActual?.horasExtras ??
+      practicante.asistencia?.[fecha]?.horasExtraSupervisor ??
+      0
+    )
+  }, [registroAct, registroActual, practicante.asistencia, fecha])
+
+  const historialVersiones = useMemo(() => {
+    return registroAct?.historialVersiones || registroActual?.historialVersiones || []
+  }, [registroAct, registroActual])
+
+  const [actividadesLocales, setActividadesLocales] = useState<import('../types').ActividadDiaria[]>(actividadesIniciales)
   const [horasExtrasDelDia, setHorasExtrasDelDia] = useState<number>(heInicial)
   const [showHeModal, setShowHeModal] = useState(false)
-  const [heSeleccionado, setHeSeleccionado] = useState<number>(horasExtrasDelDia > 0 ? horasExtrasDelDia : 1)
+  const [heSeleccionado, setHeSeleccionado] = useState<number>(heInicial > 0 ? heInicial : 1)
   const [isEditingHe, setIsEditingHe] = useState(false)
-
-  const [actividadesLocales, setActividadesLocales] = useState<import('../types').ActividadDiaria[]>(
-    registroActual?.actividades || []
-  )
   const [vistaAuditoria, setVistaAuditoria] = useState(vistaAuditoriaInicial)
 
+  // Sincronización estricta por fecha: carga limpia si es nueva fecha y sin arrastrar días pasados
+  useEffect(() => {
+    setActividadesLocales(actividadesIniciales)
+    setHorasExtrasDelDia(heInicial)
+    setHeSeleccionado(heInicial > 0 ? heInicial : 1)
+    setIsEditingHe(false)
+    setShowHeModal(false)
+  }, [fecha, practicante.id, actividadesIniciales, heInicial])
+
+  // Verificación estricta de falta (fuente de la verdad del Administrador/Gerencia)
+  const regHistorial = practicante.historial?.find((h) => h.fecha === fecha)
+  const asistenciaDia = practicante.asistencia?.[fecha]
+
+  const esFalta = Boolean(
+    regHistorial?.estado === 'FALTA' ||
+    regHistorial?.estado === 'FALTA_CUBIERTA' ||
+    asistenciaDia?.estado?.toLowerCase() === 'falta'
+  )
+
+  const observacionFalta = regHistorial?.observacion?.trim() || asistenciaDia?.observacion?.trim()
+  const motivoFalta = observacionFalta && observacionFalta.length > 0 ? observacionFalta : 'Sin observación registrada'
+
+  const bloqueado = esFalta || soloLectura
+
   const handleGuardarClick = () => {
+    if (bloqueado) return
     if (usuarioActual.rol === 'SUPERVISOR') {
       setShowHeModal(true)
       setIsEditingHe(false)
       return
     }
-    // Practicante guarda directamente sin declarar HE
-    guardarRegistroDiario(practicante.id, fecha, actividadesLocales, usuarioActual.nombre, 0)
+    // Practicante guarda directamente sin modificar propuesta ni estado de HE
+    guardarRegistroDiario(practicante.id, fecha, actividadesLocales, usuarioActual.nombre)
     toast.success('Registro diario guardado')
     onClose()
   }
 
   const handleConfirmarHe = (heFinal: number) => {
+    if (bloqueado) return
     setHorasExtrasDelDia(heFinal)
     guardarRegistroDiario(practicante.id, fecha, actividadesLocales, usuarioActual.nombre, heFinal)
     if (heFinal > 0) {
@@ -806,6 +924,7 @@ export function BottomSheetRegistroDiario({
   }
 
   const handleAddActividad = () => {
+    if (bloqueado) return
     setActividadesLocales([
       ...actividadesLocales,
       { id: Date.now().toString(), descripcion: '', tipo: 'Macromec' }
@@ -813,10 +932,12 @@ export function BottomSheetRegistroDiario({
   }
 
   const handleEliminar = (id: string) => {
+    if (bloqueado) return
     setActividadesLocales(actividadesLocales.filter(a => a.id !== id))
   }
 
   const handleChange = (id: string, campo: keyof import('../types').ActividadDiaria, valor: any) => {
+    if (bloqueado) return
     setActividadesLocales(actividadesLocales.map(a => a.id === id ? { ...a, [campo]: valor } : a))
   }
 
@@ -832,11 +953,15 @@ export function BottomSheetRegistroDiario({
               <h3 className="font-bold text-slate-900 text-[18px]">
                 {vistaAuditoria ? 'Auditoría de Registro' : 'Registro de Actividades'}
               </h3>
-              {usuarioActual.rol === 'SUPERVISOR' && (
+              {esFalta ? (
+                <span className="bg-red-100 text-red-700 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full border border-red-200 shadow-xs">
+                  Falta
+                </span>
+              ) : usuarioActual.rol === 'SUPERVISOR' ? (
                 <span className="bg-blue-100 text-blue-700 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full border border-blue-200 shadow-xs">
                   HE: {horasExtrasDelDia}
                 </span>
-              )}
+              ) : null}
             </div>
             <span className="text-[13px] text-slate-500">{formatFecha(fecha)} — {practicante.nombre}</span>
           </div>
@@ -859,12 +984,12 @@ export function BottomSheetRegistroDiario({
         {/* Content */}
         {vistaAuditoria ? (
           <div className="flex flex-col gap-4">
-            {!registroActual?.historialVersiones?.length ? (
+            {!historialVersiones.length ? (
               <div className="text-center text-slate-400 py-8 text-[13px]">No hay historial de versiones.</div>
             ) : (
               <div className="flex flex-col gap-3 relative before:absolute before:inset-y-0 before:left-3.5 before:w-px before:bg-slate-200">
-                {registroActual.historialVersiones.map((v, i) => (
-                  <div key={v.id} className="flex gap-3 relative">
+                {historialVersiones.map((v, i) => (
+                  <div key={v.id || i} className="flex gap-3 relative">
                     <div className="w-7 h-7 rounded-full bg-white border-2 border-blue-500 shrink-0 z-10 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-blue-500" />
                     </div>
@@ -883,6 +1008,29 @@ export function BottomSheetRegistroDiario({
           </div>
         ) : (
           <div className="flex flex-col gap-4">
+            {/* Aviso de Periodo Histórico (Solo Lectura) */}
+            {soloLectura && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+                <Lock size={15} className="shrink-0 text-amber-700" />
+                <span>Solo Lectura — Registro histórico perteneciente a un periodo cerrado.</span>
+              </div>
+            )}
+
+            {/* Aviso de Falta (REQUERIMIENTO 3) */}
+            {esFalta && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 flex items-start gap-2.5">
+                <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={18} />
+                <div className="flex-1">
+                  <p className="font-bold text-red-900 text-[12px] leading-snug">
+                    El aprendiz fue marcado como ausente hoy. Motivo: {motivoFalta}
+                  </p>
+                  <p className="text-[11px] text-red-700 mt-0.5">
+                    El registro y edición de actividades se encuentra inhabilitado debido a la falta reportada.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {actividadesLocales.length === 0 ? (
               <div className="text-center text-slate-400 py-6 text-[13px]">
                 {usuarioActual.rol === 'SUPERVISOR'
@@ -898,21 +1046,26 @@ export function BottomSheetRegistroDiario({
                         type="text"
                         placeholder="Descripción de la actividad..."
                         value={act.descripcion}
+                        disabled={bloqueado}
                         onChange={(e) => handleChange(act.id, 'descripcion', e.target.value)}
-                        className="flex-1 bg-transparent text-[13px] font-medium text-slate-800 placeholder-slate-400 outline-none w-full"
+                        className={`flex-1 bg-transparent text-[13px] font-medium text-slate-800 placeholder-slate-400 outline-none w-full ${bloqueado ? 'cursor-not-allowed opacity-60' : ''}`}
                       />
-                      <button
-                        onClick={() => handleEliminar(act.id)}
-                        className="text-red-400 hover:text-red-600 bg-red-50 p-1.5 rounded-lg transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {!bloqueado && (
+                        <button
+                          type="button"
+                          onClick={() => handleEliminar(act.id)}
+                          className="text-red-400 hover:text-red-600 bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                     <div className="flex gap-2 items-center">
                       <select
                         value={act.tipo}
+                        disabled={bloqueado}
                         onChange={(e) => handleChange(act.id, 'tipo', e.target.value as 'Macromec' | 'SENATI')}
-                        className="bg-slate-100 text-slate-700 text-[12px] font-semibold px-2.5 py-1.5 rounded-lg border-none outline-none"
+                        className={`bg-slate-100 text-slate-700 text-[12px] font-semibold px-2.5 py-1.5 rounded-lg border-none outline-none ${bloqueado ? 'cursor-not-allowed opacity-60' : ''}`}
                       >
                         <option value="Macromec">Macromec</option>
                         <option value="SENATI">SENATI</option>
@@ -924,23 +1077,49 @@ export function BottomSheetRegistroDiario({
             )}
 
             <button
+              type="button"
+              disabled={bloqueado}
               onClick={handleAddActividad}
-              className="w-full border-2 border-dashed border-slate-300 text-slate-500 font-bold py-3 rounded-xl text-[13px] flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors"
+              className={`w-full border-2 border-dashed font-bold py-3 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-colors ${
+                bloqueado
+                  ? 'border-slate-200 text-slate-400 bg-slate-100/70 cursor-not-allowed'
+                  : 'border-slate-300 text-slate-500 hover:bg-slate-100 cursor-pointer'
+              }`}
             >
               <Plus size={16} />
               {usuarioActual.rol === 'SUPERVISOR' ? 'Agregar/Editar actividades por el alumno' : 'Añadir Trabajo'}
             </button>
 
             <button
+              type="button"
+              disabled={bloqueado}
               onClick={handleGuardarClick}
-              className="w-full mt-2 bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px] flex items-center justify-center gap-2 active:bg-blue-700 transition-transform active:scale-[0.98]"
+              className={`w-full mt-2 font-bold py-3.5 rounded-xl text-[14px] flex items-center justify-center gap-2 transition-all ${
+                bloqueado
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-blue-600 text-white active:bg-blue-700 active:scale-[0.98] cursor-pointer'
+              }`}
             >
-              <CheckCircle2 size={18} />
-              Guardar Registro
+              {esFalta ? (
+                <>
+                  <AlertCircle size={18} />
+                  Registro bloqueado por inasistencia
+                </>
+              ) : soloLectura ? (
+                <>
+                  <Lock size={18} />
+                  Solo Lectura (Periodo Cerrado)
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} />
+                  Guardar Registro
+                </>
+              )}
             </button>
 
             {/* Modal dinámico interceptor de Horas Extras para Supervisor */}
-            {showHeModal && (
+            {showHeModal && !bloqueado && (
               <div className="fixed inset-0 z-[600] bg-black/60 flex items-center justify-center p-4 animate-in fade-in duration-200">
                 <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200">
                   <div className="flex items-center justify-between">
@@ -1065,19 +1244,35 @@ function ModalExpediente({
   practicante,
   usuario,
   plantilla,
+  readOnly = false,
   onUpload,
   onCerrar,
 }: {
   practicante: import('../types').Practicante
   usuario: any
   plantilla: import('../types').PlantillaAceptacion
+  readOnly?: boolean
   onUpload: (id: string, key: string, name: string) => void
   onCerrar: () => void
 }) {
   const periodos = useAppStore(s => s.periodos)
+  const periodoVisualizacionId = useAppStore(s => s.periodoVisualizacionId)
   const semestres = useAppStore(s => s.semestres)
-  const periodoActivo = periodos?.find(p => p.estado === 'activo') || periodos?.[0]
-  const fechaFinConvenio = periodoActivo?.fechaFinConvenio || semestres?.[0]?.fechaFinConvenio
+  const carreras = useAppStore(s => s.carreras)
+  const monitores = useAppStore(s => s.monitores)
+  const plantillaStore = useAppStore(s => s.plantillaAceptacion)
+  const [generandoPdf, setGenerandoPdf] = useState(false)
+
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
+  const soloLectura = Boolean(readOnly || esPeriodoPasado)
+  const fechaFinConvenio =
+    periodoVisualizado?.fechaFinConvenio ||
+    periodoActivo?.fechaFinConvenio ||
+    semestres?.[0]?.fechaFinConvenio
 
   const hoyISO = new Date().toISOString().split('T')[0]
   const plazoVencido = Boolean(fechaFinConvenio && hoyISO > fechaFinConvenio)
@@ -1088,27 +1283,27 @@ function ModalExpediente({
     registroVinculacion: null,
   }
 
-  const handleDescargarCarta = () => {
-    const nombre = usuario?.nombre || practicante.nombre || 'Estudiante'
-    const dni = usuario?.dni || practicante.dni || '--------'
-    const carrera = usuario?.carrera || practicante.carrera || 'No definida'
+  const handleDescargarCarta = async () => {
+    if (generandoPdf || soloLectura) return
+    setGenerandoPdf(true)
+    try {
+      const htmlTemplate =
+        plantillaStore?.contenidoHTML ||
+        plantilla?.contenidoHTML ||
+        MOCK_PLANTILLA.contenidoHTML
+      const datos = extraerDatosCartaPracticante(practicante, usuario, carreras, monitores)
 
-    let contenido = plantilla?.contenidoHTML || '<p>Carta de Aceptación</p>'
-    contenido = contenido
-      .replace('[Nombre estudiante]', nombre)
-      .replace('[DNI]', dni)
-      .replace('[Carrera]', carrera)
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carta de Aceptación</title><style>body{font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:auto}h1{color:#1E3A8A;font-size:18px}p{line-height:1.6;font-size:14px}</style></head><body><h1>MACROMEC S.A.C. - Carta de Aceptación</h1><p><strong>Estudiante:</strong> ${nombre}</p><p><strong>DNI:</strong> ${dni}</p><p><strong>Carrera:</strong> ${carrera}</p><hr/>${contenido}<br/><p style="margin-top:40px;font-size:12px;color:#666">Documento generado automáticamente por el Sistema MACROMEC © 2026</p></body></html>`
-
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Carta_Aceptacion_${nombre.replace(/\s/g, '_')}.html`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Carta de Aceptación descargada correctamente')
+      await generarCartaAceptacionPDF({
+        htmlTemplate,
+        datos,
+      })
+      toast.success('Carta de Aceptación (PDF) descargada correctamente')
+    } catch (error) {
+      console.error('Error al generar PDF de Carta de Aceptación:', error)
+      toast.error('No se pudo generar el PDF de la Carta de Aceptación')
+    } finally {
+      setGenerandoPdf(false)
+    }
   }
 
   return (
@@ -1126,8 +1321,15 @@ function ModalExpediente({
           </button>
         </div>
 
+        {soloLectura && (
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-3.5 py-2.5 rounded-xl mb-3 flex items-center gap-2 text-[12px] font-bold">
+            <Lock size={15} className="text-amber-700 shrink-0" />
+            <span>Modo Histórico — Solo Lectura. Descarga de carta y carga bloqueadas.</span>
+          </div>
+        )}
+
         {/* Alerta fija si el plazo para subir documentos ha vencido */}
-        {plazoVencido && (
+        {plazoVencido && !soloLectura && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl mb-3 flex items-center gap-2.5 text-[12px] font-bold sticky top-0 z-20 shadow-xs">
             <AlertCircle size={16} className="text-red-600 shrink-0" />
             <span>El plazo para subir documentos ha vencido. Comuníquese con el administrador.</span>
@@ -1136,8 +1338,7 @@ function ModalExpediente({
 
         {/* Info Fechas de Convenio Sincronizadas */}
         {(() => {
-          const semestres = useAppStore(s => s.semestres);
-          const semestreActivo = semestres[0];
+          const semestreActivo = semestres?.[0];
           return semestreActivo ? (
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-5 flex flex-col gap-1">
               <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wide">Plazos Legales del Semestre Activo</span>
@@ -1162,10 +1363,15 @@ function ModalExpediente({
                   <p className="text-[12px] text-blue-600 mb-3">Genera automáticamente tu Carta de Aceptación con los datos de tu cuenta.</p>
                   <button
                     onClick={handleDescargarCarta}
-                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-[13px] flex items-center justify-center gap-2 active:bg-blue-700 transition-colors"
+                    disabled={generandoPdf || soloLectura}
+                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-[13px] flex items-center justify-center gap-2 active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <Download size={16} />
-                    Descargar Carta de Aceptación
+                    {soloLectura
+                      ? 'Solo Lectura (Periodo Cerrado)'
+                      : generandoPdf
+                        ? 'Generando PDF A4...'
+                        : 'Descargar Carta de Aceptación'}
                   </button>
                 </div>
               )
@@ -1204,22 +1410,24 @@ function ModalExpediente({
                       <Download size={13} /> Descargar
                     </button>
                   </div>
-                ) : plazoVencido ? (
+                ) : (plazoVencido || soloLectura) ? (
                   <button
                     type="button"
                     disabled
                     onClick={() => toast.error('El plazo para subir documentos ha vencido. Comuníquese con el administrador.')}
                     className="w-full bg-slate-100 text-slate-400 font-bold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 cursor-not-allowed opacity-60 border border-slate-200"
                   >
-                    <Lock size={15} /> Plazo Vencido
+                    <Lock size={15} /> {soloLectura ? 'Solo Lectura' : 'Plazo Vencido'}
                   </button>
                 ) : (
                   <>
                     <input
                       type="file"
                       id={inputId}
+                      disabled={readOnly}
                       className="hidden"
                       onChange={(e) => {
+                        if (readOnly) return
                         const file = e.target.files?.[0]
                         if (file) {
                           onUpload(practicante.id, item.key, file.name)
@@ -1228,11 +1436,15 @@ function ModalExpediente({
                       }}
                     />
                     <label
-                      htmlFor={inputId}
-                      className="w-full bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-200 transition-colors"
+                      htmlFor={readOnly ? undefined : inputId}
+                      className={`w-full font-bold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-colors ${
+                        readOnly
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : 'bg-slate-100 text-slate-700 cursor-pointer hover:bg-slate-200'
+                      }`}
                     >
                       <Upload size={15} />
-                      Seleccionar archivo
+                      {readOnly ? 'Solo Lectura (Periodo Cerrado)' : 'Seleccionar archivo'}
                     </label>
                   </>
                 )}
@@ -1257,13 +1469,22 @@ function DashboardSupervisor() {
   const todosPracticantes = useAppStore((s) => s.practicantes)
   const usuarioActual = useAppStore((s) => s.usuarioActual)
   const periodos = useAppStore((s) => s.periodos || [])
-  const periodoActivo = periodos.find(p => p.estado === 'activo') || periodos[0]
-  const periodoActivoNombre = periodoActivo?.nombre || '2026-02'
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
+  const periodoActivoNombre = periodoVisualizado?.nombre || periodoActivo?.nombre || '2026-02'
 
-  // PASO 4: Filtro relacional estricto — el Supervisor solo ve sus practicantes
+  // Filtro relacional estricto — Supervisor solo ve sus practicantes del periodo seleccionado
+  const practicantesPeriodo = todosPracticantes.filter((p) =>
+    perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02'),
+  )
   const practicantes = usuarioActual
-    ? todosPracticantes.filter((p) => p.monitorId === usuarioActual.id)
-    : todosPracticantes
+    ? practicantesPeriodo.filter((p) => p.monitorId === usuarioActual.id)
+    : practicantesPeriodo
 
   // Requerimiento 1: Estado dinámico con new Date() (sin fechas estáticas hardcodeadas)
   const [fechaActualView, setFechaActualView] = useState<Date>(() => new Date())
@@ -1514,6 +1735,13 @@ function DashboardSupervisor() {
         </span>
       </div>
 
+      {esPeriodoPasado && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+          <Lock size={14} className="shrink-0 text-amber-700" />
+          <span>Modo Histórico ({periodoActivoNombre}) — Solo Lectura.</span>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
         <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
           <button
@@ -1636,6 +1864,7 @@ function DashboardSupervisor() {
           fecha={fechaStr}
           practicante={practicantes.find((p) => p.id === practicanteControlModal)!}
           usuarioActual={usuarioActual}
+          readOnly={esPeriodoPasado}
           onClose={() => setPracticanteControlModal(null)}
           vistaAuditoriaInicial={false}
         />
@@ -1646,43 +1875,40 @@ function DashboardSupervisor() {
 
 // ============================================================
 function DashboardGerencia() {
-  // PASO 4: GERENCIA ve todos los practicantes sin filtro
-  const practicantes = useAppStore((s) => s.practicantes)
+  // GERENCIA visualiza estrictamente los practicantes del periodo seleccionado en la Máquina del Tiempo
+  const todosPracticantes = useAppStore((s) => s.practicantes)
+  const actividadesDiarias = useAppStore((s) => s.actividadesDiarias)
   const usuario = useAppStore((s) => s.usuarioActual)
+  const periodos = useAppStore((s) => s.periodos || [])
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
+  const monitores = useAppStore((s) => s.monitores || [])
   const cambiarModalidadHoy = useAppStore((s) => s.cambiarModalidadHoy)
+
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
+
+  const practicantes = useMemo(
+    () =>
+      (todosPracticantes || []).filter((p) =>
+        perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02'),
+      ),
+    [todosPracticantes, periodoVisId, periodoActivo?.id],
+  )
 
   const [modalCumplesOpen, setModalCumplesOpen] = useState(false);
 
-  const cumpleañosOrdenados = useMemo(() => {
-    if (!practicantes) return [];
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    const hoyActual = new Date();
-
-    return practicantes.map(p => {
-      const [year, month, day] = p.fechaNacimiento.split('-');
-      const anioNac = parseInt(year, 10);
-      const mesIndex = parseInt(month, 10) - 1;
-      const diaNum = parseInt(day, 10);
-
-      // Cálculo exacto de la edad actual
-      let edad = hoyActual.getFullYear() - anioNac;
-      const m = hoyActual.getMonth() - mesIndex;
-      if (m < 0 || (m === 0 && hoyActual.getDate() < diaNum)) {
-        edad--;
-      }
-
-      return {
-        id: p.id,
-        nombreCompleto: `${p.nombre} ${p.apellido || ''}`.trim(),
-        dia: diaNum,
-        mesIndex: mesIndex,
-        mesTexto: meses[mesIndex],
-        edadActual: edad,
-        avatar: p.nombre.substring(0, 2).toUpperCase()
-      };
-    })
-      .sort((a, b) => a.mesIndex === b.mesIndex ? a.dia - b.dia : a.mesIndex - b.mesIndex);
-  }, [practicantes]);
+  const cumpleañosOrdenados = useMemo(
+    () =>
+      construirCumpleanosActivos({
+        practicantes,
+        monitores,
+      }),
+    [practicantes, monitores],
+  );
 
   const mesActual = new Date().getMonth();
   const cumpleañosEsteMes = cumpleañosOrdenados.filter(c => c.mesIndex === mesActual);
@@ -1749,10 +1975,12 @@ function DashboardGerencia() {
   }
 
   const handleMarcar = (id: string, estado: import('../types').EstadoAsistencia) => {
+    if (esPeriodoPasado) return
     marcarBorrador(id, estado)
   }
 
   const handleToggleModalidad = (id: string, modalidadActual: import('../types').Modalidad) => {
+    if (esPeriodoPasado) return
     const nueva: import('../types').Modalidad = modalidadActual === 'presencial' ? 'virtual' : 'presencial'
     cambiarModalidadHoy(id, nueva)
   }
@@ -1760,14 +1988,26 @@ function DashboardGerencia() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Título */}
-      <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
-        Panel de Gerencia
-        {usuario && (
-          <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400, marginLeft: 8 }}>
-            — {usuario.nombre}
-          </span>
-        )}
+      <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div>
+          Panel de Gerencia
+          {usuario && (
+            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400, marginLeft: 8 }}>
+              — {usuario.nombre}
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0">
+          {periodoVisualizado?.nombre || ''}
+        </span>
       </div>
+
+      {esPeriodoPasado && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+          <Lock size={14} className="shrink-0 text-amber-700" />
+          <span>Modo Histórico ({periodoVisualizado?.nombre}) — Solo Lectura. Controles diarios bloqueados.</span>
+        </div>
+      )}
 
       {/* ── Banner Cumpleaños (RF-49) ── */}
       <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex flex-col gap-3">
@@ -1786,8 +2026,14 @@ function DashboardGerencia() {
         <div className="flex flex-col gap-2">
           {cumpleañosEsteMes.length > 0 ? (
             cumpleañosEsteMes.map(c => (
-              <span key={c.id} className="text-sm font-medium text-indigo-900">
-                • {c.nombreCompleto} <span className="text-indigo-500 font-normal">({c.dia} de {c.mesTexto})</span>
+              <span key={`${c.esSupervisor ? 'sup' : 'prac'}-${c.id}`} className="text-sm font-medium text-indigo-900 flex items-center gap-1.5 flex-wrap">
+                <span>• {c.nombreCompleto}</span>
+                {c.esSupervisor && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-extrabold">
+                    (S)
+                  </span>
+                )}
+                <span className="text-indigo-500 font-normal">({c.dia} de {c.mesTexto})</span>
               </span>
             ))
           ) : (
@@ -1831,7 +2077,7 @@ function DashboardGerencia() {
             const estadoBorrador = borradorDiario[p.id]
             const estadoActual = estadoBorrador || estadoHistorial || 'PENDIENTE'
 
-            const tieneHEPendiente = p.hePendienteValidacion || Object.values(p.asistencia || {}).some(a => a.hePendienteValidacion === true);
+            const tieneHEPendiente = tieneHePendienteGlobal(p, actividadesDiarias);
             const mostrarAlerta = tieneHEPendiente || (estadoBorrador && estadoBorrador !== estadoHistorial) ||
               (mostrarAlertasFaltantes && !estadoBorrador && !estadoHistorial)
 
@@ -1884,11 +2130,14 @@ function DashboardGerencia() {
             const esVirtual = !esLibreEfectivo && ((reg?.modalidad === 'virtual') || (modalidadHorarioHoy === 'Virtual'))
             const isPresencial = !esLibreEfectivo && !esVirtual
 
+            const monitorDeP = monitores.find((m) => m.id === p.monitorId)
+            const supervisorSuspendido = esSupervisorSuspendido(monitorDeP)
+
             // ── Practicante ACTIVO ────────────────────────────
             return (
               <div key={p.id} style={{
                 display: 'flex', flexDirection: 'column', padding: '10px 12px',
-                background: 'white', borderRadius: 12, border: '1px solid #e2e8f0',
+                background: 'white', borderRadius: 12, border: supervisorSuspendido ? '1px solid #fcd34d' : '1px solid #e2e8f0',
               }}>
                 {/* Fila nombre + modalidad diaria */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1902,6 +2151,11 @@ function DashboardGerencia() {
                       )}
                       {mostrarAlerta && !tieneHEPendiente && <span className="text-red-500 font-extrabold text-lg animate-pulse">!</span>}
                     </div>
+                    {supervisorSuspendido && (
+                      <div style={{ fontSize: 10, color: '#b45309', fontWeight: 800, marginTop: 2 }}>
+                        ⚠ Supervisor Suspendido - Requiere Reasignación
+                      </div>
+                    )}
                     {almuerzosHoy.some((a) => a.id === p.id) && (
                       <div style={{ fontSize: 10, color: '#059669', fontWeight: 700, marginTop: 2 }}>
                         🍽 Almuerzo confirmado
@@ -1937,41 +2191,49 @@ function DashboardGerencia() {
                   ) : (
                     <>
                       <button
+                        type="button"
+                        disabled={esPeriodoPasado}
                         onClick={() => handleMarcar(p.id, 'ASISTIO')}
                         style={{
                           flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
                           background: estadoActual === 'ASISTIO' ? '#10b981' : '#f1f5f9',
                           color: estadoActual === 'ASISTIO' ? 'white' : '#64748b',
-                          fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                          fontWeight: 700, fontSize: 11, cursor: esPeriodoPasado ? 'not-allowed' : 'pointer', opacity: esPeriodoPasado ? 0.6 : 1, transition: 'all 0.2s',
                         }}
                       >✓ Asistió</button>
                       <button
+                        type="button"
+                        disabled={esPeriodoPasado}
                         onClick={() => handleMarcar(p.id, 'TARDANZA')}
                         style={{
                           flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
                           background: estadoActual === 'TARDANZA' ? '#f59e0b' : '#f1f5f9',
                           color: estadoActual === 'TARDANZA' ? 'white' : '#64748b',
-                          fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                          fontWeight: 700, fontSize: 11, cursor: esPeriodoPasado ? 'not-allowed' : 'pointer', opacity: esPeriodoPasado ? 0.6 : 1, transition: 'all 0.2s',
                         }}
                       >T</button>
                       <button
+                        type="button"
+                        disabled={esPeriodoPasado}
                         onClick={() => handleMarcar(p.id, 'FALTA')}
                         style={{
                           flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
                           background: estadoActual === 'FALTA' ? '#ef4444' : '#f1f5f9',
                           color: estadoActual === 'FALTA' ? 'white' : '#64748b',
-                          fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                          fontWeight: 700, fontSize: 11, cursor: esPeriodoPasado ? 'not-allowed' : 'pointer', opacity: esPeriodoPasado ? 0.6 : 1, transition: 'all 0.2s',
                         }}
                       >F</button>
                       {/* Campo: solo en Presencial */}
                       {isPresencial && (
                         <button
+                          type="button"
+                          disabled={esPeriodoPasado}
                           onClick={() => handleMarcar(p.id, 'CAMPO')}
                           style={{
                             flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none',
                             background: estadoActual === 'CAMPO' ? '#8b5cf6' : '#f1f5f9',
                             color: estadoActual === 'CAMPO' ? 'white' : '#64748b',
-                            fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                            fontWeight: 700, fontSize: 11, cursor: esPeriodoPasado ? 'not-allowed' : 'pointer', opacity: esPeriodoPasado ? 0.6 : 1, transition: 'all 0.2s',
                           }}
                         >Campo</button>
                       )}
@@ -2035,19 +2297,21 @@ function DashboardGerencia() {
       </Card >
 
       {/* ── Botón Notificar Incidencias (RF-51) ── */}
-      < button
+      <button
+        type="button"
+        disabled={esPeriodoPasado}
         onClick={() => {
+          if (esPeriodoPasado) return
           const hayFaltantes = practicantes.some(p => p.estadoLaboral === 'activo' && !borradorDiario[p.id] && !p.historial.find(h => h.fecha === FECHA_HOY)?.estado)
           if (hayFaltantes) {
             setMostrarAlertasFaltantes(true)
           }
           setModalNotificar(true)
-        }
-        }
-        className="w-full bg-slate-800 text-white font-bold py-3.5 rounded-xl text-[14px] active:bg-slate-900 transition-colors mt-2"
+        }}
+        className={`w-full font-bold py-3.5 rounded-xl text-[14px] transition-colors mt-2 ${esPeriodoPasado ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-800 text-white active:bg-slate-900 cursor-pointer'}`}
       >
-        Notificar asistencia
-      </button >
+        {esPeriodoPasado ? 'Solo Lectura (Periodo Cerrado)' : 'Notificar asistencia'}
+      </button>
 
       {/* Modal BottomSheet Notificar Asistencia */}
       {
@@ -2100,7 +2364,10 @@ function DashboardGerencia() {
                   )}
 
                 <button
+                  type="button"
+                  disabled={esPeriodoPasado}
                   onClick={() => {
+                    if (esPeriodoPasado) return
                     const payload = Object.entries(observaciones).map(([id, obs]) => ({
                       id,
                       observacion: obs
@@ -2110,7 +2377,7 @@ function DashboardGerencia() {
                     setModalNotificar(false)
                     setObservaciones({})
                   }}
-                  className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px]"
+                  className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl text-[14px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Confirmar asistencia
                 </button>
@@ -2120,35 +2387,12 @@ function DashboardGerencia() {
         )
       }
 
-      {/* Modal Cumpleaños (RF-49 ampliado) */}
-      {
-        modalCumplesOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-lg text-slate-800">Cumpleaños del Año</h3>
-                <button onClick={() => setModalCumplesOpen(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 font-bold">✕</button>
-              </div>
-
-              <div className="overflow-y-auto flex-1 flex flex-col gap-3 pr-2">
-                {cumpleañosOrdenados.map((c) => (
-                  <div key={c.id} className={`flex items-center justify-between p-3 rounded-xl border ${c.mesIndex === mesActual ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-100'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">
-                        {c.avatar}
-                      </div>
-                      <span className="font-bold text-sm text-slate-700">{c.nombreCompleto}</span>
-                    </div>
-                    <div className={`px-3 py-1 rounded-lg text-xs font-bold ${c.mesIndex === mesActual ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-100 text-slate-500'}`}>
-                      {c.dia} {c.mesTexto}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )
-      }
+      {/* Modal Cumpleaños del Año (Practicantes y Supervisores ACTIVOS) */}
+      <ModalCumpleaños
+        abierto={modalCumplesOpen}
+        onCerrar={() => setModalCumplesOpen(false)}
+        items={cumpleañosOrdenados}
+      />
     </div >
   )
 }

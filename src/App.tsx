@@ -11,7 +11,7 @@ import GeneralScreen from './screens/GeneralScreen'
 import ReportesScreen from './screens/ReportesScreen'
 import AdminModuloScreen from './screens/AdminModuloScreen'
 
-const HEADER_HEIGHT = 120
+const HEADER_HEIGHT = 176
 
 export default function App() {
   // ── 1. DECLARACIÓN ESTRICTA DE HOOKS EN LA PARTE SUPERIOR (Sin returns previos) ──

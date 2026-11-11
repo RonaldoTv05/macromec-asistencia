@@ -18,13 +18,14 @@ import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
 import { useAppStore } from '../store/useAppStore'
 import { descargarArchivoBase64 } from '../utils/fileUtils'
+import { getPeriodoContext, perteneceAPeriodo } from '../utils/periodoHelpers'
 import type { Monitor } from '../types';
 import ModalRevisarInforme from '../components/ModalRevisarInforme';
 import ModalConfirmacion from '../components/ModalConfirmacion';
 
 export default function ReportesScreen() {
   const rolActivo = useAppStore((s) => s.rolActivo)
-  const practicantes = useAppStore((s) => s.practicantes)
+  const todosPracticantes = useAppStore((s) => s.practicantes)
   const aprobarHorario = useAppStore((state) => state.aprobarHorario);
   const rechazarHorario = useAppStore((state) => state.rechazarHorario);
 
@@ -39,6 +40,11 @@ export default function ReportesScreen() {
   const [modalBovedaOpen, setModalBovedaOpen] = useState(false)
   const [informeAEliminar, setInformeAEliminar] = useState<string | null>(null)
   const periodos = useAppStore((s) => s.periodos)
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
+  const { periodoActivo, periodoVisualizacionId: periodoVisId, esPeriodoPasado } = getPeriodoContext(periodos, periodoVisualizacionId)
+  const practicantes = todosPracticantes.filter((p) =>
+    perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02'),
+  )
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>('todos')
   const [selectedInforme, setSelectedInforme] = useState<typeof informes[0] | null>(null)
 
@@ -228,11 +234,13 @@ export default function ReportesScreen() {
   const [rechazoMotivo, setRechazoMotivo] = useState('')
 
   const handleAprobarHorario = (id: string) => {
+    if (esPeriodoPasado) return
     aprobarHorario(id)
     toast.success('Horario aprobado exitosamente')
   }
 
   const handleRechazarHorario = (id: string) => {
+    if (esPeriodoPasado) return
     setRechazoId(id)
     setRechazoMotivo('')
     setRechazoModalOpen(true)
@@ -609,21 +617,8 @@ export function GeneradorReportes() {
   const monitores = useAppStore((s) => s.monitores || []);
   const practicantes = useAppStore((s) => s.practicantes || []);
   const periodos = useAppStore((s) => s.periodos || []);
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId);
   const semestres = useAppStore((s) => s.semestres || []);
-
-  const esAdmin =
-    usuarioActual?.rol === 'GERENCIA' ||
-    (usuarioActual as any)?.rol === 'ADMIN' ||
-    (usuarioActual as any)?.role === 'ADMIN' ||
-    (usuarioActual as any)?.role === 'GERENCIA';
-
-  // 🛡️ Seguridad RBAC: Solo visible para administradores/gerencia
-  if (!esAdmin || usuarioActual?.rol === 'PRACTICANTE') {
-    return null;
-  }
-
-  const periodoActivo = periodos.find((p) => p.estado === 'activo') || periodos[0];
-  const feriados = periodoActivo?.feriados || semestres[0]?.feriados || [];
 
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
@@ -645,6 +640,25 @@ export function GeneradorReportes() {
       }
     };
   }, [archivoGenerado]);
+
+  const esAdmin =
+    usuarioActual?.rol === 'GERENCIA' ||
+    (usuarioActual as any)?.rol === 'ADMIN' ||
+    (usuarioActual as any)?.role === 'ADMIN' ||
+    (usuarioActual as any)?.role === 'GERENCIA';
+
+  // 🛡️ Seguridad RBAC: Solo visible para administradores/gerencia
+  if (!esAdmin || usuarioActual?.rol === 'PRACTICANTE') {
+    return null;
+  }
+
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+  } = getPeriodoContext(periodos, periodoVisualizacionId);
+  const feriados =
+    periodoVisualizado?.feriados || periodoActivo?.feriados || semestres[0]?.feriados || [];
 
   const handleMonitorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
@@ -722,9 +736,11 @@ export function GeneradorReportes() {
       const tableHeaderRows: number[] = [];
 
       monitoresSeleccionados.forEach((sup) => {
-        // Alumnos asignados al supervisor
+        // Alumnos asignados al supervisor estrictamente en el periodo seleccionado
         const alumnos = practicantes.filter(
-          (p) => p.supervisorId === sup.id || p.monitorId === sup.id
+          (p) =>
+            perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02') &&
+            (p.supervisorId === sup.id || p.monitorId === sup.id)
         );
 
         // Cabecera del supervisor (Fila con fondo azul tenue)

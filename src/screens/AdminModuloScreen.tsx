@@ -15,22 +15,70 @@ import {
   Check,
   Download,
   XCircle,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  History,
+  Lock,
+  UserCog,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore, enviarCredencialesWhatsApp } from '../store/useAppStore'
-import type { EstadoLaboral, Practicante, RetiroData, User, Postulante } from '../types'
+import {
+  abrirWhatsAppCredenciales,
+  enviarCredencialesWhatsApp,
+  useAppStore,
+} from '../store/useAppStore'
+import ModalAdminEditarUsuario from '../components/ModalAdminEditarUsuario'
+import ModalNuevoSupervisor from '../components/ModalNuevoSupervisor'
+import {
+  esSupervisorSuspendido,
+  getPeriodoContext,
+  perteneceAPeriodo,
+} from '../utils/periodoHelpers'
+import type {
+  EstadoGlobalPracticante,
+  EstadoLaboral,
+  Practicante,
+  RetiroData,
+  TipoUsuarioPerfil,
+  User,
+  Postulante,
+} from '../types'
 
 // ── Sanitización ───────────────────────────────────────────────
 function sanitize(value: string): string {
   return value.replace(/<[^>]*>/g, '').trim()
 }
 
-// ── Badge de estado laboral ────────────────────────────────────
-function BadgeEstado({ estado }: { estado: EstadoLaboral }) {
-  if (estado === 'retirado') {
+// ── Badge de estado global / laboral ───────────────────────────
+function BadgeEstado({
+  estado,
+  estadoGlobal,
+}: {
+  estado: EstadoLaboral
+  estadoGlobal?: EstadoGlobalPracticante
+}) {
+  const code: EstadoGlobalPracticante =
+    estadoGlobal || (estado === 'retirado' ? 'RETIRADO' : 'ACTIVO')
+
+  if (code === 'RETIRADO') {
     return (
-      <span className="bg-slate-200 text-slate-500 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide uppercase">
+      <span className="bg-red-100 text-red-700 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide uppercase">
         RETIRADO
+      </span>
+    )
+  }
+  if (code === 'EGRESADO') {
+    return (
+      <span className="bg-purple-100 text-purple-800 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide uppercase">
+        EGRESADO
+      </span>
+    )
+  }
+  if (code === 'BAJA') {
+    return (
+      <span className="bg-rose-100 text-rose-800 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide uppercase">
+        BAJA
       </span>
     )
   }
@@ -44,30 +92,42 @@ function BadgeEstado({ estado }: { estado: EstadoLaboral }) {
 // ── Tarjeta de colaborador ─────────────────────────────────────
 function TarjetaColaborador({
   practicante,
+  supervisorSuspendido = false,
+  readOnly = false,
   onEditarEstado,
   onClick,
 }: {
   practicante: Practicante
+  supervisorSuspendido?: boolean
+  readOnly?: boolean
   onEditarEstado: (p: Practicante) => void
   onClick: (p: Practicante) => void
 }) {
-  const isRetirado = practicante.estadoLaboral === 'retirado'
-  const docsSubidos = Object.values(practicante.documentos || {}).filter(Boolean).length
+  const isRetirado =
+    (practicante.estadoGlobal && practicante.estadoGlobal !== 'ACTIVO') ||
+    practicante.estadoLaboral === 'retirado'
+  const docsSubidos = [
+    practicante.documentos?.cartaPresentacion,
+    practicante.documentos?.evidenciaFormulario,
+    practicante.documentos?.cartaAceptacionFirmada,
+    practicante.documentos?.convenioFirmado,
+    practicante.documentos?.registroVinculacion,
+  ].filter(Boolean).length
 
   return (
     <div
       onClick={() => onClick(practicante)}
-      className={`rounded-[14px] p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all duration-200 border ${isRetirado ? 'bg-slate-50 border-slate-200 opacity-70' : 'bg-white border-slate-200'}`}
+      className={`rounded-[14px] p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all duration-200 border ${isRetirado ? 'bg-slate-50 border-slate-200 opacity-85' : supervisorSuspendido ? 'bg-amber-50/40 border-amber-300' : 'bg-white border-slate-200'}`}
     >
       {/* Avatar */}
-      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 ${isRetirado ? 'bg-slate-200 text-slate-400' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white'}`}>
+      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 ${isRetirado ? 'bg-slate-200 text-slate-500' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white'}`}>
         {practicante.nombre[0]}
         {practicante.apellido?.[0] || ''}
       </div>
 
       {/* Datos */}
       <div className="flex-1 min-w-0">
-        <div className={`text-[13px] font-bold mb-0.5 truncate ${isRetirado ? 'text-slate-400' : 'text-slate-800'}`}>
+        <div className={`text-[13px] font-bold mb-0.5 truncate ${isRetirado ? 'text-slate-600' : 'text-slate-800'}`}>
           {practicante.nombre} {practicante.apellido}
         </div>
         <div className="text-[11px] text-slate-400 truncate font-medium">
@@ -75,7 +135,10 @@ function TarjetaColaborador({
         </div>
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <BadgeEstado estado={practicante.estadoLaboral} />
+            <BadgeEstado
+              estado={practicante.estadoLaboral}
+              estadoGlobal={practicante.estadoGlobal}
+            />
             <span className="text-[10px] text-slate-400 capitalize">
               {practicante.modalidadBase}
             </span>
@@ -89,10 +152,18 @@ function TarjetaColaborador({
           )}
         </div>
 
-        {/* Info de retiro */}
-        {isRetirado && practicante.retiro && (
-          <div className="text-[10px] text-slate-500 mt-1 italic">
-            Indefinido · {practicante.retiro.motivo.slice(0, 30)}…
+        {/* Alerta de Supervisor Suspendido */}
+        {supervisorSuspendido && !isRetirado && (
+          <div className="mt-1.5 inline-flex items-center gap-1 bg-amber-100 border border-amber-300 text-amber-900 rounded-lg px-2 py-0.5 text-[10px] font-extrabold">
+            <AlertTriangle size={11} className="shrink-0 text-amber-700" />
+            <span>Supervisor Suspendido - Requiere Reasignación</span>
+          </div>
+        )}
+
+        {/* Info de retiro / baja / egreso */}
+        {isRetirado && (practicante.motivoRetiro || practicante.retiro?.motivo) && (
+          <div className="text-[10px] text-slate-500 mt-1 italic truncate">
+            {(practicante.motivoRetiro || practicante.retiro?.motivo || '').slice(0, 48)}
           </div>
         )}
       </div>
@@ -100,8 +171,13 @@ function TarjetaColaborador({
       {/* Botón editar */}
       <button
         id={`btn-editar-estado-${practicante.id}`}
-        onClick={(e) => { e.stopPropagation(); onEditarEstado(practicante); }}
-        className="bg-slate-100 border-none rounded-[10px] px-2.5 py-2 cursor-pointer flex items-center gap-1 text-[11px] font-bold text-blue-900 shrink-0"
+        type="button"
+        disabled={readOnly}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!readOnly) onEditarEstado(practicante)
+        }}
+        className={`border-none rounded-[10px] px-2.5 py-2 flex items-center gap-1 text-[11px] font-bold shrink-0 ${readOnly ? 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60' : 'bg-slate-100 cursor-pointer text-blue-900'}`}
       >
         <Edit3 size={13} />
         Editar
@@ -111,26 +187,45 @@ function TarjetaColaborador({
 }
 
 // ── Tarjeta de Supervisor ─────────────────────────────────────
-function TarjetaSupervisor({ supervisor, onEditar }: { supervisor: any, onEditar: (s: any) => void }) {
-  const isRetirado = supervisor.estado === 'Retirado' || supervisor.estado === 'Suspendido'
+function TarjetaSupervisor({
+  supervisor,
+  readOnly = false,
+  onEditar,
+  onGestionar,
+}: {
+  supervisor: any
+  readOnly?: boolean
+  onEditar: (s: any) => void
+  onGestionar: (s: any) => void
+}) {
+  const esSuspendido = esSupervisorSuspendido(supervisor)
+  const isRetirado = supervisor.estado === 'Retirado'
+  const inactivo = esSuspendido || isRetirado
 
   const handleCredencialesWhatsapp = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const numeroLimpio = supervisor.celular?.replace(/\D/g, '') || supervisor.tel?.replace(/\D/g, '') || '';
-    const numeroFinal = numeroLimpio.startsWith('51') ? numeroLimpio : `51${numeroLimpio}`;
-    const mensaje = `Hola ${supervisor.nombre}, tu acceso al Sistema MACROMEC es. Usuario: ${supervisor.dni} Clave: ${supervisor.dni}`;
-    window.open(`https://wa.me/${numeroFinal}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    const usuarioLive = useAppStore.getState().getUsuarioById(supervisor.id);
+    if (!usuarioLive) {
+      toast.error('No se encontraron credenciales activas para este supervisor');
+      return;
+    }
+    abrirWhatsAppCredenciales(usuarioLive);
   };
 
   return (
-    <div className={`rounded-[14px] p-3 flex items-center gap-3 border ${isRetirado ? 'bg-slate-50 border-slate-200 opacity-70' : 'bg-white border-slate-200'}`}>
-      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 ${isRetirado ? 'bg-slate-300 text-slate-500' : 'bg-gradient-to-br from-indigo-900 to-indigo-600 text-white'}`}>
+    <div
+      onClick={() => onGestionar(supervisor)}
+      className={`rounded-[14px] p-3 flex items-center gap-3 border cursor-pointer transition-colors ${inactivo ? 'bg-amber-50/40 border-amber-200 opacity-85' : 'bg-white border-slate-200 hover:bg-slate-50/50'}`}
+    >
+      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0 ${inactivo ? 'bg-slate-300 text-slate-600' : 'bg-gradient-to-br from-indigo-900 to-indigo-600 text-white'}`}>
         {supervisor.avatarIniciales || supervisor.nombre.substring(0, 2).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-bold mb-0.5 flex items-center gap-2">
-          <span className={`truncate ${isRetirado ? 'text-slate-500' : 'text-slate-800'}`}>{supervisor.nombre}</span>
-          {isRetirado ? (
+          <span className={`truncate ${inactivo ? 'text-slate-600' : 'text-slate-800'}`}>{supervisor.nombre}</span>
+          {esSuspendido ? (
+            <span className="bg-amber-100 text-amber-800 rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide uppercase">SUSPENDIDO</span>
+          ) : isRetirado ? (
             <span className="bg-red-100 text-red-700 rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide uppercase">RETIRADO</span>
           ) : (
             <span className="bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide uppercase">ACTIVO</span>
@@ -144,114 +239,43 @@ function TarjetaSupervisor({ supervisor, onEditar }: { supervisor: any, onEditar
         </div>
         <div className="mt-2 flex items-center gap-2">
           <button
+            id={`btn-credenciales-supervisor-${supervisor.id}`}
+            type="button"
             onClick={handleCredencialesWhatsapp}
-            className="flex-1 bg-green-100 text-green-700 hover:bg-green-200 text-[12px] py-1.5 rounded-lg flex items-center justify-center gap-1 font-semibold"
+            className="flex-1 bg-green-100 text-green-700 hover:bg-green-200 text-[11px] py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 font-semibold cursor-pointer border-none"
           >
-            <Smartphone size={14} />
+            <Smartphone size={13} />
             Credenciales
           </button>
           <button
-            onClick={() => onEditar(supervisor)}
-            className="flex-1 border border-slate-200 text-slate-600 py-1.5 rounded-lg flex items-center justify-center gap-1 text-[12px] font-semibold hover:bg-slate-50"
+            id={`btn-gestionar-supervisor-${supervisor.id}`}
+            type="button"
+            disabled={readOnly}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!readOnly) onGestionar(supervisor);
+            }}
+            className={`flex-1 border border-indigo-200 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 text-[11px] font-semibold ${readOnly ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 cursor-pointer'}`}
           >
-            <Edit3 size={14} />
+            <UserCog size={13} />
+            Gestionar
+          </button>
+          <button
+            id={`btn-editar-supervisor-${supervisor.id}`}
+            type="button"
+            disabled={readOnly}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!readOnly) onEditar(supervisor);
+            }}
+            className={`border border-slate-200 py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1 text-[11px] font-semibold shrink-0 ${readOnly ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-50 cursor-pointer bg-white'}`}
+          >
+            <Edit3 size={13} />
             Editar
           </button>
         </div>
       </div>
     </div>
-  )
-}
-
-// ── Modal de Registro Supervisor ───────────────────────────────
-function ModalRegistroSupervisor({
-  onCerrar,
-}: {
-  onCerrar: () => void
-}) {
-  const addUsuario = useAppStore((s) => s.addUsuario)
-  const [nombre, setNombre] = useState('')
-  const [dni, setDni] = useState('')
-  const [tel, setTel] = useState('')
-  const [cargo, setCargo] = useState('')
-  const [correoGmail, setCorreoGmail] = useState('')
-
-  const handleGuardar = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!nombre.trim() || !dni.trim() || !tel.trim() || !cargo.trim() || !correoGmail.trim()) {
-      toast.error('Todos los campos son obligatorios')
-      return
-    }
-
-    const pass = Math.random().toString(36).slice(-6)
-
-    const newSupervisor = {
-      id: `usr-sup-${Date.now()}`,
-      username: dni.trim(),
-      password: pass,
-      nombre: sanitize(nombre),
-      rol: 'SUPERVISOR',
-      email: `${dni.trim()}@macromec.pe`,
-      correoGmail: sanitize(correoGmail),
-      dni: sanitize(dni),
-      tel: sanitize(tel),
-      carrera: sanitize(cargo),
-      avatarIniciales: nombre.trim().slice(0, 2).toUpperCase()
-    } as any
-
-    addUsuario(newSupervisor)
-
-    toast.promise(
-      enviarCredencialesWhatsApp(newSupervisor.tel, newSupervisor.nombre, pass, newSupervisor.rol),
-      {
-        loading: 'Enviando WhatsApp...',
-        success: 'Credenciales enviadas',
-        error: 'Error'
-      }
-    )
-
-    onCerrar()
-  }
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/55 z-[100] backdrop-blur-[4px]" onClick={onCerrar} />
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white rounded-t-[20px] px-5 pt-6 pb-8 z-[110]">
-        <div className="flex items-center justify-between mb-5">
-          <div className="font-bold text-[18px] text-slate-800">
-            Nuevo Supervisor
-          </div>
-          <button onClick={onCerrar} className="bg-slate-100 border-none rounded-full w-8 h-8 flex items-center justify-center text-slate-500 cursor-pointer">
-            <X size={17} />
-          </button>
-        </div>
-        <form onSubmit={handleGuardar} className="flex flex-col gap-4">
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">Nombres y Apellidos</label>
-            <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="Ej. Juan Pérez" />
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">DNI</label>
-            <input type="text" value={dni} onChange={(e) => setDni(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="8 dígitos" maxLength={8} />
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">N° de Celular</label>
-            <input type="text" value={tel} onChange={(e) => setTel(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="Ej. +51 999 888 777" />
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">Área / Carreras a cargo</label>
-            <input type="text" value={cargo} onChange={(e) => setCargo(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="Ej. Mantenimiento / Electricidad Industrial" />
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">Correo de Gmail</label>
-            <input type="email" value={correoGmail} onChange={(e) => setCorreoGmail(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border-[1.5px] border-slate-200 text-[13px] bg-white outline-none focus:border-slate-400" placeholder="ej.correo@gmail.com" />
-          </div>
-          <button type="submit" className="w-full bg-indigo-600 border-none cursor-pointer text-white font-bold py-3.5 rounded-xl mt-2 text-[14px]">
-            Guardar Supervisor
-          </button>
-        </form>
-      </div>
-    </>
   )
 }
 
@@ -506,31 +530,36 @@ function BottomSheetEvaluacion({
       return
     }
 
-    const passGenerada = Math.random().toString(36).slice(-6)
+    const passGenerada = postulante.dni.trim()
     const carreraObj = carrerasGlobal.find(c => c.id === carreraIdSeleccionada)
     const espAsignado = getEspecialistaAsignado(carreraIdSeleccionada, cicloActual)
     const peasCarrera = carreraObj?.peas || []
 
     const nuevoPracticante: Practicante = {
       id: `prac-${Date.now()}`,
+      periodo_id: periodoActivo.id,
       periodoId: periodoActivo.id,
       nombre: postulante.nombres,
       apellido: postulante.apellidos,
       email: postulante.correo,
+      correo: postulante.correo,
       fechaNacimiento: postulante.fechaNacimiento || '2000-01-01',
       dni: postulante.dni,
       celular: postulante.celular,
+      telefono: postulante.celular,
       carrera: carreraObj?.nombre || 'Especialidad Asignada',
       tel: postulante.celular,
       carreraId: carreraIdSeleccionada,
       semestre: cicloActual,
       monitorId: monitorId,
+      supervisorId: monitorId,
       modalidadBase: (modalidad === 'presencial' ? 'Presencial' : modalidad === 'semipresencial' ? 'Semipresencial' : 'Virtual') as any,
       horasSemanalesTarget: 30,
       historial: [],
       semanasHojaFisica: [],
       entregaHojaFisica: false,
       almuerzosConfirmados: [],
+      estadoGlobal: 'ACTIVO',
       estadoLaboral: 'activo',
       estado: 'activo',
       saldoHorasExtras: 0,
@@ -773,33 +802,33 @@ function BottomSheetEvaluacion({
 
 function BottomSheetPracticante({
   practicante,
+  readOnly = false,
   onCerrar,
+  onCambiarEstado,
 }: {
   practicante: Practicante
+  readOnly?: boolean
   onCerrar: () => void
+  onCambiarEstado?: (p: Practicante) => void
 }) {
+  const monitores = useAppStore((s) => s.monitores || [])
+  const practicantes = useAppStore((s) => s.practicantes)
+  const asignarMonitor = useAppStore((s) => s.asignarMonitor)
+  const practicanteLive = practicantes.find((p) => p.id === practicante.id) || practicante
+  const monitorAsignado = monitores.find((m) => m.id === practicanteLive.monitorId)
+  const supSuspendido = esSupervisorSuspendido(monitorAsignado)
   const [isSendingWhatsapp, setIsSendingWhatsapp] = useState(false);
   const [isSyncingHikvision, setIsSyncingHikvision] = useState(false);
 
   const handleReenviarCredenciales = () => {
+    const usuarioLive = useAppStore.getState().getUsuarioById(practicante.id);
+    if (!usuarioLive) {
+      toast.error('No se encontraron credenciales activas para el practicante');
+      return;
+    }
     setIsSendingWhatsapp(true);
-
-    // Limpiar el número de teléfono (quitar espacios, '+' y asegurar que sea válido)
-    const numeroLimpio = practicante.tel?.replace(/\D/g, '') || '';
-    const numeroFinal = numeroLimpio.startsWith('51') ? numeroLimpio : `51${numeroLimpio}`;
-
-    // Armar el mensaje dinámico
-    const mensaje = `Hola ${practicante.nombre}, tu acceso al Sistema de Asistencia MACROMEC es. Usuario: ${practicante.dni} Clave: ${practicante.dni}`;
-    const mensajeEncodeado = encodeURIComponent(mensaje);
-
-    // URL universal de WhatsApp
-    const whatsappUrl = `https://wa.me/${numeroFinal}?text=${mensajeEncodeado}`;
-
-    // Pequeña pausa visual antes de abrir la pestaña
-    setTimeout(() => {
-      window.open(whatsappUrl, '_blank');
-      setIsSendingWhatsapp(false);
-    }, 800);
+    abrirWhatsAppCredenciales(usuarioLive);
+    setIsSendingWhatsapp(false);
   };
 
   const handleSincronizarHikvision = async () => {
@@ -823,8 +852,8 @@ function BottomSheetPracticante({
 
         <div className="flex items-center justify-between mb-5 shrink-0">
           <div>
-            <h3 className="font-bold text-slate-800 text-[18px] leading-tight">{practicante.nombre} {practicante.apellido}</h3>
-            <span className="text-[12px] text-slate-500 font-medium">DNI: {practicante.dni} • Cel: {practicante.tel}</span>
+            <h3 className="font-bold text-slate-800 text-[18px] leading-tight">{practicanteLive.nombre} {practicanteLive.apellido}</h3>
+            <span className="text-[12px] text-slate-500 font-medium">DNI: {practicanteLive.dni} • Cel: {practicanteLive.telefono || practicanteLive.celular || practicanteLive.tel}</span>
           </div>
           <button onClick={onCerrar} className="bg-slate-100 p-2 rounded-full text-slate-500 active:scale-95 transition-transform">
             <X size={18} />
@@ -832,23 +861,91 @@ function BottomSheetPracticante({
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="mb-6">
+          {supSuspendido && (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-amber-900 text-[12px] font-extrabold">
+                <AlertTriangle size={15} className="shrink-0 text-amber-700" />
+                <span>Supervisor Suspendido - Requiere Reasignación</span>
+              </div>
+              <p className="text-[11px] text-amber-800 m-0">
+                El supervisor actual ({monitorAsignado?.nombre}) se encuentra suspendido. Reasigna este practicante a un supervisor activo:
+              </p>
+              <select
+                disabled={readOnly}
+                value={practicanteLive.monitorId || ''}
+                onChange={(e) => {
+                  if (!e.target.value || readOnly) return
+                  asignarMonitor(practicanteLive.id, e.target.value)
+                  toast.success('Supervisor reasignado correctamente')
+                }}
+                className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-2 text-[12px] font-bold text-slate-800 outline-none disabled:opacity-60"
+              >
+                {monitores.map((m) => (
+                  <option
+                    key={m.id}
+                    value={m.id}
+                    disabled={esSupervisorSuspendido(m) && m.id !== practicanteLive.monitorId}
+                  >
+                    {m.nombre} {esSupervisorSuspendido(m) ? '(Suspendido)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {practicanteLive.estadoGlobal && practicanteLive.estadoGlobal !== 'ACTIVO' && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-600 uppercase">Estado: {practicanteLive.estadoGlobal}</span>
+                <span className="text-[10px] font-semibold text-slate-500">Registros intactos: {practicanteLive.historial?.length || 0} días</span>
+              </div>
+              {(practicanteLive.motivoRetiro || practicanteLive.retiro?.motivo) && (
+                <span className="text-[11px] text-slate-500">
+                  Motivo: {practicanteLive.motivoRetiro || practicanteLive.retiro?.motivo}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="mb-2">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Gestión de Acceso y Credenciales</span>
             <button
+              id={`btn-reenviar-credenciales-${practicanteLive.id}`}
+              type="button"
               onClick={handleReenviarCredenciales}
-              disabled={isSendingWhatsapp}
-              className="w-full h-12 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
+              disabled={isSendingWhatsapp || readOnly}
+              className="w-full h-12 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer border-none"
             >
-              {isSendingWhatsapp ? 'Conectando con Evolution API...' : '📱 Reenviar Credenciales por WhatsApp'}
+              {isSendingWhatsapp ? 'Abriendo WhatsApp...' : '📱 Reenviar Credenciales por WhatsApp'}
             </button>
           </div>
 
-          <div className="mb-6">
+          {onCambiarEstado && (
+            <div className="mb-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Ciclo de Vida Laboral</span>
+              <button
+                id={`btn-cambiar-estado-${practicanteLive.id}`}
+                type="button"
+                disabled={readOnly}
+                onClick={() => {
+                  if (readOnly) return;
+                  onCerrar();
+                  onCambiarEstado(practicanteLive);
+                }}
+                className="w-full h-11 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Edit3 size={14} />
+                Cambiar Estado Laboral (Activo / Retirado)
+              </button>
+            </div>
+          )}
+
+          <div className="mb-4">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Control de Asistencia Biométrico</span>
             <button
               onClick={handleSincronizarHikvision}
-              disabled={isSyncingHikvision}
-              className="w-full h-12 bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
+              disabled={isSyncingHikvision || readOnly}
+              className="w-full h-12 bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isSyncingHikvision ? 'Consultando ISAPI...' : '📡 Sincronizar Hikvision API'}
             </button>
@@ -914,12 +1011,18 @@ function BottomSheetPracticante({
 
 function BottomSheetSupervisor({
   supervisor,
+  readOnly = false,
   onCerrar,
 }: {
   supervisor: any
+  readOnly?: boolean
   onCerrar: () => void
 }) {
   const practicantes = useAppStore(s => s.practicantes);
+  const monitores = useAppStore(s => s.monitores || []);
+  const periodos = useAppStore(s => s.periodos || []);
+  const periodoVisualizacionId = useAppStore(s => s.periodoVisualizacionId);
+  const { periodoActivo, periodoVisualizacionId: periodoVisId } = getPeriodoContext(periodos, periodoVisualizacionId);
   const asignarMonitor = useAppStore(s => s.asignarMonitor);
   const removerMonitor = useAppStore(s => s.removerMonitor);
   const cambiarEstadoSupervisor = useAppStore(s => s.cambiarEstadoSupervisor);
@@ -929,8 +1032,19 @@ function BottomSheetSupervisor({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAssigning, setIsAssigning] = useState<string | null>(null);
 
-  const practicantesActuales = practicantes.filter(p => p.monitorId === supervisor.id);
-  const practicantesLibres = practicantes.filter(p => !p.monitorId || p.monitorId === null);
+  const practicantesDelPeriodo = practicantes.filter(
+    (p) =>
+      perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02') &&
+      (p.estadoGlobal || 'ACTIVO') === 'ACTIVO' &&
+      p.estadoLaboral !== 'retirado',
+  );
+  const practicantesActuales = practicantesDelPeriodo.filter(p => p.monitorId === supervisor.id);
+  const practicantesLibres = practicantesDelPeriodo.filter(p => {
+    if (!p.monitorId || p.monitorId === null) return true;
+    if (p.monitorId === supervisor.id) return false;
+    const supDeP = monitores.find(m => m.id === p.monitorId);
+    return esSupervisorSuspendido(supDeP);
+  });
 
   const handleGuardarEstado = async () => {
     setIsUpdating(true);
@@ -999,7 +1113,7 @@ function BottomSheetSupervisor({
             </div>
           )}
 
-          <button onClick={handleGuardarEstado} disabled={isUpdating} className="w-full bg-slate-800 text-white font-bold h-12 rounded-xl text-[14px] disabled:opacity-70 transition-all flex items-center justify-center mt-2">
+          <button onClick={handleGuardarEstado} disabled={isUpdating || readOnly} className="w-full bg-slate-800 text-white font-bold h-12 rounded-xl text-[14px] disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center mt-2">
             {isUpdating ? 'Guardando en Base de Datos...' : 'Guardar Estado'}
           </button>
         </div>
@@ -1023,7 +1137,7 @@ function BottomSheetSupervisor({
                       <div className="text-[11px] text-slate-400 truncate font-medium">{p.carrera} - {p.semestre}</div>
                     </div>
                   </div>
-                  <button onClick={() => handleRemover(p.id)} disabled={isAssigning === p.id} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50 shrink-0">
+                  <button onClick={() => handleRemover(p.id)} disabled={isAssigning === p.id || readOnly} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50 shrink-0">
                     <X size={16} />
                   </button>
                 </div>
@@ -1046,7 +1160,7 @@ function BottomSheetSupervisor({
                       <div className="text-[11px] text-slate-400 truncate font-medium">{p.carrera} - {p.semestre}</div>
                     </div>
                   </div>
-                  <button onClick={() => handleAsignar(p.id)} disabled={isAssigning === p.id} className="bg-blue-100 text-blue-600 text-[11px] font-bold px-3 py-1.5 rounded-md hover:bg-blue-200 transition-colors disabled:opacity-50 shrink-0">
+                  <button onClick={() => handleAsignar(p.id)} disabled={isAssigning === p.id || readOnly} className="bg-blue-100 text-blue-600 text-[11px] font-bold px-3 py-1.5 rounded-md hover:bg-blue-200 transition-colors disabled:opacity-50 shrink-0">
                     {isAssigning === p.id ? '...' : 'Añadir'}
                   </button>
                 </div>
@@ -1066,25 +1180,45 @@ function BottomSheetSupervisor({
 // ============================================================
 
 export default function AdminModuloScreen() {
-  const practicantes = useAppStore((s) => s.practicantes)
-  const usuariosSistema = useAppStore((s) => s.usuariosSistema)
+  const todosPracticantes = useAppStore((s) => s.practicantes)
   const postulaciones = useAppStore((s) => s.postulaciones)
   const carreras = useAppStore((s) => s.carreras)
+  const periodos = useAppStore((s) => s.periodos || [])
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
+  const monitores = useAppStore((s) => s.monitores || [])
   const addPostulacion = useAppStore((s) => s.addPostulacion)
 
-  const [vistaActiva, setVistaActiva] = useState<'postulantes' | 'practicantes' | 'supervisores'>('postulantes')
+  const [vistaActiva, setVistaActiva] = useState<'postulantes' | 'practicantes' | 'supervisores'>('practicantes')
   const [modalSupervisorOpen, setModalSupervisorOpen] = useState(false)
   const [supervisorActivo, setSupervisorActivo] = useState<any>(null)
   const [postulanteActivo, setPostulanteActivo] = useState<Postulante | null>(null)
   const [practicanteActivo, setPracticanteActivo] = useState<Practicante | null>(null)
+  const [retiradosOpen, setRetiradosOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [ordenAscendente, setOrdenAscendente] = useState(true)
   const [modalEdicion, setModalEdicion] = useState<ModalEdicionState>({
     open: false,
     practicante: null,
   })
+  const [usuarioEditAdmin, setUsuarioEditAdmin] = useState<{
+    id: string
+    tipoUsuario: TipoUsuarioPerfil
+  } | null>(null)
+
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
+
+  // Filtro relacional estricto al periodo seleccionado en la Máquina del Tiempo
+  const practicantes = todosPracticantes.filter((p) =>
+    perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02'),
+  )
 
   const handleSimularPostulacion = () => {
+    if (esPeriodoPasado) return
     const carreraId = carreras.length > 0 ? carreras[0].id : 'carrera-default'
     const nuevoPostulante: Postulante = {
       id: `postulante-${Date.now()}`,
@@ -1103,23 +1237,49 @@ export default function AdminModuloScreen() {
     toast.success('Postulante de prueba generado')
   }
 
-  // Filtrar Practicantes
-  const filtradosPracticantes = practicantes
-    .filter((p) => {
-      const texto = `${p.nombre} ${p.apellido} ${p.dni ?? ''}`.toLowerCase()
-      return texto.includes(query.toLowerCase())
-    })
-    .sort((a, b) => {
-      const nameA = `${a.nombre} ${a.apellido}`
-      const nameB = `${b.nombre} ${b.apellido}`
-      return ordenAscendente
-        ? nameA.localeCompare(nameB, 'es')
-        : nameB.localeCompare(nameA, 'es')
-    })
+  const coincideBusqueda = (p: Practicante) => {
+    const texto = `${p.nombre} ${p.apellido} ${p.dni ?? ''}`.toLowerCase()
+    return texto.includes(query.toLowerCase())
+  }
 
-  // Filtrar Supervisores (leyendo directamente de Monitores en lugar de usuariosSistema)
-  const supervisores = useAppStore((s) => s.monitores || [])
-  const filtradosSupervisores = supervisores
+  const ordenarPracticantes = (a: Practicante, b: Practicante) => {
+    const nameA = `${a.nombre} ${a.apellido}`
+    const nameB = `${b.nombre} ${b.apellido}`
+    return ordenAscendente
+      ? nameA.localeCompare(nameB, 'es')
+      : nameB.localeCompare(nameA, 'es')
+  }
+
+  const esRetiradoOInactivo = (p: Practicante) =>
+    p.estadoGlobal === 'RETIRADO' ||
+    p.estadoGlobal === 'BAJA' ||
+    (p.estadoLaboral === 'retirado' && p.estadoGlobal !== 'EGRESADO')
+
+  const filtradosActivos = practicantes
+    .filter((p) => !esRetiradoOInactivo(p))
+    .filter((p) => (esPeriodoPasado ? true : (p.estadoGlobal || 'ACTIVO') === 'ACTIVO'))
+    .filter(coincideBusqueda)
+    .sort(ordenarPracticantes)
+
+  const filtradosRetirados = practicantes
+    .filter((p) => esRetiradoOInactivo(p))
+    .filter(coincideBusqueda)
+    .sort(ordenarPracticantes)
+
+  const monitorSuspendidoPorPracticante = (p: Practicante) => {
+    const monitor = monitores.find((m) => m.id === p.monitorId)
+    return esSupervisorSuspendido(monitor)
+  }
+
+  const practicantesSinSupActivo = practicantes.filter(
+    (p) =>
+      !esRetiradoOInactivo(p) &&
+      (p.estadoGlobal || 'ACTIVO') === 'ACTIVO' &&
+      monitorSuspendidoPorPracticante(p),
+  )
+
+  // Filtrar Supervisores (leyendo directamente de Monitores)
+  const filtradosSupervisores = monitores
     .filter((u) => {
       const texto = `${u.nombre} ${u.dni ?? ''}`.toLowerCase()
       return texto.includes(query.toLowerCase())
@@ -1131,17 +1291,29 @@ export default function AdminModuloScreen() {
     })
 
   const totalActivos = practicantes.filter(
-    (p) => p.estadoLaboral === 'activo',
+    (p) => (p.estadoGlobal || 'ACTIVO') === 'ACTIVO' && p.estadoLaboral !== 'retirado',
   ).length
-  const totalRetirados = practicantes.filter(
-    (p) => p.estadoLaboral === 'retirado',
-  ).length
+  const totalRetirados = practicantes.filter((p) => esRetiradoOInactivo(p)).length
 
   return (
     <div className="flex flex-col gap-3 pb-8">
-      <div className="font-bold text-[14px] text-slate-900">
-        ⚙️ Admin — Gestión de Personal
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-bold text-[14px] text-slate-900">
+          ⚙️ Admin — Gestión de Personal
+        </div>
+        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+          Ciclo {periodoVisualizado?.nombre || ''}
+        </span>
       </div>
+
+      {esPeriodoPasado && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+          <Lock size={14} className="shrink-0 text-amber-700" />
+          <span>
+            Modo Histórico ({periodoVisualizado?.nombre}) — Solo Lectura. Los cambios y contrataciones están deshabilitados.
+          </span>
+        </div>
+      )}
 
       {/* FASE 1: Toggle Vistas */}
       <div className="bg-slate-100 rounded-xl p-1 flex gap-1 mb-2">
@@ -1250,6 +1422,15 @@ export default function AdminModuloScreen() {
             </div>
           </div>
 
+          {practicantesSinSupActivo.length > 0 && !esPeriodoPasado && (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+              <AlertTriangle size={15} className="shrink-0 text-amber-700" />
+              <span>
+                {practicantesSinSupActivo.length} practicante{practicantesSinSupActivo.length === 1 ? '' : 's'} con Supervisor Suspendido - Requiere Reasignación (toca su tarjeta para reasignar).
+              </span>
+            </div>
+          )}
+
           {/* Buscador + Ordenar */}
           <div className="flex gap-2.5">
             <div className="flex-1 relative">
@@ -1277,25 +1458,28 @@ export default function AdminModuloScreen() {
             </button>
           </div>
 
-          {/* Contador de resultados */}
+          {/* Contador de resultados activos */}
           <div className="text-[12px] text-slate-400 pl-0.5">
-            {filtradosPracticantes.length} colaborador{filtradosPracticantes.length !== 1 ? 'es' : ''}{' '}
-            encontrado{filtradosPracticantes.length !== 1 ? 's' : ''}
+            {filtradosActivos.length} colaborador{filtradosActivos.length !== 1 ? 'es' : ''}{' '}
+            encontrado{filtradosActivos.length !== 1 ? 's' : ''}
           </div>
 
-          {/* Lista de colaboradores */}
-          {filtradosPracticantes.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-[13px]">
-              Sin resultados para "{query}"
+          {/* Lista principal de activos / históricos */}
+          {filtradosActivos.length === 0 ? (
+            <div className="text-center py-6 text-slate-400 text-[13px] bg-white rounded-xl border border-slate-100">
+              {query ? `Sin colaboradores activos para "${query}"` : 'No hay colaboradores activos en este periodo.'}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {filtradosPracticantes.map((p) => (
+              {filtradosActivos.map((p) => (
                 <TarjetaColaborador
                   key={p.id}
                   practicante={p}
+                  supervisorSuspendido={monitorSuspendidoPorPracticante(p)}
+                  readOnly={esPeriodoPasado}
                   onEditarEstado={(pr) =>
-                    setModalEdicion({ open: true, practicante: pr })
+                    !esPeriodoPasado &&
+                    setUsuarioEditAdmin({ id: pr.id, tipoUsuario: 'PRACTICANTE' })
                   }
                   onClick={(pr) => setPracticanteActivo(pr)}
                 />
@@ -1303,8 +1487,56 @@ export default function AdminModuloScreen() {
             </div>
           )}
 
+          {/* Acordeón colapsable de Alumnos Retirados (conservando asistencia, HE y documentos intactos) */}
+          <div className="mt-2 bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
+            <button
+              id="btn-acordeon-retirados"
+              type="button"
+              onClick={() => setRetiradosOpen((prev) => !prev)}
+              className="w-full px-3.5 py-3 flex items-center justify-between bg-slate-100/70 hover:bg-slate-100 border-none cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <History size={15} className="text-slate-600" />
+                <span className="text-[12px] font-extrabold text-slate-700">
+                  Alumnos Retirados
+                </span>
+                <span className="bg-slate-200 text-slate-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                  {filtradosRetirados.length}
+                </span>
+              </div>
+              {retiradosOpen ? (
+                <ChevronUp size={16} className="text-slate-500" />
+              ) : (
+                <ChevronDown size={16} className="text-slate-500" />
+              )}
+            </button>
+
+            {retiradosOpen && (
+              <div className="p-3 flex flex-col gap-2 border-t border-slate-200 bg-white">
+                {filtradosRetirados.length === 0 ? (
+                  <div className="text-center py-4 text-[12px] text-slate-400 italic">
+                    No hay alumnos retirados en este periodo.
+                  </div>
+                ) : (
+                  filtradosRetirados.map((p) => (
+                    <TarjetaColaborador
+                      key={p.id}
+                      practicante={p}
+                      readOnly={esPeriodoPasado}
+                      onEditarEstado={(pr) =>
+                        !esPeriodoPasado &&
+                        setUsuarioEditAdmin({ id: pr.id, tipoUsuario: 'PRACTICANTE' })
+                      }
+                      onClick={(pr) => setPracticanteActivo(pr)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Modal edición */}
-          {modalEdicion.open && (
+          {modalEdicion.open && !esPeriodoPasado && (
             <ModalEdicionEstado
               state={modalEdicion}
               onCerrar={() =>
@@ -1317,7 +1549,11 @@ export default function AdminModuloScreen() {
           {practicanteActivo && (
             <BottomSheetPracticante
               practicante={practicanteActivo}
+              readOnly={esPeriodoPasado}
               onCerrar={() => setPracticanteActivo(null)}
+              onCambiarEstado={(pr) =>
+                !esPeriodoPasado && setModalEdicion({ open: true, practicante: pr })
+              }
             />
           )}
         </>
@@ -1362,7 +1598,16 @@ export default function AdminModuloScreen() {
           ) : (
             <div className="flex flex-col gap-2">
               {filtradosSupervisores.map((sup) => (
-                <TarjetaSupervisor key={sup.id} supervisor={sup} onEditar={(s) => setSupervisorActivo(s)} />
+                <TarjetaSupervisor
+                  key={sup.id}
+                  supervisor={sup}
+                  readOnly={esPeriodoPasado}
+                  onEditar={(s) =>
+                    !esPeriodoPasado &&
+                    setUsuarioEditAdmin({ id: s.id, tipoUsuario: 'SUPERVISOR' })
+                  }
+                  onGestionar={(s) => setSupervisorActivo(s)}
+                />
               ))}
             </div>
           )}
@@ -1370,23 +1615,35 @@ export default function AdminModuloScreen() {
           {supervisorActivo && (
             <BottomSheetSupervisor
               supervisor={supervisorActivo}
+              readOnly={esPeriodoPasado}
               onCerrar={() => setSupervisorActivo(null)}
             />
           )}
 
           <button
-            onClick={() => setModalSupervisorOpen(true)}
-            className="w-full mt-4 bg-indigo-600 border-none cursor-pointer text-white rounded-xl py-3.5 flex items-center justify-center gap-2 font-bold text-[14px]"
+            type="button"
+            disabled={esPeriodoPasado}
+            onClick={() => !esPeriodoPasado && setModalSupervisorOpen(true)}
+            className="w-full mt-4 bg-indigo-600 border-none cursor-pointer text-white rounded-xl py-3.5 flex items-center justify-center gap-2 font-bold text-[14px] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus size={18} />
             Registrar Nuevo Supervisor
           </button>
 
-          {modalSupervisorOpen && (
-            <ModalRegistroSupervisor onCerrar={() => setModalSupervisorOpen(false)} />
+          {modalSupervisorOpen && !esPeriodoPasado && (
+            <ModalNuevoSupervisor onCerrar={() => setModalSupervisorOpen(false)} />
           )}
         </>
       )}
+
+      {/* Modal Universal de Edición Admin (Acceso Total + Contraseña Visible) */}
+      <ModalAdminEditarUsuario
+        abierto={Boolean(usuarioEditAdmin) && !esPeriodoPasado}
+        usuarioId={usuarioEditAdmin?.id ?? null}
+        tipoUsuario={usuarioEditAdmin?.tipoUsuario ?? 'PRACTICANTE'}
+        onCerrar={() => setUsuarioEditAdmin(null)}
+        onGuardado={(msg) => toast.success(msg)}
+      />
     </div>
   )
 }
