@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Settings } from 'lucide-react'
+import { History, Lock, Settings } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
-import PerfilModal from './PerfilModal'
+import { getPeriodoContext } from '../../utils/periodoHelpers'
+import MiPerfilModal from '../MiPerfilModal'
 import ConfiguracionModal from './ConfiguracionModal'
 
 // ── Badge de rol ─────────────────────────────────────────────
@@ -65,9 +66,17 @@ function formatFechaHoy(): string {
 
 export default function Header() {
   const usuario = useAppStore((s) => s.usuarioActual)
+  const periodos = useAppStore((s) => s.periodos || [])
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
+  const setPeriodoVisualizacionId = useAppStore((s) => s.setPeriodoVisualizacionId)
   const [modalAbierto, setModalAbierto] = useState(false)
   const [configModalAbierto, setConfigModalAbierto] = useState(false)
   const [fechaHoy, setFechaHoy] = useState(formatFechaHoy)
+
+  const {
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
 
   // Actualizar fecha a medianoche (por si la app queda abierta)
   useEffect(() => {
@@ -282,10 +291,78 @@ export default function Header() {
             </button>
           </div>
         </div>
+
+        {/* Barra global de Máquina del Tiempo (Selector de Periodo Académico) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '6px 16px 8px',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            background: esPeriodoPasado
+              ? 'rgba(180,83,9,0.28)'
+              : 'rgba(30,41,59,0.55)',
+            gap: 8,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            {esPeriodoPasado ? (
+              <Lock size={13} color="#fcd34d" style={{ flexShrink: 0 }} />
+            ) : (
+              <History size={13} color="#93c5fd" style={{ flexShrink: 0 }} />
+            )}
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: '0.4px',
+                textTransform: 'uppercase',
+                color: esPeriodoPasado ? '#fde68a' : '#cbd5e1',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {esPeriodoPasado ? 'Histórico · Solo Lectura' : 'Ciclo Académico'}
+            </span>
+          </div>
+
+          <select
+            id="select-periodo-visualizacion"
+            aria-label="Seleccionar periodo académico de visualización"
+            value={periodoVisId}
+            onChange={(e) => setPeriodoVisualizacionId(e.target.value)}
+            style={{
+              background: esPeriodoPasado
+                ? 'rgba(245,158,11,0.2)'
+                : 'rgba(255,255,255,0.1)',
+              color: '#f8fafc',
+              border: esPeriodoPasado
+                ? '1px solid rgba(251,191,36,0.5)'
+                : '1px solid rgba(255,255,255,0.18)',
+              borderRadius: 8,
+              padding: '3px 8px',
+              fontSize: 11,
+              fontWeight: 700,
+              outline: 'none',
+              cursor: 'pointer',
+              maxWidth: 190,
+            }}
+          >
+            {periodos.map((per) => (
+              <option
+                key={per.id}
+                value={per.id}
+                style={{ background: '#0f172a', color: '#f8fafc' }}
+              >
+                {per.nombre} {per.estado === 'activo' ? '(Activo)' : per.estado === 'cerrado' ? '(Cerrado)' : '(Borrador)'}
+              </option>
+            ))}
+          </select>
+        </div>
       </header>
 
       {/* Modal de perfil */}
-      <PerfilModal
+      <MiPerfilModal
         abierto={modalAbierto}
         onCerrar={() => setModalAbierto(false)}
       />

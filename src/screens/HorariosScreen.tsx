@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { CheckCircle2, ChevronDown, ChevronUp, Clock, Send, Trash2, X, FileText, Download, Upload, Archive } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Clock, Lock, Send, Trash2, X, FileText, Download, Upload, Archive } from 'lucide-react'
 import { descargarArchivoBase64 } from '../utils/fileUtils'
 import ModalNuevoInforme from '../components/ModalNuevoInforme'
 import ModalConfirmacion from '../components/ModalConfirmacion'
 import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
+import { getPeriodoContext, perteneceAPeriodo } from '../utils/periodoHelpers'
 import type { DiaHorario, HorarioSemanal, Modalidad, Practicante, RegistroDia } from '../types'
 
 // ── Utilidades ─────────────────────────────────────────────────
@@ -188,8 +189,24 @@ function PracticanteHorarios() {
   const archivarInformeQuincenal = useAppStore((s) => s.archivarInformeQuincenal)
   const eliminarInformeQuincenal = useAppStore((s) => s.eliminarInformeQuincenal)
   const informesQuincenales = useAppStore((s) => s.informesQuincenales)
-  const p = practicantes.find(pr => pr.id === usuarioActual?.id) || practicantes[0]
-  const misInformes = informesQuincenales.filter(i => i.practicanteId === (usuarioActual?.id || p.id))
+  const periodos = useAppStore((s) => s.periodos)
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
+
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
+
+  const p = practicantes.find(
+    (pr) =>
+      (pr.id === usuarioActual?.id || (usuarioActual?.dni && pr.dni === usuarioActual.dni)) &&
+      perteneceAPeriodo(pr, periodoVisId, periodoActivo?.id || 'per-2026-02'),
+  )
+  const misInformes = informesQuincenales.filter(
+    (i) => i.practicanteId === (p?.id || usuarioActual?.id || ''),
+  )
   const misInformesActivos = misInformes.filter(i => !i.archivado)
   const misInformesArchivados = misInformes.filter(i => i.archivado)
 
@@ -197,7 +214,6 @@ function PracticanteHorarios() {
   const [showModal, setShowModal] = useState(false)
   const [showArchivadosModal, setShowArchivadosModal] = useState(false)
   const [informeAEliminar, setInformeAEliminar] = useState<string | null>(null)
-  const periodos = useAppStore((s) => s.periodos)
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>('todos')
 
   // Horario aprobado / vigente de la entidad relacional Practicante
@@ -207,6 +223,7 @@ function PracticanteHorarios() {
 
   // Requerimiento 1 & 2: isEditing se inicializa en false si existe un horario aprobado cargado
   const [isEditing, setIsEditing] = useState<boolean>(() => {
+    if (esPeriodoPasado) return false
     if (tieneHorarioAprobado) return false
     if (pendienteActual && pendienteActual.estado !== 'Rechazado') return false
     return true
@@ -320,7 +337,7 @@ function PracticanteHorarios() {
       }
     })
 
-    enviarHorario(usuarioActual.id, diasFinales)
+    enviarHorario(p?.id || usuarioActual.id, diasFinales)
 
     setEnviando(false)
     setIsEditing(false)
@@ -328,13 +345,36 @@ function PracticanteHorarios() {
   }
 
   const handleCancelarEnvio = () => {
-    cancelarHorario(usuarioActual?.id || p.id)
+    if (esPeriodoPasado) return
+    cancelarHorario(p?.id || usuarioActual?.id || '')
     handleResetForm()
     toast.info('Envío cancelado, puedes editar tu horario nuevamente.')
   }
 
+  if (!p) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+        <p className="text-[13px] font-bold text-amber-900 mb-1">
+          Sin horario registrado en el periodo {periodoVisualizado?.nombre || ''}
+        </p>
+        <p className="text-[11px] text-amber-700 m-0">
+          Selecciona tu periodo activo desde el selector de ciclo en el encabezado.
+        </p>
+      </div>
+    )
+  }
+
+  const puedeEditar = isEditing && !esPeriodoPasado
+
   return (
     <div className="flex flex-col gap-3">
+      {esPeriodoPasado && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+          <Lock size={14} className="shrink-0 text-amber-700" />
+          <span>Modo Histórico ({periodoVisualizado?.nombre}) — Solo Lectura.</span>
+        </div>
+      )}
+
       {/* Banner estado horario */}
       {pendienteActual && (
         <div className={`rounded-[14px] px-4 py-3 flex items-center gap-2.5 ${pendienteActual.estado === 'Rechazado' ? 'bg-red-50 border border-red-200' : 'bg-gradient-to-br from-blue-900 to-blue-600'}`}>
@@ -355,8 +395,9 @@ function PracticanteHorarios() {
             )}
           </div>
           <button
+            disabled={esPeriodoPasado}
             onClick={handleCancelarEnvio}
-            className={`border-none rounded-lg p-1.5 flex items-center justify-center cursor-pointer ${pendienteActual.estado === 'Rechazado' ? 'bg-red-100 text-red-700' : 'bg-white/20 text-white'}`}
+            className={`border-none rounded-lg p-1.5 flex items-center justify-center ${esPeriodoPasado ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${pendienteActual.estado === 'Rechazado' ? 'bg-red-100 text-red-700' : 'bg-white/20 text-white'}`}
             aria-label="Eliminar envío"
           >
             <Trash2 size={16} />
@@ -368,13 +409,13 @@ function PracticanteHorarios() {
       <div className="bg-white rounded-2xl border border-slate-200 p-4">
         <div className="flex justify-between items-center mb-1">
           <div className="font-bold text-[14px] text-slate-900 flex items-center gap-2">
-            📋 {isEditing ? 'Declaración de Horario Semanal' : 'Horario Semanal Vigente'}
+            📋 {puedeEditar ? 'Declaración de Horario Semanal' : 'Horario Semanal Vigente'}
             <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">{p.modalidadBase}</span>
-            {tieneHorarioAprobado && !isEditing && (
+            {tieneHorarioAprobado && !puedeEditar && (
               <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">Aprobado</span>
             )}
           </div>
-          {(!pendienteActual || pendienteActual.estado === 'Rechazado') && (
+          {!esPeriodoPasado && (!pendienteActual || pendienteActual.estado === 'Rechazado') && (
             <button
               id="btn-habilitar-edicion"
               type="button"
@@ -458,12 +499,12 @@ function PracticanteHorarios() {
                           key={m}
                           id={`modal-${d.key}-${m}`}
                           type="button"
-                          disabled={!isEditing}
-                          onClick={() => updateDia(d.key, { modalidad: m })}
+                          disabled={!puedeEditar}
+                          onClick={() => puedeEditar && updateDia(d.key, { modalidad: m })}
                           className={`flex-1 rounded-lg py-1.5 px-1 text-[11px] font-semibold transition-all ${form.modalidad === m
                             ? 'border-2 border-blue-600 bg-blue-50 text-blue-800 font-bold'
                             : 'border-[1.5px] border-slate-200 bg-white text-slate-500'
-                            } ${!isEditing ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                            } ${!puedeEditar ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
                           {MODALIDAD_LABELS[m]}
                         </button>
@@ -483,15 +524,15 @@ function PracticanteHorarios() {
                           <input
                             id={`hora-inicio-${d.key}`}
                             type="time"
-                            disabled={!isEditing}
-                            readOnly={!isEditing}
+                            disabled={!puedeEditar}
+                            readOnly={!puedeEditar}
                             value={form.horaInicio}
                             onChange={(e) =>
                               updateDia(d.key, {
                                 horaInicio: e.target.value,
                               })
                             }
-                            className={`w-full px-2.5 py-2 rounded-lg border-[1.5px] text-[13px] outline-none box-border ${!isEditing
+                            className={`w-full px-2.5 py-2 rounded-lg border-[1.5px] text-[13px] outline-none box-border ${!puedeEditar
                               ? 'border-slate-200 bg-slate-50 text-slate-600 cursor-not-allowed'
                               : 'border-slate-200 bg-white text-slate-800 focus:border-blue-500'
                               }`}
@@ -510,13 +551,13 @@ function PracticanteHorarios() {
                           <input
                             id={`hora-fin-${d.key}`}
                             type="time"
-                            disabled={!isEditing}
-                            readOnly={!isEditing}
+                            disabled={!puedeEditar}
+                            readOnly={!puedeEditar}
                             value={form.horaFin}
                             onChange={(e) =>
                               updateDia(d.key, { horaFin: e.target.value })
                             }
-                            className={`w-full px-2.5 py-2 rounded-lg border-[1.5px] text-[13px] outline-none box-border ${!isEditing
+                            className={`w-full px-2.5 py-2 rounded-lg border-[1.5px] text-[13px] outline-none box-border ${!puedeEditar
                               ? 'border-slate-200 bg-slate-50 text-slate-600 cursor-not-allowed'
                               : 'border-slate-200 bg-white text-slate-800 focus:border-blue-500'
                               }`}
@@ -539,7 +580,7 @@ function PracticanteHorarios() {
               className={`text-[13px] font-semibold ${esValido ? 'text-emerald-800' : 'text-red-800'
                 }`}
             >
-              {isEditing ? 'Total recalculado' : 'Total de horas'}
+              {puedeEditar ? 'Total recalculado' : 'Total de horas'}
             </span>
             <span
               className={`text-[16px] font-extrabold flex items-center gap-1.5 ${esValido ? 'text-emerald-600' : 'text-red-600'
@@ -548,7 +589,7 @@ function PracticanteHorarios() {
               {totalHoras.toFixed(1)}h / 30h
             </span>
           </div>
-          {isEditing && !esValido && (
+          {puedeEditar && !esValido && (
             <div className="text-red-600 text-[12px] font-bold mt-2 text-center">
               ⚠️ Error: El horario debe sumar exactamente 30 horas semanales. Actual: {totalHoras.toFixed(1)}h
             </div>
@@ -558,11 +599,11 @@ function PracticanteHorarios() {
             id="btn-enviar-horario"
             type="button"
             onClick={procesarEnvio}
-            disabled={!isEditing || enviando || !!pendienteActual || !esValido}
-            className={`w-full mt-3 py-3.5 border-none rounded-xl text-[14px] font-bold flex items-center justify-center gap-2 transition-all duration-200 ${(!isEditing || enviando || !!pendienteActual || !esValido) ? 'bg-slate-300 text-white cursor-not-allowed' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white cursor-pointer active:opacity-90'}`}
+            disabled={!puedeEditar || enviando || !!pendienteActual || !esValido}
+            className={`w-full mt-3 py-3.5 border-none rounded-xl text-[14px] font-bold flex items-center justify-center gap-2 transition-all duration-200 ${(!puedeEditar || enviando || !!pendienteActual || !esValido) ? 'bg-slate-300 text-white cursor-not-allowed' : 'bg-gradient-to-br from-blue-900 to-blue-600 text-white cursor-pointer active:opacity-90'}`}
           >
             <Send size={16} />
-            {enviando ? 'Enviando…' : 'Guardar y Enviar Horario'}
+            {esPeriodoPasado ? 'Solo Lectura (Periodo Cerrado)' : enviando ? 'Enviando…' : 'Guardar y Enviar Horario'}
           </button>
         </div>
       </div>
@@ -697,10 +738,12 @@ function PracticanteHorarios() {
 
         {/* Botón de envío de informe quincenal */}
         <button
-          onClick={() => setShowModal(true)}
-          className="w-full bg-slate-900 text-white rounded-2xl py-3.5 text-[14px] font-bold border-none cursor-pointer active:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+          type="button"
+          disabled={esPeriodoPasado}
+          onClick={() => !esPeriodoPasado && setShowModal(true)}
+          className={`w-full rounded-2xl py-3.5 text-[14px] font-bold border-none transition-colors flex items-center justify-center gap-2 ${esPeriodoPasado ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white cursor-pointer active:bg-slate-800'}`}
         >
-          <FileText size={18} /> Mandar informe nuevo
+          <FileText size={18} /> {esPeriodoPasado ? 'Solo Lectura (Periodo Cerrado)' : 'Mandar informe nuevo'}
         </button>
       </div>
 

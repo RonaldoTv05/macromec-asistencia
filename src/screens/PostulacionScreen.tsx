@@ -33,6 +33,21 @@ export default function PostulacionScreen({
   const [edad, setEdad] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
 
+  useEffect(() => {
+    if (fechaNacimiento) {
+      const hoy = new Date()
+      const cumple = new Date(fechaNacimiento)
+      let e = hoy.getFullYear() - cumple.getFullYear()
+      const m = hoy.getMonth() - cumple.getMonth()
+      if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) {
+        e--
+      }
+      setEdad(e)
+    } else {
+      setEdad(null)
+    }
+  }, [fechaNacimiento])
+
   const sem = semestres[0]
   const forzarCierre = sem?.forzarCierrePostulacion ?? false
   const limite = sem?.limitePostulantes ?? 0
@@ -126,22 +141,6 @@ export default function PostulacionScreen({
       </div>
     )
   }
-
-
-  useEffect(() => {
-    if (fechaNacimiento) {
-      const hoy = new Date()
-      const cumple = new Date(fechaNacimiento)
-      let e = hoy.getFullYear() - cumple.getFullYear()
-      const m = hoy.getMonth() - cumple.getMonth()
-      if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) {
-        e--
-      }
-      setEdad(e)
-    } else {
-      setEdad(null)
-    }
-  }, [fechaNacimiento])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

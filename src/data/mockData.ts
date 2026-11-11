@@ -3,10 +3,12 @@ import type {
   CodigoHoja,
   DiaHorario,
   EstadoAsistencia,
+  EstadoGlobalPracticante,
   EstadoLaboral,
   ExtraHoursBalance,
   HorarioSemanal,
   Modalidad,
+  Monitor,
   Practicante,
   RegistroDia,
   SemanaFisica,
@@ -32,8 +34,11 @@ export const USUARIOS_SISTEMA: User[] = [
     nombre: 'Junior Sandoval',
     rol: 'PRACTICANTE',
     email: 'juniors@macromec.pe',
+    correo: 'juniors@macromec.pe',
     dni: '72849102',
     tel: '+51 984 123 456',
+    telefono: '+51 984 123 456',
+    fechaNacimiento: '2004-01-01',
     carrera: 'Ingeniería Industrial',
     avatarIniciales: 'JS',
   },
@@ -44,8 +49,11 @@ export const USUARIOS_SISTEMA: User[] = [
     nombre: 'Alexander Marquez',
     rol: 'SUPERVISOR',
     email: 'alexander@macromec.pe',
+    correo: 'alexander@macromec.pe',
     dni: '70192834',
     tel: '+51 912 345 678',
+    telefono: '+51 912 345 678',
+    fechaNacimiento: '1995-05-15',
     carrera: 'Mecatrónica Industrial',
     avatarIniciales: 'AM',
   },
@@ -56,8 +64,11 @@ export const USUARIOS_SISTEMA: User[] = [
     nombre: 'Juan Directivo',
     rol: 'GERENCIA',
     email: 'juan.gerencia@macromec.pe',
+    correo: 'juan.gerencia@macromec.pe',
     dni: '08472910',
     tel: '+51 999 888 777',
+    telefono: '+51 999 888 777',
+    fechaNacimiento: '1988-03-10',
     carrera: 'Gerencia General',
     avatarIniciales: 'JD',
   },
@@ -296,11 +307,18 @@ export const practicantesData: any[] = [
 export const MOCK_PRACTICANTES: Practicante[] = practicantesData.map((p) => {
   const tieneHorario = p.id !== 'prac-5';
   const horarioInicial = tieneHorario ? (p.id === 'prac-3' ? makeHorarioSemipresencial(38) : makeHorario(38, [])) : undefined;
+  const esRetirado = p.estado?.toLowerCase() === 'retirado';
+  const periodoAsignado = p.periodoId || 'per-2026-02';
   return {
     ...p,
-    periodoId: p.periodoId || 'per-2026-02',
+    periodo_id: periodoAsignado,
+    periodoId: periodoAsignado,
+    supervisorId: p.monitorId,
     email: `${p.nombre.toLowerCase().split(' ')[0]}@macromec.pe`,
+    correo: p.correo || `${p.nombre.toLowerCase().split(' ')[0]}@macromec.pe`,
     tel: p.celular,
+    telefono: p.telefono || p.celular,
+    password: p.password || p.dni,
     carreraId: p.carreraId || p.carrera,
     horasSemanalesTarget: 30,
     horarioAprobado: horarioInicial,
@@ -310,8 +328,9 @@ export const MOCK_PRACTICANTES: Practicante[] = practicantesData.map((p) => {
     semanasHojaFisica: [],
     almuerzosConfirmados: [],
     saldoHorasExtras: 0,
-    estadoLaboral: (p.estado?.toLowerCase() === 'retirado' ? 'retirado' : 'activo'),
-    estado: (p.estado?.toLowerCase() === 'retirado' ? 'retirado' : 'activo') as 'activo' | 'retirado',
+    estadoGlobal: (esRetirado ? 'RETIRADO' : 'ACTIVO') as EstadoGlobalPracticante,
+    estadoLaboral: (esRetirado ? 'retirado' : 'activo'),
+    estado: (esRetirado ? 'retirado' : 'activo') as 'activo' | 'retirado',
     motivoRetiro: p.motivoRetiro,
     fechaRetiro: p.fechaRetiro || p.retiro?.fechaInicio,
     entregaHojaFisica: false,
@@ -390,17 +409,26 @@ export const MOCK_MACROMEC_CONFIG: MacromecConfig = {
 }
 
 export const monitoresData = [
-  { id: 'sup-1', nombre: 'Ronaldo Torres', rol: 'SUPERVISOR', dni: '70192834', celular: '+51 912 345 678', area: 'Supervisión de Operaciones', correoGmail: 'ronaldotv@macromec.pe', password: '123' },
-  { id: 'sup-omar', nombre: 'Jhonny Omar Chacon Colonio', rol: 'SUPERVISOR', dni: '08172882', celular: '968273238', area: 'Mantenimiento / Electricidad Industrial', correoGmail: 'omar.chacon@gmail.com', password: '123' },
-  { id: 'sup-tamy', nombre: 'Tamy Adela Chacon Rojas', rol: 'SUPERVISOR', dni: '73019151', celular: '947042215', area: 'Diseño Grafico', correoGmail: 'tamy.chacon@gmail.com', password: '123' },
-  { id: 'sup-juan', nombre: 'Juan Luis Alfonso Alva Cuadros', rol: 'SUPERVISOR', dni: '76143396', celular: '979134594', area: 'Software', correoGmail: 'juan.alva@gmail.com', password: '123' },
-  { id: 'sup-alexander', nombre: 'Alexander Márquez', rol: 'SUPERVISOR', dni: '72402294', celular: '961041473', area: 'Mecatrónica Industrial', correoGmail: 'alexander@gmail.com', password: '123' },
-  { id: 'sup-jheferson', nombre: 'Jheferson Roque', rol: 'SUPERVISOR', dni: '71892880', celular: '968701757', area: 'Electricidad Industrial', correoGmail: 'jheferson@gmail.com', password: '123' },
-  { id: 'sup-david', nombre: 'Davis Tolentino', rol: 'SUPERVISOR', dni: '74634898', celular: '944293154', area: 'Electricidad Industrial', correoGmail: 'david@gmail.com', password: '123' },
-  { id: 'sup-jeremy', nombre: 'Jeremy Calderón', rol: 'SUPERVISOR', dni: '73123591', celular: '941272622', area: 'Electricidad Industrial', correoGmail: 'jeremy@gmail.com', password: '123' }
+  { id: 'sup-1', nombre: 'Ronaldo Torres', rol: 'SUPERVISOR', dni: '70192834', celular: '+51 912 345 678', area: 'Supervisión de Operaciones', correoGmail: 'ronaldotv@macromec.pe', password: '123', fechaNacimiento: '1991-03-14' },
+  { id: 'sup-omar', nombre: 'Jhonny Omar Chacon Colonio', rol: 'SUPERVISOR', dni: '08172882', celular: '968273238', area: 'Mantenimiento / Electricidad Industrial', correoGmail: 'omar.chacon@gmail.com', password: '123', fechaNacimiento: '1980-06-22' },
+  { id: 'sup-tamy', nombre: 'Tamy Adela Chacon Rojas', rol: 'SUPERVISOR', dni: '73019151', celular: '947042215', area: 'Diseño Grafico', correoGmail: 'tamy.chacon@gmail.com', password: '123', fechaNacimiento: '1988-11-19' },
+  { id: 'sup-juan', nombre: 'Juan Luis Alfonso Alva Cuadros', rol: 'SUPERVISOR', dni: '76143396', celular: '979134594', area: 'Software', correoGmail: 'juan.alva@gmail.com', password: '123', fechaNacimiento: '1985-08-09' },
+  { id: 'sup-alexander', nombre: 'Alexander Márquez', rol: 'SUPERVISOR', dni: '72402294', celular: '961041473', area: 'Mecatrónica Industrial', correoGmail: 'alexander@gmail.com', password: '123', fechaNacimiento: '1995-05-15' },
+  { id: 'sup-jheferson', nombre: 'Jheferson Roque', rol: 'SUPERVISOR', dni: '71892880', celular: '968701757', area: 'Electricidad Industrial', correoGmail: 'jheferson@gmail.com', password: '123', fechaNacimiento: '1994-04-03' },
+  { id: 'sup-david', nombre: 'Davis Tolentino', rol: 'SUPERVISOR', dni: '74634898', celular: '944293154', area: 'Electricidad Industrial', correoGmail: 'david@gmail.com', password: '123', fechaNacimiento: '1978-09-12' },
+  { id: 'sup-jeremy', nombre: 'Jeremy Calderón', rol: 'SUPERVISOR', dni: '73123591', celular: '941272622', area: 'Electricidad Industrial', correoGmail: 'jeremy@gmail.com', password: '123', fechaNacimiento: '1990-12-04' }
 ];
 
-export const MOCK_MONITORES: import('../types').Monitor[] = monitoresData as import('../types').Monitor[];
+export const MOCK_MONITORES: Monitor[] = monitoresData.map((m) => ({
+  ...m,
+  correo: m.correoGmail,
+  telefono: m.celular,
+  fechaNacimiento: m.fechaNacimiento,
+  password: m.password || m.dni,
+  modalidadBase: 'Presencial' as const,
+  estado: 'Activo' as const,
+  estadoGlobal: 'ACTIVO' as const,
+}));
 
 export const MOCK_CARRERAS: Carrera[] = [
   {
@@ -557,7 +585,54 @@ export const MOCK_ESPECIALISTAS: Especialista[] = especialistasData as any as Es
 
 export const MOCK_PLANTILLA: PlantillaAceptacion = {
   id: 'tpl-1',
-  contenidoHTML: '<p>Estimado(a) practicante, nos complace informarle que ha sido aceptado(a)...</p>'
+  contenidoHTML: `<div style="font-family: 'Helvetica', 'Arial', sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #333333; background-color: white;">
+  
+  <!-- Membrete y Logo -->
+  <table style="width: 100%; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-bottom: 30px;">
+    <tr>
+      <td style="width: 20%; text-align: left;">
+        <!-- Asegúrate de colocar el logo de macromec en la carpeta /public como logo-macromec.png -->
+        <img src="/logo-macromec.png" alt="Logo MACROMEC" style="height: 80px; object-fit: contain;" />
+      </td>
+      <td style="width: 80%; text-align: right; line-height: 1.4;">
+        <h2 style="margin: 0; color: #003366; font-size: 20px;">MACROMEC J&S S.A.C.</h2>
+        <p style="margin: 0; font-size: 12px; color: #555;">Tecnología y Servicios Integrales</p>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Fecha y Asunto -->
+  <div style="text-align: right; font-size: 14px; margin-bottom: 40px; line-height: 1.6;">
+    <p style="margin: 0;"><strong>CARTA DE ACEPTACIÓN N° 001-2026-MACROMEC</strong></p>
+    <p style="margin: 0;">Lima, [Fecha Actual]</p>
+  </div>
+
+  <div style="margin-bottom: 30px; font-size: 15px;">
+    <p style="margin: 0;"><strong>A quien corresponda:</strong></p>
+  </div>
+
+  <!-- Cuerpo Formal -->
+  <div style="line-height: 1.8; text-align: justify; font-size: 15px; margin-bottom: 40px;">
+    <p>Es grato dirigirnos a usted para expresarle nuestro cordial saludo. Mediante el presente documento, la empresa <strong>MACROMEC J&S S.A.C.</strong> emite la carta de aceptación formal a favor del/la estudiante:</p>
+    
+    <p style="text-align: center; font-size: 18px; margin: 25px 0; color: #003366;"><strong>[Nombre estudiante]</strong></p>
+    
+    <p>Identificado/a con DNI N° <strong>[DNI]</strong>, quien cursa la carrera profesional de <strong>[Carrera]</strong> correspondiente al semestre académico <strong>[Semestre]</strong>.</p>
+    
+    <p>El/la estudiante ha sido admitido/a para realizar sus Prácticas Pre Profesionales en nuestra institución, específicamente en el área de <strong>[Área de Práctica]</strong>, bajo la modalidad <strong>[Modalidad]</strong>. Esta etapa formativa se desarrollará cumpliendo estrictamente con los estándares de calidad, seguridad y compromiso que rigen en nuestra organización.</p>
+    
+    <p>Se expide la presente constancia a solicitud del interesado/a para los fines académicos e institucionales que considere pertinentes.</p>
+  </div>
+
+  <!-- Zona de Firma -->
+  <div style="margin-top: 80px; text-align: center; line-height: 1.4;">
+    <hr style="width: 250px; border: none; border-top: 1px solid #333333; margin: 0 auto 10px auto;" />
+    <p style="margin: 0; font-weight: bold; font-size: 15px;">Juan Luis Alfonso Alva Cuadros</p>
+    <p style="margin: 0; font-size: 13px;">Jefe del Área de Tecnologías de la Información</p>
+    <p style="margin: 0; font-size: 13px;"><strong>MACROMEC J&S S.A.C.</strong></p>
+  </div>
+
+</div>`,
 }
 
 

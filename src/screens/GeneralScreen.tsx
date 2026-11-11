@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Lock, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, tieneHePendienteEnDia, tieneHePendienteGlobal } from '../store/useAppStore'
+import { getPeriodoContext, perteneceAPeriodo } from '../utils/periodoHelpers'
 import type { EstadoAsistencia, Modalidad, Practicante } from '../types'
 
 // ============================================================
@@ -182,34 +183,85 @@ function ModalAusencia({ info, onClose }: { info: AusenciaInfo; onClose: () => v
 // BOTTOM-SHEET DE INCIDENCIA
 // ============================================================
 
-function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose: () => void }) {
+function BottomSheetIncidencia({
+  sheet,
+  readOnly = false,
+  onClose,
+}: {
+  sheet: SheetState
+  readOnly?: boolean
+  onClose: () => void
+}) {
   const actualizarConModalidad = useAppStore((s) => s.actualizarAsistenciaDiaConModalidad)
   const registrarIncidencia = useAppStore((s) => s.registrarIncidencia)
   const cubrirFaltaConComodin = useAppStore((s) => s.cubrirFaltaConComodin)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
   const practicantes = useAppStore((s) => s.practicantes)
+  const actividadesDiarias = useAppStore((s) => s.actividadesDiarias)
+
+  const practicanteLive = useMemo(
+    () => practicantes.find((p) => p.id === sheet.practicante?.id) ?? sheet.practicante,
+    [practicantes, sheet.practicante]
+  )
 
   const saldoLive = useMemo(() => {
-    if (!sheet.practicante) return 0
-    const pId = sheet.practicante.id
-    const pStore = practicantes.find((p) => p.id === pId)
-    if (pStore?.saldoHorasExtras !== undefined) return pStore.saldoHorasExtras
-    return extraHoursBalances.find((b) => b.practicanteId === pId)?.horasDisponibles ?? 0
-  }, [extraHoursBalances, sheet.practicante, practicantes])
+    if (!practicanteLive) return 0
+    if (practicanteLive.saldoHorasExtras !== undefined) return practicanteLive.saldoHorasExtras
+    return extraHoursBalances.find((b) => b.practicanteId === practicanteLive.id)?.horasDisponibles ?? 0
+  }, [extraHoursBalances, practicanteLive])
 
   const [estadoSel, setEstadoSel] = useState<EstadoAsistencia>(sheet.estadoActual ?? 'PENDIENTE')
   const [modalidadLocal, setModalidadLocal] = useState<'presencial' | 'virtual'>(sheet.modalidadDia)
 
-  const asistenciaActual = sheet.practicante?.asistencia?.[sheet.fecha]
-  const regHistorial = sheet.practicante?.historial.find(h => h.fecha === sheet.fecha)
-  const regDiario = sheet.practicante?.registrosDiarios?.[sheet.fecha]
-  const [observacion, setObservacion] = useState(regHistorial?.observacion || '')
+  const actDiaria = useMemo(
+    () =>
+      practicanteLive
+        ? actividadesDiarias.find(
+            (a) =>
+              a.id === `${practicanteLive.id}_${sheet.fecha}` ||
+              (a.practicanteId === practicanteLive.id && a.fecha === sheet.fecha)
+          )
+        : undefined,
+    [actividadesDiarias, practicanteLive, sheet.fecha]
+  )
 
-  const heSupervisor = asistenciaActual?.horasExtraSupervisor ?? regDiario?.horasExtras ?? 0
+  const asistenciaActual = practicanteLive?.asistencia?.[sheet.fecha]
+  const regHistorial = practicanteLive?.historial.find(h => h.fecha === sheet.fecha)
+  const regDiario = practicanteLive?.registrosDiarios?.[sheet.fecha]
+  const [observacion, setObservacion] = useState(regHistorial?.observacion || asistenciaActual?.observacion || '')
+
+  // Preservar dato histórico propuesto por el supervisor (REQUERIMIENTO 3)
+  const horasExtrasPropuestas =
+    actDiaria?.horasExtrasPropuestas ??
+    asistenciaActual?.horasExtrasPropuestas ??
+    asistenciaActual?.horasExtraSupervisor ??
+    regDiario?.horasExtrasPropuestas ??
+    regDiario?.horasExtras ??
+    regDiario?.heSupervisor ??
+    0
+
+  const yaRevisado = Boolean(
+    asistenciaActual?.heRevisadas === true ||
+    regDiario?.heRevisadas === true ||
+    actDiaria?.heRevisadas === true
+  )
+
+  const tieneHePendiente = practicanteLive
+    ? tieneHePendienteEnDia(practicanteLive, sheet.fecha, actividadesDiarias)
+    : false
+
+  const horasAprobadasPrevias =
+    asistenciaActual?.horasExtrasAprobadas ??
+    regDiario?.horasExtrasAprobadas ??
+    actDiaria?.horasExtrasAprobadas ??
+    asistenciaActual?.horasExtraManuales
+
   const [heManuales, setHeManuales] = useState<number>(
-    (asistenciaActual?.horasExtraManuales !== undefined && asistenciaActual.horasExtraManuales > 0)
-      ? asistenciaActual.horasExtraManuales
-      : heSupervisor
+    yaRevisado
+      ? (horasAprobadasPrevias ?? 0)
+      : (horasAprobadasPrevias !== undefined && horasAprobadasPrevias > 0)
+        ? horasAprobadasPrevias
+        : horasExtrasPropuestas
   )
   const [usarComodin, setUsarComodin] = useState(false)
 
@@ -218,6 +270,7 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
   const puedeCompensarHE = mostrarHE && saldoLive >= HE_HORAS
 
   const handleToggleModalidad = () => {
+    if (readOnly) return
     const nueva = esVirtual ? 'presencial' : 'virtual'
     setModalidadLocal(nueva)
     if (nueva === 'virtual' && estadoSel === 'CAMPO') setEstadoSel('PENDIENTE')
@@ -240,19 +293,24 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
   const btns = esVirtual ? BTNS_VIRTUAL : BTNS_PRESENCIAL
 
   const handleGuardar = () => {
-    if (!sheet.practicante) return
+    if (readOnly || !practicanteLive) return
     const mod = estadoSel === 'LIBRE' ? 'libre' : modalidadLocal
-    actualizarConModalidad(sheet.practicante.id, sheet.fecha, estadoSel, mod as Modalidad)
-    registrarIncidencia(sheet.practicante.id, sheet.fecha, {
-      observacion: estadoSel === 'LIBRE' ? '' : observacion,
-      horasExtraManuales: estadoSel === 'LIBRE' ? 0 : heManuales
+    const esLibre = estadoSel === 'LIBRE'
+    const aprobadas = esLibre ? 0 : heManuales
+    actualizarConModalidad(practicanteLive.id, sheet.fecha, estadoSel, mod as Modalidad)
+    registrarIncidencia(practicanteLive.id, sheet.fecha, {
+      observacion: esLibre ? '' : observacion,
+      horasExtraManuales: aprobadas,
+      horasExtrasAprobadas: aprobadas,
+      heRevisadas: true,
+      estadoHE: (esLibre || (horasExtrasPropuestas > 0 && aprobadas === 0)) ? 'rechazado' : 'aprobado',
     })
 
     if (estadoSel === 'FALTA' && usarComodin) {
-      cubrirFaltaConComodin(sheet.practicante.id, sheet.fecha)
+      cubrirFaltaConComodin(practicanteLive.id, sheet.fecha)
       toast.success('Incidencia guardada y falta cubierta con comodín')
     } else {
-      toast.success(`Guardado: ${sheet.practicante.nombre} - ${estadoSel} (${mod})`)
+      toast.success(`Guardado: ${practicanteLive.nombre} - ${estadoSel} (${mod})`)
     }
     onClose()
   }
@@ -282,21 +340,59 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
           </button>
         </div>
 
+        {/* Banner solo lectura si es periodo pasado */}
+        {readOnly && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 mb-3 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+            <Lock size={14} className="shrink-0 text-amber-700" />
+            <span>Solo Lectura — Registro perteneciente a un periodo cerrado.</span>
+          </div>
+        )}
+
         {/* Toggle modalidad + Saldo HE */}
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-4">
           <button
+            type="button"
+            disabled={readOnly}
             onClick={handleToggleModalidad}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border-0 cursor-pointer transition-all ${esVirtual ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border-0 transition-all ${readOnly ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'} ${esVirtual ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
               }`}
           >
             {esVirtual ? 'Virtual' : 'Presencial'}
-            <span className="text-[9px] opacity-50">cambiar</span>
+            {!readOnly && <span className="text-[9px] opacity-50">cambiar</span>}
           </button>
           <span className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold ${saldoLive > 0 ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-400'
             }`}>
             Saldo HE: {saldoLive}h
           </span>
         </div>
+
+        {/* Aviso de Horas Extras Pendientes o Revisadas (REQUERIMIENTO 2 y 3) */}
+        {tieneHePendiente ? (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-amber-500 text-white font-black text-xs flex items-center justify-center shrink-0">!</span>
+              <div>
+                <p className="font-bold text-[12px] text-amber-900 leading-tight">Revisión de Horas Extras Pendiente</p>
+                <p className="text-[11px] text-amber-700 mt-0.5">Supervisor propuso: {horasExtrasPropuestas}h para esta fecha.</p>
+              </div>
+            </div>
+            <span className="bg-amber-200 text-amber-900 font-extrabold text-xs px-2.5 py-1 rounded-lg shrink-0">
+              +{horasExtrasPropuestas}h
+            </span>
+          </div>
+        ) : (yaRevisado && horasExtrasPropuestas > 0) ? (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-emerald-500 text-white font-black text-[10px] flex items-center justify-center shrink-0">✓</span>
+              <p className="font-bold text-[11px] text-emerald-900 leading-tight">
+                HE Revisadas ({heManuales}h {heManuales > 0 ? 'aprobadas' : 'rechazadas'})
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full shrink-0">
+              Supervisor propuso: {horasExtrasPropuestas}h
+            </span>
+          </div>
+        ) : null}
 
         {/* Label */}
         <p className="text-[10px] font-extrabold text-slate-400 tracking-widest mb-2">
@@ -310,8 +406,10 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
             return (
               <button
                 key={estado}
-                onClick={() => setEstadoSel(estado)}
-                className={`py-3 rounded-xl text-[12px] font-bold cursor-pointer border-2 transition-all ${colSpan || ''} ${isActive ? activeClass : 'bg-slate-50 border-slate-200 text-slate-600'
+                type="button"
+                disabled={readOnly}
+                onClick={() => !readOnly && setEstadoSel(estado)}
+                className={`py-3 rounded-xl text-[12px] font-bold border-2 transition-all ${colSpan || ''} ${readOnly ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} ${isActive ? activeClass : 'bg-slate-50 border-slate-200 text-slate-600'
                   }`}
               >
                 {label}
@@ -320,24 +418,25 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
           })}
         </div>
 
-        {/* Incidencias (RF-48 y RF-53): solo visibles para estados de asistencia laborables */}
-        {['ASISTIO', 'TARDANZA', 'FALTA', 'CAMPO'].includes(estadoSel) && (
+        {/* Incidencias (RF-48 y RF-53): visibles para estados laborables o cuando existen HE propuestas */}
+        {(['ASISTIO', 'TARDANZA', 'FALTA', 'CAMPO'].includes(estadoSel) || horasExtrasPropuestas > 0 || tieneHePendiente) && (
           <div className="flex flex-col gap-3 mb-5">
             <div>
               <label className="text-[11px] font-bold text-slate-600 mb-1 block">Observaciones (Ej. Descanso médico, permiso)</label>
               <textarea
                 value={observacion}
+                disabled={readOnly}
                 onChange={(e) => setObservacion(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 min-h-[70px] resize-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 min-h-[70px] resize-none disabled:opacity-70 disabled:cursor-not-allowed"
                 placeholder="Escribe la observación..."
               />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-bold text-slate-600 block">Modificar Horas Extras Manuales</label>
-                {heSupervisor > 0 && (
+                <label className="text-[11px] font-bold text-slate-600 block">Horas Extras Aprobadas (Oficiales)</label>
+                {horasExtrasPropuestas > 0 && (
                   <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                    Supervisor propuso: {heSupervisor}h
+                    Supervisor propuso: {horasExtrasPropuestas}h
                   </span>
                 )}
               </div>
@@ -346,8 +445,9 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
                 min="0"
                 step="0.5"
                 value={heManuales}
+                disabled={readOnly}
                 onChange={(e) => setHeManuales(parseFloat(e.target.value) || 0)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 disabled:opacity-70 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -360,8 +460,8 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
               <p className="font-bold text-[12px] text-red-900 leading-tight">Cubrir Falta con Horas Extra (Comodín)</p>
               <p className="text-[11px] text-red-700 mt-0.5">Deduce 6h del saldo (Saldo: {saldoLive}h)</p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={usarComodin} onChange={(e) => setUsarComodin(e.target.checked)} disabled={saldoLive < 6} />
+            <label className={`relative inline-flex items-center ${readOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+              <input type="checkbox" className="sr-only peer" checked={usarComodin} onChange={(e) => setUsarComodin(e.target.checked)} disabled={readOnly || saldoLive < 6} />
               <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600 peer-disabled:opacity-50"></div>
             </label>
           </div>
@@ -370,11 +470,13 @@ function BottomSheetIncidencia({ sheet, onClose }: { sheet: SheetState; onClose:
         {/* Guardar */}
         <button
           id="btn-guardar-general"
+          type="button"
+          disabled={readOnly}
           onClick={handleGuardar}
-          className="w-full py-3.5 rounded-xl text-[14px] font-bold text-white border-0 cursor-pointer"
-          style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}
+          className={`w-full py-3.5 rounded-xl text-[14px] font-bold border-0 ${readOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'text-white cursor-pointer'}`}
+          style={readOnly ? undefined : { background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}
         >
-          Guardar Cambios
+          {readOnly ? 'Solo Lectura (Periodo Cerrado)' : 'Guardar Cambios'}
         </button>
       </div>
     </div>
@@ -426,6 +528,7 @@ interface TablaMatrizProps {
 }
 
 function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feriados, onCeldaClick }: TablaMatrizProps) {
+  const actividadesDiarias = useAppStore((s) => s.actividadesDiarias)
   return (
     <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
       <table className="border-collapse" style={{ tableLayout: 'fixed', width: 'max-content' }}>
@@ -470,18 +573,31 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feri
             const saldo = p.saldoHorasExtras ?? extraHoursBalances.find((b) => b.practicanteId === p.id)?.horasDisponibles ?? 0
             const rowBg = ri % 2 === 0 ? '#fafafa' : 'white'
             const sinHorario = p.estadoLaboral !== 'retirado' && !tieneHorarioAprobado(p)
+            const hasPendienteGlobal = tieneHePendienteGlobal(p, actividadesDiarias)
             return (
               <tr key={p.id} style={{ background: rowBg }}>
                 <td
                   className="sticky left-0 z-[5] py-1.5 px-3"
                   style={{ background: rowBg, minWidth: 130, borderRight: '2px solid #e2e8f0' }}
                 >
-                  <p className="text-[11px] font-semibold text-slate-800 whitespace-nowrap">
-                    {p.nombre} {p.apellido ? p.apellido.split(' ')[0] : ''}
-                  </p>
-                  <p className="text-[9px] text-slate-400 mt-0.5">
-                    {p.modalidadBase} · {p.estadoLaboral}
-                  </p>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="truncate">
+                      <p className="text-[11px] font-semibold text-slate-800 whitespace-nowrap">
+                        {p.nombre} {p.apellido ? p.apellido.split(' ')[0] : ''}
+                      </p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">
+                        {p.modalidadBase} · {p.estadoLaboral}
+                      </p>
+                    </div>
+                    {hasPendienteGlobal && (
+                      <span
+                        title="Tiene horas extras pendientes de validación"
+                        className="w-4 h-4 rounded-full bg-red-600 text-white font-black text-[9px] flex items-center justify-center shrink-0 shadow-xs animate-pulse"
+                      >
+                        !
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td
                   className="sticky z-[5] text-center py-1"
@@ -496,6 +612,7 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feri
                   const fecha = getFechaStr(year, month, d)
                   const feriadoObj = feriados.find((f: any) => f.fecha === fecha)
                   const info = getCeldaAsistencia(p, fecha, feriados)
+                  const tieneHePendienteDia = tieneHePendienteEnDia(p, fecha, actividadesDiarias)
 
                   if (feriadoObj) {
                     return (
@@ -542,11 +659,19 @@ function TablaMatriz({ practicantes, year, month, dias, extraHoursBalances, feri
                         disabled={!sinHorario && info.bloqueado}
                         className={
                           sinHorario
-                            ? 'w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold transition-all bg-slate-100 opacity-50 text-slate-400 border border-slate-200 cursor-not-allowed'
-                            : `w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold cursor-pointer transition-all ${info.cls} ${info.bloqueado ? 'cursor-not-allowed opacity-80' : ''}`
+                            ? 'w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold transition-all bg-slate-100 opacity-50 text-slate-400 border border-slate-200 cursor-not-allowed relative'
+                            : `w-7 h-7 rounded flex items-center justify-center mx-auto text-[8px] font-extrabold cursor-pointer transition-all relative ${info.cls} ${info.bloqueado ? 'cursor-not-allowed opacity-80' : ''}`
                         }
                       >
                         {sinHorario ? '-' : info.label}
+                        {tieneHePendienteDia && (
+                          <span
+                            title="Horas extras propuestas pendientes de validación"
+                            className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-600 text-white text-[8px] font-black rounded-full flex items-center justify-center shadow-xs border border-white animate-pulse"
+                          >
+                            !
+                          </span>
+                        )}
                       </button>
                     </td>
                   )
@@ -570,9 +695,17 @@ export default function GeneralScreen() {
   const setTabActiva = useAppStore((s) => s.setTabActiva)
   const extraHoursBalances = useAppStore((s) => s.extraHoursBalances)
   const periodos = useAppStore((s) => s.periodos)
+  const periodoVisualizacionId = useAppStore((s) => s.periodoVisualizacionId)
   const semestres = useAppStore((s) => s.semestres)
-  const periodoActivo = periodos?.find(p => p.estado === 'activo') || periodos?.[0]
-  const feriados = periodoActivo?.feriados || semestres?.[0]?.feriados || []
+
+  const [fechaBase, setFechaBase] = useState(new Date())
+  const [sheet, setSheet] = useState<SheetState>(SHEET_VACIO)
+  const [ausenciaInfo, setAusenciaInfo] = useState<AusenciaInfo | null>(null)
+
+  const mesActual = fechaBase.getMonth()
+  const anioActual = fechaBase.getFullYear()
+  const diasEnMes = new Date(anioActual, mesActual + 1, 0).getDate()
+  const dias = useMemo(() => Array.from({ length: diasEnMes }, (_, i) => i + 1), [diasEnMes])
 
   // 🛡️ Seguridad RBAC: Vista exclusiva para Administradores / Gerencia
   const esAdmin =
@@ -594,19 +727,22 @@ export default function GeneralScreen() {
     return null
   }
 
-  // Filtro relacional estricto: Supervisor solo ve sus propios practicantes
+  const {
+    periodoActivo,
+    periodoVisualizado,
+    periodoVisualizacionId: periodoVisId,
+    esPeriodoPasado,
+  } = getPeriodoContext(periodos, periodoVisualizacionId)
+  const feriados =
+    periodoVisualizado?.feriados || periodoActivo?.feriados || semestres?.[0]?.feriados || []
+
+  // Filtro relacional estricto por ciclo seleccionado en la Máquina del Tiempo
+  const practicantesPeriodo = todosPracticantes.filter((p) =>
+    perteneceAPeriodo(p, periodoVisId, periodoActivo?.id || 'per-2026-02'),
+  )
   const practicantes = usuarioActual?.rol === 'SUPERVISOR'
-    ? todosPracticantes.filter((p) => p.monitorId === usuarioActual.id)
-    : todosPracticantes
-
-  const [fechaBase, setFechaBase] = useState(new Date())
-  const [sheet, setSheet] = useState<SheetState>(SHEET_VACIO)
-  const [ausenciaInfo, setAusenciaInfo] = useState<AusenciaInfo | null>(null)
-
-  const mesActual = fechaBase.getMonth()
-  const anioActual = fechaBase.getFullYear()
-  const diasEnMes = new Date(anioActual, mesActual + 1, 0).getDate()
-  const dias = useMemo(() => Array.from({ length: diasEnMes }, (_, i) => i + 1), [diasEnMes])
+    ? practicantesPeriodo.filter((p) => p.monitorId === usuarioActual.id)
+    : practicantesPeriodo
 
   const isMesActualOrFuturo = fechaBase.getMonth() >= new Date().getMonth() && fechaBase.getFullYear() >= new Date().getFullYear()
 
@@ -634,11 +770,10 @@ export default function GeneralScreen() {
         return
       }
     }
-    // Edición de asistencia
+    // Edición / Inspección de asistencia
     const reg = p.historial.find((h) => h.fecha === fecha)
     let estadoActual = reg?.estado
     if (!estadoActual) {
-      const feriados = useAppStore.getState().semestres[0]?.feriados || []
       const info = getCeldaAsistencia(p, fecha, feriados)
       if (info.label === 'L') {
         estadoActual = 'LIBRE'
@@ -678,11 +813,25 @@ export default function GeneralScreen() {
     <div className="flex flex-col gap-2.5">
       {/* Cabecera */}
       <div className="rounded-2xl px-5 py-4" style={{ background: 'linear-gradient(135deg,#1E3A8A,#2563EB)' }}>
-        <p className="font-bold text-base text-white mb-0.5">Vista General</p>
+        <div className="flex items-center justify-between">
+          <p className="font-bold text-base text-white mb-0.5">Vista General</p>
+          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white/20 text-white">
+            Ciclo {periodoVisualizado?.nombre || ''}
+          </span>
+        </div>
         <p className="text-[12px] text-white/75">
-          Toca una celda para editar asistencia
+          {esPeriodoPasado
+            ? 'Modo auditoría histórica (solo lectura)'
+            : 'Toca una celda para editar asistencia'}
         </p>
       </div>
+
+      {esPeriodoPasado && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex items-center gap-2 text-amber-900 text-[11px] font-bold">
+          <Lock size={14} className="shrink-0 text-amber-700" />
+          <span>Modo Histórico ({periodoVisualizado?.nombre}) — Solo Lectura.</span>
+        </div>
+      )}
 
       {/* Navegador de mes */}
       <div className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 border border-slate-200">
@@ -725,7 +874,13 @@ export default function GeneralScreen() {
       </p>
 
       {ausenciaInfo && <ModalAusencia info={ausenciaInfo} onClose={() => setAusenciaInfo(null)} />}
-      {sheet.open && <BottomSheetIncidencia sheet={sheet} onClose={() => setSheet(SHEET_VACIO)} />}
+      {sheet.open && (
+        <BottomSheetIncidencia
+          sheet={sheet}
+          readOnly={esPeriodoPasado}
+          onClose={() => setSheet(SHEET_VACIO)}
+        />
+      )}
     </div>
   )
 }
